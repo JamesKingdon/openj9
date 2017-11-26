@@ -21,7 +21,12 @@
 -->
 
 <#if uma.spec.processor.arm>
-OBJCOPY := bcm2708hardfp-objcopy
+ARM_ARCH_FLAGS := -march=armv6 -marm -mfpu=vfp -mfloat-abi=hard
+ifdef OPENJ9_CC_PREFIX
+  OBJCOPY := $(OPENJ9_CC_PREFIX)-objcopy
+else
+  OBJCOPY := bcm2708hardfp-objcopy
+endif
 <#else>
 OBJCOPY := objcopy
 </#if>
@@ -102,7 +107,7 @@ ifndef UMA_DO_NOT_OPTIMIZE_CCODE
   <#elseif uma.spec.processor.x86>
   UMA_OPTIMIZATION_CFLAGS+=-O3 -fno-strict-aliasing -march=pentium4 -mtune=prescott -mpreferred-stack-boundary=4
   <#elseif uma.spec.processor.arm>
-  UMA_OPTIMIZATION_CFLAGS+=-g -O3 -fno-strict-aliasing -march=armv6 -mfpu=vfp -mfloat-abi=hard -Wno-unused-but-set-variable
+  UMA_OPTIMIZATION_CFLAGS+=-g -O3 -fno-strict-aliasing $(ARM_ARCH_FLAGS) -Wno-unused-but-set-variable
   <#elseif uma.spec.processor.ppc>
   UMA_OPTIMIZATION_CFLAGS+=-O3
   <#if uma.spec.flags.env_littleEndian.enabled && uma.spec.type.linux>
@@ -125,7 +130,7 @@ ifndef UMA_DO_NOT_OPTIMIZE_CCODE
   <#elseif uma.spec.processor.x86>
   UMA_OPTIMIZATION_CXXFLAGS+=-O3 -fno-strict-aliasing -march=pentium4 -mtune=prescott -mpreferred-stack-boundary=4
   <#elseif uma.spec.processor.arm>
-  UMA_OPTIMIZATION_CXXFLAGS+=-g -O3 -fno-strict-aliasing -march=armv6 -mfpu=vfp -mfloat-abi=hard -Wno-unused-but-set-variable
+  UMA_OPTIMIZATION_CXXFLAGS+=-g -O3 -fno-strict-aliasing $(ARM_ARCH_FLAGS) -Wno-unused-but-set-variable
   <#elseif uma.spec.processor.ppc>
   UMA_OPTIMIZATION_CXXFLAGS+=-O3
   <#if uma.spec.flags.env_littleEndian.enabled && uma.spec.type.linux>
