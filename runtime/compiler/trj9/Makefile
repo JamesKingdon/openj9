@@ -37,6 +37,19 @@ ifeq ($(SPEC),linux_arm)
     $(warning ARM SPEC detected)
 endif
 
+# During openJDK build, SPEC arrives as 
+# /root/openj9-openjdk-jdk9/build/linux-arm-normal-server-release/spec.gmk
+# and PLATFORM is not set, so the above doesn't work.
+ifdef OPENJ9_CC_PREFIX
+  PLATFORM=arm-linux-gcc-cross
+  # Set the tool names. Note that there's a second block below that
+  # sets these variables again, but the ?= should ensure that this
+  # set of definitions wins when we need it to.
+  export CC_PATH?=$(OPENJ9_CC_PREFIX)-gcc
+  export CXX_PATH?=$(OPENJ9_CC_PREFIX)-g++
+  export AS_PATH?=$(OPENJ9_CC_PREFIX)-as
+endif
+
 ifeq ($(PLATFORM),amd64-linux64-clang)
     # Luckily we can just use the default path for Clang :)
 endif
