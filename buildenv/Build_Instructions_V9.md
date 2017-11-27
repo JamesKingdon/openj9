@@ -416,4 +416,279 @@ We haven't created a full build process for macOS yet? Watch this space!
 :iphone:
 
 :construction:
-We haven't created a full build process for ARM yet? Watch this space!
+### Status
+
+!!! THIS IS WORK IN PROGRESS. BEST TO WAIT UNTIL THIS MESSAGE HAS GONE !!!
+
+OpenJDK Version 9 with OpenJ9 on ARM is at an early stage.
+
+It builds and can run some applications with work-arounds, but there are certainly
+more bugs to be found and performance has plenty of room for improvement. It is not
+yet ready for production use. At this point the build is mostly useful for developers
+wanting to contribute new code and fixes, but everyone is welcome to try it out.
+
+If you find problems check for known issues on github
+( https://github.com/eclipse/openj9/issues?utf8=%E2%9C%93&q=is%3Aissue+is%3Aopen+arm )
+and if it looks like the problem isn't already there, please open a new issue!
+
+### Platforms
+
+The build is setup to cross compile in a Docker container. Cross compiling a JVM which
+itself contains a compiler (JIT) has resulted in somewhat confusing terminology:
+
+  - The *build* platform is the machine where we are compiling the JVM, the place where we run 'make'.
+  - The *host* platform is the machine where the JVM will eventually run.
+  - The *target* platform is the machine for which the compiler in the JVM generates code.
+
+In this case the build platform is x86, and both the host and target are ARM. In all current
+uses the host and target are the same, but the possibility that they could be different is
+why we are stuck with talking about build and host platforms instead of something more
+natural.
+
+### JDKs
+
+The build makes use of three JDKs.
+
+  - The *bootstrap* JDK is required during early phases of the build that make use of Java.
+  - The *build* JDK is required during later phases of the build when the JDK has to match the
+version being built.
+  - Finally there is the JDK that we're actually trying to create as a result of the build.
+
+The bootstrap JDK is usually the previous major version to that being built, e.g. Java 8
+when building Java 9. In the Docker image it is already installed in /usr/lib/jvm/java-8-openjdk-amd64
+In this cross compile, the bootstrap JDK runs on the build platform (x86).
+
+The build JDK would normally be built as a minimal JDK during the build itself, but this is not
+working yet, so we have to provide one manually. There are two alternatives for doing so which
+will be described below. The build JDK also runs on the build platform (x86).
+
+The output JDK will be produced in the build/linux-arm-normal-server-release/images/jdk (and jre)
+directories. It runs on the host platform (ARM).
+
+### 1. Get the Source
+
+:pencil: Temporary: Using my forks instead of the official repos until the PRs are merged.
+
+We can fetch the source code outside of Docker and mount it as a Docker volume later.
+
+Make an empty working directory, cd into it, and fetch the OpenJDK extensions:
+
+```
+git clone https://github.com/JamesKingdon/openj9-openjdk-jdk9.git
+```
+cd into openj9-openjdk-jdk9 and switch to the arm branch
+```
+cd openj9-openjdk-jdk9/
+git checkout arm
+```
+
+run get_source.sh with options to pull from my forks
+
+```
+bash get_source.sh -openj9-repo=https://github.com/JamesKingdon/openj9.git -openj9-branch=arm-buildspec -omr-repo=https://github.com/JamesKingdon/openj9-omr.git -omr-branch=arm-build
+```
+
+### 2. Get a build JDK
+
+There are two approaches to getting the build JDK; either download one from adoptopenjdk,
+or compile your own using the same source code as will be used for the ARM JDK. It's
+simpler and quicker to download a ready made one, so I'd recommend starting with that.
+
+Download the latest "Linux x64" nightly build from 
+https://adoptopenjdk.net/nightly.html?variant=openjdk9-openj9
+
+into a temporary directory of your choice (or just put it in the working directory for simplicity)
+
+e.g. at the time of writing,
+```
+wget https://github.com/AdoptOpenJDK/openjdk9-openj9-nightly/releases/download/jdk-9%2B181-20172711/OpenJDK9-OPENJ9_x64_Linux_20172711.tar.gz
+```
+
+Extract it into the working directory along side openj9-openjdk-jdk9
+
+```
+tar xf OpenJDK9-OPENJ9_x64_Linux_20172711.tar.gz
+```
+This should produce the directory jdk-9+181.
+
+### 3. Create the Docker image
+
+cd into openj9-openjdk-jdk9/openj9/buildenv/docker/jdk9/armhf_CC and run
+
+```
+cd openj9-openjdk-jdk9/openj9/buildenv/docker/jdk9/armhf_CC/
+docker build -t openj9arm .
+```
+### 4. Run the Docker image
+
+The first time you run the Docker image you need to specifiy the volumes for the build JDK and
+source code:
+
+```
+docker run -v <path to working dir>/openj9-openjdk-jdk9:/root/openj9-openjdk-jdk9 -v <path to working dir>/jdk-9+181:/root/buildjdk -it openj9arm
+```
+:pencil:
+If you are using SELinux and can't access the volumes you may need to add :Z to the end of each mount string, e.g.
+```
+<path to working dir>/openj9-openjdk-jdk9:/root/openj9-openjdk-jdk9:Z
+```
+
+### 4a. Restarting an existing container
+
+On subsequent usage, you can restart an existing container with the "docker start" command. This saves creating ever more containers that eventually need cleaning up.
+
+First use docker ps -a to identify the container:
+
+```
+$ d ps -a
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS                     PORTS               NAMES
+51e37ca0a783        openj9arm           "/bin/bash"              2 days ago          Exited (0) 2 hours ago                         optimistic_goldberg
+```
+The container can be specified using either the container id field or the name field.
+```
+$ d start -i 51e37ca0a783
+root@51e37ca0a783:~# 
+```
+
+Inside the Docker container you should see the buildjdk, freemarker.jar, the cross compiler tool chain and the openj9 source directory
+```
+root@51e37ca0a783:~# ls -l
+total 796
+drwxr-xr-x 10 root  root   4096 Nov 22 19:54 buildjdk
+-rw-r--r--  1 root  root 802494 Jul  9  2006 freemarker.jar
+drwxr-xr-x  9 11827 9000   4096 Nov 17 20:09 gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf
+drwxr-xr-x 17  1000 1000   4096 Nov 27 22:36 openj9-openjdk-jdk9
+```
+
+### 5. Run the build
+
+Inside the Docker container...
+
+cd into the openj9-openjdk-jdk9 directory and run the build script
+
+```
+cd /root/openj9-openjdk-jdk9/
+./build-docker-arm
+```
+
+### 6. Test
+
+The output is in the build/linux-arm-normal-server-release/images/jdk and jre
+directories which the build script also creates zip archives from.
+(Be careful not to pick up the linux-arm-normal-server-release/jdk directory - that's a 
+temporary staging location that doesn't have the files in the standard places.)
+
+scp one of jdk.zip or jre.zip to an ARM box, unzip and test with the following command-line (note the -Xjit:disableDirectToJNI -Xgcpolicy:optthruput options which work around problems known at the time of writing):
+
+```
+jkingdon@oban:/usbP2/sdks$ jdk/bin/java -Xjit:disableDirectToJNI -Xgcpolicy:optthruput -version
+openjdk version "9-internal"
+OpenJDK Runtime Environment (build 9-internal+0-adhoc..openj9-openjdk-jdk9)
+Eclipse OpenJ9 VM (build 2.9, JRE 9 Linux arm-32 20171128_000000 (JIT enabled, AOT enabled)
+OpenJ9   - c60bb3a
+OMR      - e051fd4
+OpenJDK  - a51ddb6 based on jdk-9+181)
+```
+
+### Separate Configure and Build steps
+
+If you don't want to use the build-docker-arm script, you can perform the configure and
+build steps individually.
+
+Both stages are performed from the /root/openj9-openjdk-jdk9/ directory.
+
+```
+cd /root/openj9-openjdk-jdk9/
+bash ./configure --openjdk-target=arm-linux-gnueabihf --with-abi-profile=armv6-vfp-hflt  --with-x=${OPENJ9_CC_DIR}/arm-linux-gnueabihf/ --with-freetype=${OPENJ9_CC_DIR}/arm-linux-gnueabihf/libc/usr/ --with-freemarker-jar=/root/freemarker.jar --with-build-jdk=/root/buildjdk
+```
+
+Hopefully this completes with a "Configuration summary:" similar to
+
+```
+Configuration summary:
+* Debug level:    release
+* HS debug level: product
+* JDK variant:    normal
+* JVM variants:   server
+* OpenJDK target: OS: linux, CPU architecture: arm, address length: 32
+* Version string: 9-internal+0-adhoc..openj9-openjdk-jdk9 (9-internal)
+
+Tools summary:
+* Boot JDK:       openjdk version "1.8.0_151" OpenJDK Runtime Environment (build 1.8.0_151-8u151-b12-0ubuntu0.16.04.2-b12) OpenJDK 64-Bit Server VM (build 25.151-b12, mixed mode)  (at /usr/lib/jvm/java-8-openjdk-amd64)
+* Toolchain:      gcc (GNU Compiler Collection)
+* C Compiler:     Version 4.9.4 (at /root/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc)
+* C++ Compiler:   Version 4.9.4 (at /root/gcc-linaro-4.9.4-2017.01-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-g++)
+
+Build performance summary:
+* Cores to use:   8
+* Memory limit:   32008 MB
+
+The following warnings were produced. Repeated here for convenience:
+WARNING: using cross tools not prefixed with host triplet
+```
+The final warning may be safely ignored (TODO why is it there?)
+
+Next run make
+
+```
+make CONF=linux-arm-normal-server-release all
+```
+The build should finish with something similar to
+```
+Creating jre jimage
+Creating jdk jimage
+WARNING: Using incubator modules: jdk.incubator.httpclient
+WARNING: Using incubator modules: jdk.incubator.httpclient
+Cross compilation detected, skipping generated_target_rules_build
+adding extra libs for arm cross compile
+adding extra libs for arm cross compile
+Cross compilation detected, skipping generated_target_rules_build
+adding extra libs for arm cross compile
+adding extra libs for arm cross compile
+Stopping sjavac server
+Finished building target 'all' in configuration 'linux-arm-normal-server-release'
+```
+
+### Hints
+
+If things go wrong it's easy to end up with bad state in your build directory that
+repeated makes won't recover from. If you suspect a mis-step has occurred, try
+```
+make CONF=linux-arm-normal-server-release dist-clean
+```
+and start over from the "Configure the build" step.
+
+### The 'other' way of getting a build JDK
+
+The Docker image for cross compiling is based on the one for x86 builds, so you can
+use it to compile the source tree natively.
+
+Note: First unset the OPENJ9_CC_PREFIX environment variable. At the moment it gets in the way of a native x86 build
+
+```
+unset OPENJ9_CC_PREFIX
+```
+
+cd to /root/openj9-openjdk-jdk9, and run configure for native build:
+
+```
+bash configure --with-freemarker-jar=/root/freemarker.jar
+```
+
+Compile all
+```
+make CONF=linux-x86_64-normal-server-release all
+```
+
+This should result in a jdk in build/linux-x86_64-normal-server-release/images/jdk
+which can be used as the build jdk during the ARM configure step
+
+```
+  ... --with-build-jdk=/root/openj9-openjdk-jdk9/build/linux-x86_64-normal-server-release/images/jdk
+```
+
+Don't forget to reset the OPENJ9_CC_PREFIX env var before working on the ARM build again.
+
+```
+export OPENJ9_CC_PREFIX=arm-linux-gnueabihf
+```
