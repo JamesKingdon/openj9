@@ -485,7 +485,7 @@ git checkout arm
 run get_source.sh with options to pull from my forks
 
 ```
-bash get_source.sh -openj9-repo=https://github.com/JamesKingdon/openj9.git -openj9-branch=arm-buildspec -omr-repo=https://github.com/JamesKingdon/openj9-omr.git -omr-branch=arm-build
+bash get_source.sh -openj9-repo=https://github.com/JamesKingdon/openj9.git -openj9-branch=arm -omr-repo=https://github.com/JamesKingdon/openj9-omr.git -omr-branch=arm
 ```
 
 ### 2. Get a build JDK
