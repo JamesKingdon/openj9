@@ -160,9 +160,10 @@ ifeq ($(HOST_ARCH),z)
     endif
 endif
 
+ARM_ARCH_FLAGS ?= -mfloat-abi=hard -mfpu=vfp -march=armv6 -marm
 ifeq ($(HOST_ARCH),arm)
     CX_DEFINES+=ARMGNU ARMGNUEABI FIXUP_UNALIGNED HARDHAT
-    CX_FLAGS+=-fPIC -mfloat-abi=hard -mfpu=vfp -march=armv6 -marm
+    CX_FLAGS+=-fPIC $(ARM_ARCH_FLAGS)
 endif
 
 ifeq ($(C_COMPILER),clang)
