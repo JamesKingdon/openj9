@@ -467,7 +467,7 @@ directories. It runs on the host platform (ARM).
 
 ### 1. Get the Source
 
-:pencil: Temporary: Using my forks instead of the official repos until the PRs are merged.
+:pencil: Temporary: Using my fork(s) instead of the official repos until the PRs are merged.
 
 We can fetch the source code outside of Docker and mount it as a Docker volume later.
 
@@ -482,11 +482,28 @@ cd openj9-openjdk-jdk9/
 git checkout arm
 ```
 
+At this point you can choose between using my forks of openj9 and openj9-omr or the
+official ones. The trade-off is that the offical repos will likely be more up to date,
+but my forks may have ARM specific features that haven't been upstreamed yet. The official
+forks will also not have been tested on ARM and may not work, where as my forks should
+have had at least a minimal "does it run" level of testing.
+
+To use my forks:
+
 run get_source.sh with options to pull from my forks
 
 ```
 bash get_source.sh -openj9-repo=https://github.com/JamesKingdon/openj9.git -openj9-branch=arm -omr-repo=https://github.com/JamesKingdon/openj9-omr.git -omr-branch=arm
 ```
+
+OR
+
+run get_source.sh with no options to get the offical repos
+
+```
+bash get_source.sh
+```
+
 
 ### 2. Get a build JDK
 
