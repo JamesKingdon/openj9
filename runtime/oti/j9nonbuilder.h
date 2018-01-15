@@ -2357,9 +2357,43 @@ typedef struct J9WalkStackFramesAndSlotsStorage {
 	UDATA* jit_r9;
 	UDATA* jit_r10;
 	UDATA* jit_r11;
-#else /* J9VM_ARCH_ARM */
+#elif defined(J9VM_ARCH_AARCH64) /* XXX REVIEW */
+	UDATA* jit_r0;
+	UDATA* jit_r1;
+	UDATA* jit_r2;
+	UDATA* jit_r3;
+	UDATA* jit_r4;
+	UDATA* jit_r5;
+	UDATA* jit_r6;
+	UDATA* jit_r7;
+	UDATA* jit_r8;
+	UDATA* jit_r9;
+	UDATA* jit_r10;
+	UDATA* jit_r11;
+	UDATA* jit_r12;
+	UDATA* jit_r13;
+	UDATA* jit_r14;
+	UDATA* jit_r15;
+	UDATA* jit_r16;
+	UDATA* jit_r17;
+	UDATA* jit_r18;
+	UDATA* jit_r19;
+	UDATA* jit_r20;
+	UDATA* jit_r21;
+	UDATA* jit_r22;
+	UDATA* jit_r23;
+	UDATA* jit_r24;
+	UDATA* jit_r25;
+	UDATA* jit_r26;
+	UDATA* jit_r27;
+	UDATA* jit_r28;
+	UDATA* jit_r29;
+	UDATA* jit_r30;
+	UDATA* jit_r31;
+#else /* J9VM_ARCH_AARCH64 */
+
 #error Unknown processor architecture
-#endif /* J9VM_ARCH_ARM */
+#endif /* unknown */
 } J9WalkStackFramesAndSlotsStorage;
 
 typedef struct J9I2JState {
@@ -2567,7 +2601,32 @@ typedef struct J9SFJ2IFrame {
 	UDATA jit_r10;
 	UDATA jit_r9;
 	UDATA jit_r6;
-#else /* J9VM_ARCH_ARM */
+#elif defined(J9VM_ARCH_AARCH64)
+	UDATA jit_r31; /* XXX review */
+	UDATA jit_r30;
+	UDATA jit_r29;
+	UDATA jit_r28;
+	UDATA jit_r27;
+	UDATA jit_r26;
+	UDATA jit_r25;
+	UDATA jit_r24;
+	UDATA jit_r23;
+	UDATA jit_r22;
+	UDATA jit_r21;
+	UDATA jit_r20;
+	UDATA jit_r19;
+	UDATA jit_r18;
+	UDATA jit_r17;
+	UDATA jit_r16;
+	UDATA jit_r15;
+	UDATA jit_r14;
+	UDATA jit_r13;
+	UDATA jit_r12;
+	UDATA jit_r11;
+	UDATA jit_r10;
+	UDATA jit_r9;
+	UDATA jit_r6;
+#else /* J9VM_ARCH_AARCH64 */
 #error Unknown processor architecture
 #endif /* J9VM_ARCH_ARM */
 	UDATA specialFrameFlags;
@@ -5592,7 +5651,18 @@ typedef struct J9CInterpreterStackFrame {
 	UDATA jitGPRs[16]; /* r0-r15 */
 	U_8 jitFPRs[16 * 8]; /* fpr0-15 */
 #endif /* J9VM_ENV_DATA64 */
-#elif defined(J9VM_ARCH_X86) /* J9VM_ARCH_ARM */
+#elif defined(J9VM_ARCH_AARCH64) /* J9VM_ARCH_ARM */
+#if !defined(J9VM_ENV_DATA64)
+#error AARCH64 must be 64 bit
+#else
+   /* AARCH64 */ /* XXX What should this look like??? */
+  	UDATA preservedGPRs[9]; /* r4-r11 and r14 */
+	UDATA align[1];
+	U_8 preservedFPRs[8 * 8]; /* fpr8-15 */
+	UDATA jitGPRs[16]; /* r0-r15 */
+	U_8 jitFPRs[16 * 8]; /* fpr0-15 */
+#endif
+#elif defined(J9VM_ARCH_X86) /* J9VM_ARCH_AARCH64 */
 	UDATA vmStruct;
 	UDATA machineBP; /* JIT has this offset hard-coded - do not move this field */
 #if defined(J9VM_ENV_DATA64)

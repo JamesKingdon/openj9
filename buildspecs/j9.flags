@@ -23,10 +23,21 @@
 -->
 
 <flags xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.ibm.com/j9/builder/flags" xsi:schemaLocation="http://www.ibm.com/j9/builder/flags flags-v1.xsd">
+	<flag id="arch_aarch64">
+		<description>This spec targets ARMv8 64 bit processors.</description>
+		<ifRemoved></ifRemoved>
+		<precludes>
+			<preclude flag="arch_arm"/>
+  			<preclude flag="arch_power"/>
+			<preclude flag="arch_s390"/>
+			<preclude flag="arch_x86"/>
+		</precludes>
+	</flag>
 	<flag id="arch_arm">
 		<description>This spec targets ARM processors.</description>
 		<ifRemoved></ifRemoved>
 		<precludes>
+			<preclude flag="arch_aarch64"/>
 			<preclude flag="arch_power"/>
 			<preclude flag="arch_s390"/>
 			<preclude flag="arch_x86"/>
@@ -36,6 +47,7 @@
 		<description>This spec targets PPC processors.</description>
 		<ifRemoved></ifRemoved>
 		<precludes>
+			<preclude flag="arch_aarch64"/>
 			<preclude flag="arch_arm"/>
 			<preclude flag="arch_s390"/>
 			<preclude flag="arch_x86"/>
@@ -45,6 +57,7 @@
 		<description>This spec targets S390 processors.</description>
 		<ifRemoved></ifRemoved>
 		<precludes>
+			<preclude flag="arch_aarch64"/>
 			<preclude flag="arch_arm"/>
 			<preclude flag="arch_power"/>
 			<preclude flag="arch_x86"/>
@@ -54,6 +67,7 @@
 		<description>This spec targets x86 processors.</description>
 		<ifRemoved></ifRemoved>
 		<precludes>
+			<preclude flag="arch_aarch64"/>
 			<preclude flag="arch_arm"/>
 			<preclude flag="arch_power"/>
 			<preclude flag="arch_s390"/>
