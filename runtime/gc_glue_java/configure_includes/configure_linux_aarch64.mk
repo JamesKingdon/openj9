@@ -27,7 +27,7 @@ CONFIGURE_ARGS += \
 	--enable-OMR_THR_YIELD_ALG \
 	--enable-OMR_THR_SPIN_WAKE_CONTROL
 
-OPENJ9_CC_PREFIX ?= arm-bcm2708hardfp-linux-gnueabi
+OPENJ9_CC_PREFIX ?= aarch64-linux-gnu
 
 ifneq (,$(findstring linux_aarch64, $(SPEC)))
 	CONFIGURE_ARGS += \
@@ -57,3 +57,5 @@ CONFIGURE_ARGS += 'OMR_HOST_OS=linux'
 CONFIGURE_ARGS += 'OMR_HOST_ARCH=aarch64'
 CONFIGURE_ARGS += 'OMR_TARGET_DATASIZE=64'
 CONFIGURE_ARGS += 'OMR_TOOLCHAIN=gcc'
+
+$(info configure_args is $(CONFIGURE_ARGS))

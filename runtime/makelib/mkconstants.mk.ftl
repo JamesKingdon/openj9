@@ -61,6 +61,8 @@ endif
 TR_HOST=TR_HOST_X86
 <#elseif uma.spec.processor.arm>
 TR_HOST=TR_HOST_ARM
+<#elseif uma.spec.processor.aarch64>
+TR_HOST=TR_HOST_AARCH64
 <#elseif uma.spec.processor.ppc>
 TR_HOST=TR_HOST_POWER
 <#elseif uma.spec.processor.s390>
