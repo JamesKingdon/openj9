@@ -903,8 +903,8 @@ TR::Register *OMR::ARM::TreeEvaluator::VMmonexitEvaluator(TR::Node *node, TR::Co
 
    if (TR::Compiler->target.isSMP() && TR::Compiler->target.cpu.id() != TR_DefaultARMProcessor)
       {
-      //instr = generateInstruction(cg, (TR::Compiler->target.cpu.id() == TR_ARMv6) ? ARMOp_dmb_v6 : ARMOp_dmb, node);
-      instr = generateInstruction(cg, ARMOp_dmb_v6 , node); // v7 version is unconditional
+      instr = generateInstruction(cg, (TR::Compiler->target.cpu.id() == TR_ARMv6) ? ARMOp_dmb_v6 : ARMOp_dmb, node);
+      // instr = generateInstruction(cg, ARMOp_dmb_v6 , node); // v7 version is unconditional XXX jbk not according to the docs, and we need to get rid of dmb_v6 if at all possible
       instr->setConditionCode(ARMConditionCodeEQ);
       }
 #endif
@@ -1781,6 +1781,3 @@ void VMgenerateCatchBlockBBStartPrologue(TR::Node *node, TR::Instruction *fenceI
 // the following is to force an export to keep ilib happy
 int J9ARMEvaluator=0;
 #endif /* TR_TARGET_ARM   */
-
-
-
