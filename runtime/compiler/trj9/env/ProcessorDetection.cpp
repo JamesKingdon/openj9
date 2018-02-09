@@ -359,6 +359,22 @@ portLibCall_getX86ProcessorType(const char *vendor, uint32_t processorSignature)
    return TR_DefaultX86Processor;
    }
 
+/**
+   Simple helper to return a string name for the specified processor value
+*/
+char * processorName(TR_Processor p)
+{
+   switch(p)
+   {
+      case TR_ARMv6:
+         return "ARMv6";
+      case TR_ARMv7:
+         return "ARMv7";
+      default:
+         return "unrecognized processor number";
+   }
+}
+
 // -----------------------------------------------------------------------------
 /**
    This routine is currently parsing the "model name" line of /proc/cpuinfo
@@ -382,23 +398,29 @@ static TR_Processor
 portLib_getARMLinuxProcessor()
    {
    FILE * fp ;
-   char buffer[120];
+   char buffer[120]; // XXX danger
    char *line_p;
    char *cpu_name = NULL;
    char *position_l, *position_r;
    size_t n=120;
    int i=0;
+   
+   // New: If we can't tell what we're running on, return ARMv6
+   TR_Processor result = TR_ARMv6;
 
    fp = fopen("/proc/cpuinfo","r");
 
-   if ( fp == NULL )
-      return TR_DefaultARMProcessor;
+   if ( fp == NULL ) {
+      fprintf(stderr, "Warning: unable to open /proc/cpuinfo, using %s\n", processorName(result));
+      return result;
+   }
 
    line_p = buffer;
 
    while (!feof(fp))
       {
       fgets(line_p, n, fp);
+      printf("read %s\n", line_p);
       // note the capital P, this isn't searching for the processor: line, it's
       // searching for part of the model name value
       position_l = strstr(line_p, "Processor");
@@ -406,24 +428,45 @@ portLib_getARMLinuxProcessor()
       if (position_l) 
          {
          position_l = strchr(line_p, ':');
-         if (position_l==NULL) return TR_DefaultARMProcessor;
+         if (position_l==NULL) continue; // try more lines
          position_l++;
          while (*(position_l) == ' ') position_l++;
 
          position_r = strchr(line_p, '\n');
-         if (position_r==NULL) return TR_DefaultARMProcessor;
+         if (position_r==NULL) continue;
          while (*(position_r-1) == ' ') position_r--;
 
-         if (position_l>=position_r) return TR_DefaultARMProcessor;
+         if (position_l>=position_r) continue;
 
          /* localize the cpu name */
          cpu_name = position_l;
          *position_r = '\000';
 
          break;
+         } // "Processor"
+      position_l = strstr(line_p, "CPU architecture");
+      if (position_l)
+         {
+            position_l = strchr(line_p, ':');
+            if (position_l==NULL) continue; // try more lines
+            position_l++;
+            while (*(position_l) == ' ') position_l++;
+            printf("using line %s\n",line_p);
+            printf("checking >%s<\n", position_l);
+            if (strstr(position_l, "6"))
+               return TR_ARMv6;
+            if (strstr(position_l, "7"))
+               return TR_ARMv7;
+            if (strstr(position_l, "8"))
+               return TR_ARMv7;
+            if (strstr(position_l, "AArch64"))
+               return TR_ARMv7;
          }
       }
-   if (cpu_name==NULL) return TR_DefaultARMProcessor;
+   if (cpu_name==NULL) {
+      fprintf(stderr, "Warning: unable to determine cpu_name, using %s\n", processorName(result));
+      return result;
+   }
 
    fclose(fp);
 
@@ -431,8 +474,13 @@ portLib_getARMLinuxProcessor()
       return TR_ARMv7;
    else if (strstr(cpu_name, "ARMv6"))
       return TR_ARMv6;
+   else if (strstr(cpu_name, "ARMv8"))
+      return TR_ARMv7; // use TR_ARMv7 on v8 processors until we have some v8 specific code
+   else if (strstr(cpu_name, "AArch64"))
+      return TR_ARMv7; // use TR_ARMv7 on v8 processors until we have some v8 specific code
    else
-      return TR_DefaultARMProcessor;
+      fprintf(stderr, "Warning: unknown cpu_name %s, using %s\n", cpu_name, processorName(result));
+      return result;
    }
 
 
