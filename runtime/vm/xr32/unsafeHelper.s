@@ -24,7 +24,8 @@
 	.global	unsafePut64
 	.type	unsafePut64, %function
 unsafePut64:
-	strd	r2, [r0]
+	str	r2, [r0]
+	str	r3, [r0, #4]
 	bx	lr
 	.size	unsafePut64, .-unsafePut64
 @ Prototype: void unsafePut32(I_32 *address, I_32 value);
