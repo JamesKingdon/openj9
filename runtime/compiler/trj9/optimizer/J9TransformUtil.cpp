@@ -371,7 +371,9 @@ static void *dereferenceStructPointerChain(void *baseStruct, TR::Node *baseNode,
                }
             else
                {
-               TR_ASSERT(isFinalFieldPointingAtNativeStruct(symRef, comp), "dereferenceStructPointerChain should be dealing with reference fields");
+               // XXX temporarily disable the assert as it seems to be too conservative.
+               // See https://github.com/eclipse/openj9/issues/1209
+               //TR_ASSERT(isFinalFieldPointingAtNativeStruct(symRef, comp), "dereferenceStructPointerChain should be dealing with reference fields. curNode %d", curNode->getGlobalIndex());
                fieldAddress = curStruct + symRef->getOffset();
                }
 
