@@ -297,11 +297,25 @@ retry:
 #ifdef J9ARM
 			// ARMv8 does not support store multiple to unaligned addresses, and unfortunately GCC
 			// generates a store multiple for the normal version of these three assignments.
-			// To avoid the store multiple instructions, we can replace the assignments with memcpy calls
-			// which should get inlined to something fairly reasonable.
+			// To avoid the store multiple instructions, we can replace the assignments with either 
+			// memcpy calls (which should get inlined to something fairly reasonable), or with
+			// inline assembly code.
+			
+			// asm volatile( 
+         //    "str %[clazz],  [%[cursor], #0]\n\t"
+         //    "str %[method], [%[cursor], #4]\n\t"
+			// 	"str %[target], [%[cursor], #8]\n\t"
+         //    :            // No outputs
+         //    :[cursor] "r" (profilingCursor),
+			//     [clazz] "r" (&clazz), 
+			//     [method] "r" (&callingMethod), 
+			//     [target] "r" (&targetMethod)
+         // );
+			
 			memcpy(profilingCursor, &clazz, sizeof(J9Class*));
 			profilingCursor += sizeof(J9Class*);
 			memcpy(profilingCursor, &callingMethod, sizeof(J9Method*));
+			
 			profilingCursor += sizeof(J9Method*);
 			*(J9Method**)profilingCursor = targetMethod; // no need to replace all three
 #else
