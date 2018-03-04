@@ -277,11 +277,13 @@ jfloat
 helperCConvertIntegerToFloat(I_32 src)
 {
 	jfloat tmpDst;
-	
-#if defined USE_NATIVE_CAST
+
+// XXX JBK testing
+#if defined(USE_NATIVE_CAST) || defined(ARM)
 	tmpDst = (jfloat)src;
 #else
 	{
+		fprintf(stderr, "Warning - executing old slow code for int to float\n");
 		int idl1, sign;
 		U_32 spfInt, overflow;
 	
@@ -406,7 +408,9 @@ static int
 fltconv_indexLeadingOne32(U_32 u32val)
 {
 	int leading;
-	U_32 mask;
+	volatile U_32 mask; // use of volatile is an alternative work around for the gcc bug
+	
+	// printf("u32val %x\n", u32val);
 	
 	if (u32val == 0) {
 		return -1;
@@ -424,14 +428,16 @@ fltconv_indexLeadingOne32(U_32 u32val)
 		leading = 7;
 		mask = 0x00000080;
 	}
-	while((mask & u32val) == 0) {
+	
+	// WARNING the mask!=0 condition is strictly unnecessary, but avoids a bug in
+	// gcc-linaro-4.9.4 where the simpler test isn't executed before the first iteration.
+	while((mask & u32val)==0) { // && mask!=0) {
 		mask >>= 1;
 		leading--;
 	}
+	// if (mask==0) fprintf(stderr, "fltconv_indexLeadingOne32: mask 0, something is wrong\n");
 	return leading;
 }
 
 
 #endif /* J9VM_INTERP_FLOAT_SUPPORT */ /* End File Level Build Flags */
-
-
