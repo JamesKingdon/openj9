@@ -530,10 +530,10 @@ This should produce the directory jdk-9+181.
 
 ### 3. Create the Docker image
 
-cd into openj9-openjdk-jdk9/openj9/buildenv/docker/jdk9/armhf_CC and run
+cd into openj9-openjdk-jdk9/openj9/buildenv/docker/jdk9/armhf_CC/arm-linux-gnueabihf and run
 
 ```
-cd openj9-openjdk-jdk9/openj9/buildenv/docker/jdk9/armhf_CC/
+cd openj9-openjdk-jdk9/openj9/buildenv/docker/jdk9/armhf_CC/arm-linux-gnueabihf
 docker build -t openj9arm .
 ```
 ### 4. Run the Docker image
