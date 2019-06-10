@@ -1,15 +1,6 @@
 /*[INCLUDE-IF Sidecar16]*/
-package java.lang;
-
-import java.io.*;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
-import com.ibm.oti.util.Msg;
-
 /*******************************************************************************
- * Copyright (c) 1998, 2010 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -27,8 +18,19 @@ import com.ibm.oti.util.Msg;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
+package java.lang;
+
+import java.io.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import com.ibm.oti.util.Msg;
+import com.ibm.oti.util.Util;
+import static com.ibm.oti.util.Util.appendTo;
+import static com.ibm.oti.util.Util.appendLnTo;
  
 /**
  * This class is the superclass of all classes which
@@ -362,7 +364,15 @@ public String toString () {
  * @return		the receiver.
  */
 public synchronized Throwable initCause(Throwable throwable) {
-	return	setCause(throwable);
+	if (cause != this) {
+		/*[MSG "K05c9", "Cause already initialized"]*/
+		throw new IllegalStateException(Msg.getString("K05c9")); //$NON-NLS-1$
+	}
+	if (throwable == this) {
+		/*[MSG "K05c8", "Cause cannot be the receiver"]*/
+		throw new IllegalArgumentException(Msg.getString("K05c8")); //$NON-NLS-1$
+	}
+	return setCause(throwable);
 }
 
 /**
@@ -379,15 +389,8 @@ public synchronized Throwable initCause(Throwable throwable) {
  * @return		the receiver.
  */
 Throwable setCause(Throwable throwable) {
-	/*[PR CMVC 199629] Exception During Class Initialization Not Handled Correctly */	
-	if (cause == this) {
-		if (throwable != this) {
-			cause = throwable;
-			return this;
-		/*[MSG "K05c8", "Cause cannot be the receiver"]*/
-		} else throw new IllegalArgumentException(Msg.getString("K05c8")); //$NON-NLS-1$
-	/*[MSG "K05c9", "Cause already initialized"]*/
-	} else throw new IllegalStateException(Msg.getString("K05c9")); //$NON-NLS-1$
+	cause = throwable;
+	return this;
 }
 
 /**
@@ -455,39 +458,6 @@ private void readObject(ObjectInputStream s)
  * CMVC 97756 try to continue printing as much as possible of the stack trace even
  *            in the presence of OutOfMemoryErrors.
  */
-
-/**
- * Helper method for output with PrintStream and PrintWriter
- */
-static void appendTo(Appendable buf, CharSequence s) {
-	StackTraceElement.appendTo(buf, s);
-}
-
-/**
- * Helper method for output with PrintStream and PrintWriter
- */
-static void appendTo(Appendable buf, CharSequence s, int indents) {
-	for (int i=0; i<indents; i++) {
-		StackTraceElement.appendTo(buf, "\t"); //$NON-NLS-1$
-	}
-	StackTraceElement.appendTo(buf, s);
-}
-
-/**
- * Helper method for output with PrintStream and PrintWriter
- */
-static void appendTo(Appendable buf, int i) {
-	StackTraceElement.appendTo(buf, i);
-}
-
-/**
- * Helper method for output with PrintStream and PrintWriter
- */
-static void appendLnTo(Appendable buf) {		
-	if (buf instanceof PrintStream) ((PrintStream)buf).println();
-	else if (buf instanceof PrintWriter) ((PrintWriter)buf).println();
-	else appendTo(buf, "\n"); //$NON-NLS-1$
-}
 
 /**
  * Print stack trace
@@ -562,7 +532,7 @@ private StackTraceElement[] printStackTrace(
         }
 		if (outOfMemory) {
 			appendTo(err, "\tat ", indents); //$NON-NLS-1$
-			stack[i].appendTo(err);
+			Util.printStackTraceElement(stack[i], null, err, false);
         }
 		appendLnTo(err);		
     }
@@ -659,4 +629,3 @@ public final Throwable[] getSuppressed() {
 	}
 }
 }
-

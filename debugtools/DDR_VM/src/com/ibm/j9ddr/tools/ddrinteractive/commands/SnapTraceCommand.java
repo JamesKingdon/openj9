@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.tools.ddrinteractive.commands;
 
@@ -82,7 +82,7 @@ public class SnapTraceCommand extends SnapBaseCommand {
 			} catch (CorruptDataException e) {
 				// Although we got a CDE some data may have been copied to the buffer.
 				// This appears to happen on z/OS when some of the buffer space is in a page of
-				// uninitialised memory. (See defect 185780.) In that case the missing data is
+				// uninitialized memory. (See defect 185780.) In that case the missing data is
 				// all 0's anyway.
 				out.println("Problem reading " + bufferSize + " bytes from 0x" +  Long.toHexString(address) + ". Trace file may contain partial or damaged data.");
 			}

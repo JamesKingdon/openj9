@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef JITPROTOS_H
@@ -37,16 +37,11 @@ extern "C" {
 #endif
 
 /* prototypes from dlt.c */
-
 void * setUpForDLT(J9VMThread * currentThread, J9StackWalkState * walkState);
 
-/* prototypes from J9JITRTStub */
-
-/* prototypes from JITSourceRuntimeInit */
-
-/* prototypes from J9SourceJITRuntimeDecompile */
 extern J9_CFUNC void   induceOSROnCurrentThread(J9VMThread * currentThread);
 extern J9_CFUNC UDATA osrFrameSize(J9Method *method);
+extern J9_CFUNC UDATA osrFrameSizeRomMethod(J9ROMMethod *romMethod);
 extern J9_CFUNC UDATA ensureOSRBufferSize(J9JavaVM *vm, UDATA osrFramesByteSize, UDATA osrScratchBufferByteSize, UDATA osrStackFrameByteSize);
 extern J9_CFUNC void jitStackLocalsModified (J9VMThread * currentThread, J9StackWalkState * walkState);
 #if (defined(J9VM_INTERP_HOT_CODE_REPLACEMENT)) /* priv. proto (autogen) */
@@ -87,16 +82,11 @@ extern J9_CFUNC void   c_jitDecompileBeforeReportMethodEnter(J9VMThread * curren
 extern J9_CFUNC void   c_jitReportExceptionCatch(J9VMThread * currentThread);
 extern J9_CFUNC void   c_jitDecompileOnReturn(J9VMThread * currentThread);
 
-/* prototypes from JITSourceCodertThunk */
 extern J9_CFUNC void * j9ThunkLookupNameAndSig (void * jitConfig, void *parm);
 
-/* prototypes from JITSourceHashTableSupport */
-
-/* prototypes from JITSourceRuntimeCacheSupport */
 extern J9_CFUNC J9JITHashTable *avl_jit_artifact_insert_existing_table (J9AVLTree * tree, J9JITHashTable * hashTable);
 extern J9_CFUNC J9AVLTree * jit_allocate_artifacts (J9PortLibrary * portLibrary);
 
-/* prototypes from JITStackWalker */
 extern J9_CFUNC UDATA  jitWalkStackFrames (J9StackWalkState *walkState);
 extern J9_CFUNC J9JITExceptionTable * jitGetExceptionTableFromPC (J9VMThread * vmThread, UDATA jitPC);
 extern J9_CFUNC UDATA  jitGetOwnedObjectMonitors(J9StackWalkState *state);
@@ -105,7 +95,6 @@ extern J9_CFUNC void jitPrintRegisterMapArray (J9StackWalkState * walkState, cha
 #endif /* J9VM_INTERP_STACKWALK_TRACING (autogen) */
 
 
-/* prototypes from JITSourceArtifactSupport */
 extern J9_CFUNC J9JITHashTable *jit_artifact_add_code_cache (J9PortLibrary * portLibrary, J9AVLTree * tree, J9MemorySegment * cacheToInsert, J9JITHashTable *optionalHashTable);
 extern J9_CFUNC UDATA jit_artifact_insert (J9PortLibrary * portLibrary, J9AVLTree * tree, J9JITExceptionTable * dataToInsert);
 extern J9_CFUNC J9JITHashTable *
@@ -124,13 +113,11 @@ void * j9ThunkInvokeExactHelperFromSignature(void * jitConfig, UDATA signatureLe
 
 /* prototypes from CodertVMHelpers.cpp */
 void initializeDirectJNI (J9JavaVM *vm);
-void flushICache(J9VMThread *currentThread, void *memoryPointer, UDATA byteAmount);
 
 /* prototypes from jsr292.c */
 void i2jFSDAssert();
 
 /* prototype from cnathelp.cpp */
-
 void initPureCFunctionTable(J9JavaVM *vm);
 
 /**
@@ -176,8 +163,10 @@ void J9FASTCALL fast_jitCollapseJNIReferenceFrame(J9VMThread *currentThread);
 #if defined(J9VM_ARCH_X86) || defined(J9VM_ARCH_S390)
 /* TODO Will be cleaned once all platforms adopt the correct parameter order */
 UDATA J9FASTCALL fast_jitInstanceOf(J9VMThread *currentThread, j9object_t object, J9Class *castClass);
+UDATA J9FASTCALL fast_jitCheckAssignable(J9VMThread *currentThread, J9Class *clazz, J9Class *castClass);
 #else /* J9VM_ARCH_X86 || J9VM_ARCH_S390*/
 UDATA J9FASTCALL fast_jitInstanceOf(J9VMThread *currentThread, J9Class *castClass, j9object_t object);
+UDATA J9FASTCALL fast_jitCheckAssignable(J9VMThread *currentThread, J9Class *castClass, J9Class *clazz);
 #endif /* J9VM_ARCH_X86 || J9VM_ARCH_S390*/
 UDATA J9FASTCALL fast_jitObjectHashCode(J9VMThread *currentThread, j9object_t object);
 

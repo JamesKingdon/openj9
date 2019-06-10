@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar19-SE]*/
 /*******************************************************************************
- * Copyright (c) 2017, 2017 IBM Corp. and others
+ * Copyright (c) 2017, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,11 +18,14 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
+
+/*[REM] This file must not use tabs because the dependency recognition code in openjdk does not support them. */
+
 module openj9.gpu {
-	requires java.base;
-	requires openj9.cuda;
-	// TODO exports com.ibm.gpu;
-	// TODO provides com.ibm.gpu.spi.GPUAssist.Provider with com.ibm.gpu.internal.CudaGPUAssistProvider;
+  requires java.base;
+  requires openj9.cuda;
+  exports com.ibm.gpu;
+  provides com.ibm.gpu.spi.GPUAssist.Provider with com.ibm.gpu.internal.CudaGPUAssistProvider;
 }

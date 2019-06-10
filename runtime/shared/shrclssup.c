@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
@@ -38,7 +38,7 @@ IDATA J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved)
 
 	PORT_ACCESS_FROM_JAVAVM(vm);
 
-		if (vm->sharedCacheAPI == NULL) {
+	if (vm->sharedCacheAPI == NULL) {
 
 		IDATA index;
 
@@ -62,6 +62,7 @@ IDATA J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved)
 			IDATA parseRc = OPTION_OK;
 
 			vm->sharedCacheAPI->xShareClassesPresent = TRUE;
+			vm->sharedCacheAPI->sharedCacheEnabled = TRUE;
 			parseRc = GET_OPTION_VALUES(index, ':', ',', &optionsBufferPtr, SHR_SUBOPT_BUFLEN);
 			if (OPTION_OK == parseRc) {
 				UDATA verboseFlags = J9SHR_VERBOSEFLAG_ENABLE_VERBOSE_DEFAULT;
@@ -75,6 +76,8 @@ IDATA J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved)
 				char* methodSpecs = NULL;
 #if !defined(WIN32) && !defined(WIN64)
 				char defaultCacheDir[J9SH_MAXPATH];
+				IDATA ret = 0;
+				BOOLEAN usingDefaultDir = TRUE;
 #endif
 				IDATA argIndex1 = -1;
 				IDATA argIndex2 = -1;
@@ -177,34 +180,45 @@ IDATA J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved)
 					memcpy(vm->sharedCacheAPI->methodSpecs, methodSpecs, strlen(methodSpecs) + 1);
 				}
 
-#if !defined(WIN32) && !defined(WIN64)
-				/* Get platform default cache directory */
-				rc = j9shmem_getDir(NULL, TRUE, defaultCacheDir, J9SH_MAXPATH);
-				if (-1 == rc) {
-					SHRCLSSUP_ERR_TRACE(verboseFlags, J9NLS_SHRC_SHRCLSSUP_FAILURE_GET_DEFAULT_DIR_FAILED);
-					Trc_SHR_Assert_ShouldNeverHappen();
-					return J9VMDLLMAIN_FAILED;
-				}
-
-				if ((NULL != ctrlDirName) && (0 != (strcmp(defaultCacheDir, ctrlDirName)))) {
-					vm->sharedCacheAPI->cacheDirPerm = convertPermToDecimal(vm, cacheDirPermStr);
-					if ((UDATA)-1 == vm->sharedCacheAPI->cacheDirPerm) {
-						return J9VMDLLMAIN_FAILED;
-					}
-				} else {
-					/* We are using platform default cache directory. It should be universally accessible */
-					vm->sharedCacheAPI->cacheDirPerm = J9SH_DIRPERM_ABSENT;
-				}
-#else
-				vm->sharedCacheAPI->cacheDirPerm = J9SH_DIRPERM_ABSENT;
-#endif
 				if (runtimeFlags & J9SHR_RUNTIMEFLAG_ENABLE_PERSISTENT_CACHE) {
 					vm->sharedCacheAPI->cacheType = J9PORT_SHR_CACHE_TYPE_PERSISTENT;
 				} else {
 					vm->sharedCacheAPI->cacheType = J9PORT_SHR_CACHE_TYPE_NONPERSISTENT;
 				}
+				/* set runtimeFlags and verboseFlags here as they will be used later in j9shr_getCacheDir() */
 				vm->sharedCacheAPI->runtimeFlags = runtimeFlags;
 				vm->sharedCacheAPI->verboseFlags = verboseFlags;
+
+#if !defined(WIN32) && !defined(WIN64)
+				if (NULL != ctrlDirName) {
+					/* Get platform default cache directory */
+					ret = j9shr_getCacheDir(vm, NULL, defaultCacheDir, J9SH_MAXPATH, vm->sharedCacheAPI->cacheType);
+					if ((0 == ret)
+						&& (0 != strcmp(defaultCacheDir, ctrlDirName))
+					) {
+						usingDefaultDir = FALSE;
+					}
+				}
+
+				if (FALSE == usingDefaultDir) {
+					vm->sharedCacheAPI->cacheDirPerm = convertPermToDecimal(vm, cacheDirPermStr);
+					if ((UDATA)-1 == vm->sharedCacheAPI->cacheDirPerm) {
+						return J9VMDLLMAIN_FAILED;
+					}
+				} else {
+					/* We are using platform default cache directory. */
+					vm->sharedCacheAPI->cacheDirPerm = J9SH_DIRPERM_ABSENT;
+				}
+
+				if (J9SH_DIRPERM_ABSENT == vm->sharedCacheAPI->cacheDirPerm) {
+					if (J9_ARE_ALL_BITS_SET(runtimeFlags, J9SHR_RUNTIMEFLAG_ENABLE_GROUP_ACCESS)) {
+						/* if groupAccess is set, change J9SH_DIRPERM_ABSENT to J9SH_DIRPERM_ABSENT_GROUPACCESS */
+						vm->sharedCacheAPI->cacheDirPerm = J9SH_DIRPERM_ABSENT_GROUPACCESS;
+					}
+				}
+#else
+				vm->sharedCacheAPI->cacheDirPerm = J9SH_DIRPERM_ABSENT;
+#endif
 				vm->sharedCacheAPI->printStatsOptions = printStatsOptions;
 				vm->sharedCacheAPI->storageKeyTesting = storageKeyTesting;
 			} else {
@@ -214,15 +228,35 @@ IDATA J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved)
 				return J9VMDLLMAIN_FAILED;
 			}
 		} else {
+			OMRPORT_ACCESS_FROM_J9PORT(vm->portLibrary);
 			vm->sharedCacheAPI->xShareClassesPresent = FALSE;
+			if (J9_SHARED_CACHE_DEFAULT_BOOT_SHARING(vm)) {
+				BOOLEAN inContainer = omrsysinfo_is_running_in_container();
+				/* Do not enable shared classes by default if running in Container */
+
+				if (FALSE == inContainer) {
+					/* If -Xshareclasses is not used in the CML, let VM startup on non-fatal error.
+					 * If shared cache failed to start, user can use -Xshareclasses:bootClassesOnly,fatal to debug. */
+					runtimeFlags |= J9SHR_RUNTIMEFLAG_ENABLE_NONFATAL;
+					runtimeFlags &= ~J9SHR_RUNTIMEFLAG_ENABLE_CACHE_NON_BOOT_CLASSES;
+					vm->sharedCacheAPI->sharedCacheEnabled = TRUE;
+				} else {
+					vm->sharedCacheAPI->inContainer = TRUE;
+				}
+			}
 			/* Initialize the default settings of the flags.
 			 * The runtimeFlags are used by shared cache utilities even if there is no active cache
 			 * (i.e. even if there is no -Xshareclasses option specified).
 			 * In particular,  SH_CompositeCacheImpl::startupForStats() looks at the runtimeFlags to
 			 * determine if mprotection should be done.
 			 */
+			if (vm->sharedCacheAPI->sharedCacheEnabled) {
+				/* clear verboseflags if -Xshareclasses is not used in the CML */
+				vm->sharedCacheAPI->verboseFlags = 0;
+			} else {
+				vm->sharedCacheAPI->verboseFlags = J9SHR_VERBOSEFLAG_ENABLE_VERBOSE_DEFAULT;
+			}
 			vm->sharedCacheAPI->runtimeFlags = runtimeFlags;
-			vm->sharedCacheAPI->verboseFlags = J9SHR_VERBOSEFLAG_ENABLE_VERBOSE_DEFAULT;
 		}
 	}
 
@@ -268,7 +302,10 @@ IDATA J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved)
 		Trc_SHR_VMInitStages_Event1(vm->mainThread);
 		vm->sharedCacheAPI->iterateSharedCaches = j9shr_iterateSharedCaches;
 		vm->sharedCacheAPI->destroySharedCache = j9shr_destroySharedCache;
-		if ((vm->sharedCacheAPI->xShareClassesPresent == TRUE) && (vm->sharedCacheAPI->parseResult != RESULT_DO_UTILITIES) ) {
+		if (vm->sharedCacheAPI->inContainer) {
+			Trc_SHR_VMInitStages_Event_RunningInContainer(vm->mainThread);
+		}
+		if ((vm->sharedCacheAPI->sharedCacheEnabled == TRUE) && (vm->sharedCacheAPI->parseResult != RESULT_DO_UTILITIES) ) {
 			/* Modules wishing to determine whether shared classes initialized correctly or not should query
 			 * vm->sharedClassConfig->runtimeFlags for J9SHR_RUNTIMEFLAG_CACHE_INITIALIZATION_COMPLETE */
 			if ((rc = j9shr_init(vm, loadFlags, &nonfatal)) != J9VMDLLMAIN_OK) {
@@ -288,7 +325,7 @@ IDATA J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved)
 
 	case ALL_LIBRARIES_LOADED:
 	{
-		if ((vm->sharedCacheAPI->xShareClassesPresent == TRUE) && (vm->sharedCacheAPI->parseResult != RESULT_DO_UTILITIES)) {
+		if ((vm->sharedCacheAPI->sharedCacheEnabled == TRUE) && (vm->sharedCacheAPI->parseResult != RESULT_DO_UTILITIES)) {
 			if (0 != initZipLibrary(vm->portLibrary, vm->j2seRootDirectory)) {
 				returnVal = J9VMDLLMAIN_FAILED;
 			}

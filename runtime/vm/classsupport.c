@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -92,6 +92,10 @@ internalFindArrayClass(J9VMThread* vmThread, J9Module *j9module, UDATA arity, U_
 
 	vmThread->privateFlags &= ~J9_PRIVATE_FLAGS_CLOAD_NO_MEM;
 
+	if (arity > 255) {
+		goto done;
+	}
+
 	if (length > arity) {
 		firstChar = name[arity];
 		lastChar = name[length-1];
@@ -112,7 +116,7 @@ internalFindArrayClass(J9VMThread* vmThread, J9Module *j9module, UDATA arity, U_
 		arrayClass = internalFindClassInModule(vmThread, j9module, name, length, classLoader, options);
 
 	} else {
-		return NULL;
+		goto done;
 	}
 
 	while (arrayClass && arity-- > 0) {
@@ -128,7 +132,7 @@ internalFindArrayClass(J9VMThread* vmThread, J9Module *j9module, UDATA arity, U_
 			}
 		}
 	}
-
+done:
 	return arrayClass;
 }
 
@@ -147,12 +151,11 @@ calculateArity(J9VMThread* vmThread, U_8* name, UDATA length)
 {
 	U_32 arity = 0;
 
-	while (length > 0 && *name == '[') {
+	while ((length > 0) && ('[' == *name)) {
 		name += 1;
 		length -= 1;
 		arity += 1;
 	}
-
 	return arity;
 }
 
@@ -253,7 +256,7 @@ internalFindClassString(J9VMThread* currentThread, j9object_t moduleName, j9obje
 	if (NULL == result) {
 		J9Module **findResult = NULL;
 		J9Module *j9module = NULL;
-		char localBuf[256];
+		char localBuf[J9VM_PACKAGE_NAME_BUFFER_LENGTH];
 		char *utf8Name = NULL;
 		UDATA utf8Length = 0;
 		PORT_ACCESS_FROM_JAVAVM(vm);
@@ -269,13 +272,12 @@ internalFindClassString(J9VMThread* currentThread, j9object_t moduleName, j9obje
 			}
 		}
 
-		utf8Name = copyStringToUTF8WithMemAlloc(currentThread, className, J9_STR_XLAT, "", localBuf, sizeof(localBuf));
+		utf8Name = copyStringToUTF8WithMemAlloc(currentThread, className, J9_STR_NULL_TERMINATE_RESULT | J9_STR_XLAT, "", 0, localBuf, J9VM_PACKAGE_NAME_BUFFER_LENGTH, &utf8Length);
 		if (NULL == utf8Name) {
 			/* Throw out-of-memory */
 			setNativeOutOfMemoryError(currentThread, 0, 0);
 			return NULL;
 		}
-		utf8Length = (UDATA)getStringUTF8Length(currentThread, className);
 		result = internalFindClassInModule(currentThread, j9module, (U_8 *)utf8Name, utf8Length, classLoader, options);
 		if (utf8Name != localBuf) {
 			j9mem_free_memory(utf8Name);
@@ -347,18 +349,20 @@ internalRunPreInitInstructions(J9Class * ramClass, J9VMThread * vmThread)
 					break;
 
 				case J9CPTYPE_INSTANCE_METHOD:
+				case J9CPTYPE_INTERFACE_INSTANCE_METHOD:
 					romMethodRef = ((J9ROMMethodRef *) romConstantPool) + i;
 					nas = J9ROMMETHODREF_NAMEANDSIGNATURE(romMethodRef);
-					((J9RAMMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = ((sizeof(J9Class) + sizeof(UDATA)) << 8) +
+					((J9RAMMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = (J9VTABLE_INITIAL_VIRTUAL_OFFSET << 8) +
 						getSendSlotsFromSignature(J9UTF8_DATA(J9ROMNAMEANDSIGNATURE_SIGNATURE(nas)));
 					((J9RAMMethodRef *) ramConstantPool)[i].method = vm->initialMethods.initialSpecialMethod;
 					break;
 
 				case J9CPTYPE_STATIC_METHOD:
+				case J9CPTYPE_INTERFACE_STATIC_METHOD:
 					romMethodRef = ((J9ROMMethodRef *) romConstantPool) + i;
 					nas = J9ROMMETHODREF_NAMEANDSIGNATURE(romMethodRef);
 					/* In case this CP entry is shared with invokevirtual */
-					((J9RAMMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = ((sizeof(J9Class) + sizeof(UDATA)) << 8) +
+					((J9RAMMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = (J9VTABLE_INITIAL_VIRTUAL_OFFSET << 8) +
 						getSendSlotsFromSignature(J9UTF8_DATA(J9ROMNAMEANDSIGNATURE_SIGNATURE(nas)));
 					((J9RAMStaticMethodRef *) ramConstantPool)[i].method = vm->initialMethods.initialStaticMethod;
 					break;
@@ -366,7 +370,7 @@ internalRunPreInitInstructions(J9Class * ramClass, J9VMThread * vmThread)
 				case J9CPTYPE_INTERFACE_METHOD:
 					romMethodRef = ((J9ROMMethodRef *) romConstantPool) + i;
 					nas = J9ROMMETHODREF_NAMEANDSIGNATURE(romMethodRef);
-					((J9RAMInterfaceMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = getSendSlotsFromSignature(J9UTF8_DATA(J9ROMNAMEANDSIGNATURE_SIGNATURE(nas)));
+					((J9RAMInterfaceMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = J9_ITABLE_INDEX_UNRESOLVED | getSendSlotsFromSignature(J9UTF8_DATA(J9ROMNAMEANDSIGNATURE_SIGNATURE(nas)));
 					break;
 
 				case J9CPTYPE_METHOD_TYPE:
@@ -516,7 +520,7 @@ callFindLocallyDefinedClass(J9VMThread* vmThread, J9Module *j9module, U_8* class
 			}
 		} else {
 			/* The class is found in shared class cache. */
-			if (J2SE_VERSION(vmThread->javaVM) >= J2SE_19) {
+			if (J2SE_VERSION(vmThread->javaVM) >= J2SE_V11) {
 				if (localBuffer->entryIndex >= 0) {
 					localBuffer->loadLocationType = LOAD_LOCATION_CLASSPATH;
 				} else {
@@ -554,7 +558,7 @@ attemptDynamicClassLoad(J9VMThread* vmThread, J9Module *j9module, U_8* className
 	Trc_VM_internalFindClass_attemptDynamicClassLoad_entry(vmThread, classLoader->classLoaderObject, classNameLength, className);
 
 	/* try to load classes from system class loader */
-	if ((J2SE_VERSION(vmThread->javaVM) >= J2SE_19)
+	if ((J2SE_VERSION(vmThread->javaVM) >= J2SE_V11)
 		|| ((NULL != classLoader->classPathEntries) && (classLoader == vmThread->javaVM->systemClassLoader))
 	) {
 		IDATA findResult = -1;
@@ -645,7 +649,7 @@ callLoadClass(J9VMThread* vmThread, U_8* className, UDATA classNameLength, J9Cla
 		J9JavaVM * vm = vmThread->javaVM;
 
 		Trc_VM_internalFindClass_sendLoadClass(vmThread, classNameLength, className, classNameString, classLoader->classLoaderObject);
-		sendLoadClass(vmThread, classLoader->classLoaderObject, classNameString, 0, 0);
+		sendLoadClass(vmThread, classLoader->classLoaderObject, classNameString);
 		sendLoadClassResult = (j9object_t) vmThread->returnValue;
 		if (NULL == sendLoadClassResult) {
 			j9object_t exception;
@@ -977,7 +981,7 @@ loadNonArrayClass(J9VMThread* vmThread, J9Module *j9module, U_8* className, UDAT
 					goto done;
 				}
 			}
-			/* Do not do the primtive type optimization if -Xfuture is on */
+			/* Do not do the primitive type optimization if -Xfuture is on */
 			if (0 == (vmThread->javaVM->runtimeFlags & J9_RUNTIME_XFUTURE)) {
 				if ((classNameLength <= 7) && ((classLoader == vmThread->javaVM->systemClassLoader) || (classLoader == vmThread->javaVM->applicationClassLoader))) {
 					switch(classNameLength) {
@@ -1478,8 +1482,8 @@ contendedLoadTableRemoveThread(J9VMThread* vmThread, J9ContendedLoadTableEntry *
 void
 fixCPShapeDescription(J9Class * clazz, UDATA cpIndex)
 {
-	UDATA wordIndex = (UDATA) (cpIndex / (sizeof(U_32)*2));
-	UDATA shiftAmount = (UDATA) ((cpIndex % (sizeof(U_32)*2)) * 4);
+	UDATA wordIndex = (UDATA) (cpIndex / J9_CP_DESCRIPTIONS_PER_U32);
+	UDATA shiftAmount = (UDATA) ((cpIndex % J9_CP_DESCRIPTIONS_PER_U32) * J9_CP_BITS_PER_DESCRIPTION);
 	U_32 * cpShapeDescription = J9ROMCLASS_CPSHAPEDESCRIPTION(clazz->romClass);
 
 	cpShapeDescription[wordIndex] = (cpShapeDescription[wordIndex] & ~(J9_CP_DESCRIPTION_MASK << shiftAmount)) | (J9CPTYPE_INSTANCE_METHOD << shiftAmount);

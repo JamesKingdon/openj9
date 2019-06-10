@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2017 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #include <string.h>
 #include <stdlib.h>
@@ -227,7 +227,7 @@ jobject getPropertyList(JNIEnv *env)
 	PORT_ACCESS_FROM_ENV(env);
 	int propIndex = 0;
 	jobject propertyList;
-#define PROPERTY_COUNT 135
+#define PROPERTY_COUNT 137
 	char *propertyKey= NULL;
 	const char * language;
 	const char * region;
@@ -241,12 +241,12 @@ jobject getPropertyList(JNIEnv *env)
 	J9JavaVM *javaVM = ((J9VMThread *) env)->javaVM;
 	OMR_VM *omrVM = javaVM->omrVM;
 
-	/* Change the allocation value PROPERTY_COUNT above as you add/remove properties, * then follow the 
-		propIndex++ convention and consume 2 * slots for each property. 2 * number of property keys is the * correct allocation.
-
-		Also note the call to addSystemProperties below, which may add some configuration-specific properties.  Be sure to leave
-		enough room in the property list for all possibilities.
-	*/
+	/* Change the allocation value PROPERTY_COUNT above as you add/remove properties, 
+	 * then follow the propIndex++ convention and consume 2 * slots for each property. 2 * number of property keys is the 
+	 * correct allocation.
+	 * Also note the call to addSystemProperties below, which may add some configuration-specific properties.  Be sure to leave
+	 * enough room in the property list for all possibilities.
+	 */
 
 	if (J9_GC_POLICY_METRONOME == (omrVM->gcPolicy)) {
 		strings[propIndex++] = "com.ibm.jvm.realtime";
@@ -280,7 +280,7 @@ jobject getPropertyList(JNIEnv *env)
 	 * 	we consider to be asynchronous signals.
 	 * The JCLs do not install handlers for any synchronous signals */
 	strings[propIndex++] = "ibm.signalhandling.rs";
-	if (javaVM->sigFlags & J9_SIG_XRS_ASYNC) {
+	if (J9_ARE_ALL_BITS_SET(javaVM->sigFlags, J9_SIG_XRS_ASYNC)) {
 		strings[propIndex++] = "true";
 	} else {
 		strings[propIndex++] = "false";
@@ -359,8 +359,26 @@ jobject getPropertyList(JNIEnv *env)
 
 #undef USERNAME_LENGTH
 
+#if defined(OPENJ9_BUILD)
+	/* Set the maximum direct byte buffer allocation property if it has not been set manually */
+	if ((UDATA) -1 == javaVM->directByteBufferMemoryMax) {
+		UDATA heapSize = javaVM->memoryManagerFunctions->j9gc_get_maximum_heap_size(javaVM);
+		/* allow up to 7/8 of the heap to be direct byte buffers */
+		javaVM->directByteBufferMemoryMax = heapSize - (heapSize / 8);
+	}
+#endif /* defined(OPENJ9_BUILD) */
+	if ((UDATA) -1 != javaVM->directByteBufferMemoryMax) {
+		/* buffer to hold the size of the maximum direct byte buffer allocations */
+		char maxDirectMemBuff[24];
+		strings[propIndex] = "sun.nio.MaxDirectMemorySize";
+		propIndex += 1;
+		j9str_printf(PORTLIB, maxDirectMemBuff, sizeof(maxDirectMemBuff), "%zu", javaVM->directByteBufferMemoryMax);
+		strings[propIndex] = maxDirectMemBuff;
+		propIndex += 1;
+	}
+
 	propertyList = getPlatformPropertyList(env, strings, propIndex);
-	if (usernameAlloc) {
+	if (NULL != usernameAlloc) {
 		jclmem_free_memory(env, usernameAlloc);
 	}
 	return propertyList;
@@ -376,50 +394,76 @@ jobject getPropertyList(JNIEnv *env)
  */
 jstring getEncoding(JNIEnv *env, jint encodingType)
 {
-	char* encoding, property[128];
+	char *encoding = NULL;
+	char property[128];
+	jstring result = NULL;
 
-	switch(encodingType) {
-		case 0:		/* initialize the locale */
-			getPlatformFileEncoding(env, NULL, 0, encodingType);
-			return NULL;
+	switch (encodingType) {
+	case 0:		/* initialize the locale */
+		getPlatformFileEncoding(env, NULL, 0, encodingType);
+		break;
 
-		case 1: 		/* platform encoding */
-			encoding = getPlatformFileEncoding(env, property, sizeof(property), encodingType);
-			break;
-
-		case 2:		/* file.encoding */
-			if (!(encoding = getDefinedEncoding(env, "-Dfile.encoding=")))
-			{
-				encoding = getPlatformFileEncoding(env, property, sizeof(property), encodingType);
-			}
-#if defined(J9ZOS390)
-			if (__CSNameType(encoding) == _CSTYPE_ASCII) {
-				__ccsid_t ccsid;
-				ccsid = __toCcsid(encoding);
-				atoe_setFileTaggingCcsid(&ccsid);
-			}       
-#endif
-			break;
-
-		case 3:		/* os.encoding */
-			if (!(encoding = getDefinedEncoding(env, "-Dos.encoding="))) {
-#if defined(J9ZOS390) || defined(J9ZTPF)
-				encoding = "ISO8859_1";
-#elif defined(WIN32)
-				encoding = "UTF8";
+	case 1: 		/* platform encoding */
+#if defined(OSX)
+		encoding = "UTF-8";
 #else
-				return NULL;
-#endif
-			 } 
-			break;
+		encoding = getPlatformFileEncoding(env, property, sizeof(property), encodingType);
+#endif /* defined(OSX) */
+#if JAVA_SPEC_VERSION >= 11
+		{
+			UDATA handle = 0;
+			J9JavaVM * const vm = ((J9VMThread*)env)->javaVM;
+			char dllPath[EsMaxPath];
+			UDATA written = 0;
+			PORT_ACCESS_FROM_ENV(env);
+			/* libjava.[so|dylib] is in the jdk/lib/ directory, one level up from the default/ & compressedrefs/ directories */
+			written = j9str_printf(PORTLIB, dllPath, sizeof(dllPath), "%s/../java", vm->j2seRootDirectory);
+			/* Assert the number of characters written (not including the null) fit within the dllPath buffer */
+			Assert_JCL_true(written < (sizeof(dllPath) - 1));
+			if (0 == j9sl_open_shared_library(dllPath, &handle, J9PORT_SLOPEN_DECORATE)) {
+				void (JNICALL *nativeFuncAddrJNU)(JNIEnv *env, const char *str) = NULL;
+				if (0 == j9sl_lookup_name(handle, "InitializeEncoding", (UDATA*) &nativeFuncAddrJNU, "VLL")) {
+					/* invoke JCL native to initialize platform encoding explicitly */
+					nativeFuncAddrJNU(env, encoding);
+				}
+			}
+		}
+#endif /* JAVA_SPEC_VERSION >= 11 */
+		break;
 
-		default:
-			return NULL;
+	case 2:		/* file.encoding */
+		encoding = getDefinedEncoding(env, "-Dfile.encoding=");
+		if (NULL == encoding) {
+			encoding = getPlatformFileEncoding(env, property, sizeof(property), encodingType);
+		}
+#if defined(J9ZOS390)
+		if (__CSNameType(encoding) == _CSTYPE_ASCII) {
+			__ccsid_t ccsid;
+			ccsid = __toCcsid(encoding);
+			atoe_setFileTaggingCcsid(&ccsid);
+		}
+#endif /* defined(J9ZOS390) */
+		break;
+
+	case 3:		/* os.encoding */
+		encoding = getDefinedEncoding(env, "-Dos.encoding=");
+		if (NULL == encoding) {
+#if defined(J9ZOS390) || defined(J9ZTPF)
+			encoding = "ISO8859_1";
+#elif defined(WIN32)
+			encoding = "UTF8";
+#endif /* defined(J9ZOS390) || defined(J9ZTPF) */
+		 } 
+		break;
+
+	default:
+		break;
 	}
-
-	return (*env)->NewStringUTF(env, encoding);
+	if (NULL != encoding) {
+		result = (*env)->NewStringUTF(env, encoding);
+	}
+	return result;
 }
-
 
 static void JNICALL
 systemPropertyIterator(char* key, char* value, void* userData)
@@ -477,7 +521,7 @@ Java_java_lang_System_startSNMPAgent(JNIEnv *env, jclass jlClass)
 		jclass smAClass = NULL;
 		jmethodID startAgent = NULL;
 		
-		if ((J2SE_VERSION(vm) >= J2SE_19) && (J2SE_SHAPE(vm) >= J2SE_SHAPE_B165)) {
+		if (J2SE_VERSION(vm) >= J2SE_V11) {
 			smAClass = (*env)->FindClass(env, "jdk/internal/agent/Agent");
 		} else {
 			smAClass = (*env)->FindClass(env, "sun/management/Agent");

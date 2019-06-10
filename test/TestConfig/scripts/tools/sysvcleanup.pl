@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ##############################################################################
-#  Copyright (c) 2016, 2017 IBM Corp. and others
+#  Copyright (c) 2016, 2019 IBM Corp. and others
 #
 #  This program and the accompanying materials are made available under
 #  the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
 #  [1] https://www.gnu.org/software/classpath/license.html
 #  [2] http://openjdk.java.net/legal/assembly-exception.html
 #
-#  SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+#  SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 ##############################################################################
 
 use strict;
@@ -108,7 +108,7 @@ foreach $iter (@stdoutvar) {
 		#we expect 3 entries in this row ... the 1st three are kei,id,owner ...
 		#the rest are don't cares ...
 		if (@vals<3) {
-			die("ipcs did not return expected ouput");
+			die("ipcs did not return expected output");
 		}
 
 		my $key = $vals[$keyindex];
@@ -152,7 +152,7 @@ foreach $iter (@stdoutvar) {
 		#we expect 3 entries in this row ... the 1st three are kei,id,owner ...
 		#the rest are don't cares ...
 		if (@vals<3) {
-			die("ipcs did not return expected ouput");
+			die("ipcs did not return expected output");
 		}
 		my $key = $vals[$keyindex];
 		my $id  = $vals[$idindex];

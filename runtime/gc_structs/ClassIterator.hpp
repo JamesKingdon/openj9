@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2016 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -72,17 +72,19 @@ protected:
 	GC_CallSitesIterator _callSitesIterator;
 	GC_MethodTypesIterator _methodTypesIterator;
 	GC_MethodTypesIterator _varHandlesMethodTypesIterator;
+	const bool _shouldScanClassObject; /**< Boolean needed for balanced GC to prevent ClassObject from being scanned twice  */
 
 public:
-	GC_ClassIterator(MM_EnvironmentBase *env, J9Class *clazz)
-		:_clazzPtr(clazz)
+	GC_ClassIterator(MM_EnvironmentBase *env, J9Class *clazz, bool shouldScanClassObject = true)
+		: _clazzPtr(clazz)
 		, _state(classiterator_state_start)
 		, _scanIndex(0)
 		, _classStaticsIterator(env, clazz)
-		, _constantPoolObjectSlotIterator(clazz)
+		, _constantPoolObjectSlotIterator((J9JavaVM *)env->getLanguageVM(), clazz)
 		, _callSitesIterator(clazz)
 		, _methodTypesIterator(clazz->romClass->methodTypeCount, clazz->methodTypes)
 		, _varHandlesMethodTypesIterator(clazz->romClass->varHandleMethodTypeCount, clazz->varHandleMethodTypes)
+		, _shouldScanClassObject(shouldScanClassObject)
 	{}
 
 	GC_ClassIterator(MM_GCExtensionsBase *extensions, J9Class *clazz)
@@ -90,10 +92,11 @@ public:
 		, _state(classiterator_state_start)
 		, _scanIndex(0)
 		, _classStaticsIterator(extensions, clazz)
-		, _constantPoolObjectSlotIterator(clazz)
+		, _constantPoolObjectSlotIterator((J9JavaVM *)extensions->getOmrVM()->_language_vm, clazz)
 		, _callSitesIterator(clazz)
 		, _methodTypesIterator(clazz->romClass->methodTypeCount, clazz->methodTypes)
 		, _varHandlesMethodTypesIterator(clazz->romClass->varHandleMethodTypeCount, clazz->varHandleMethodTypes)
+		, _shouldScanClassObject(true)
 	{}
 
 	MMINLINE int getState() 

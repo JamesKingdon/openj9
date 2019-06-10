@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -37,7 +37,7 @@ jitResetAllUntranslateableMethods(J9VMThread *vmThread)
 				J9Method *method = clazz->ramMethods;
 				UDATA methodCount = clazz->romClass->romMethodCount;
 				while(0 != methodCount) {
-					if(0 == ((J9_JAVA_NATIVE | J9_JAVA_ABSTRACT) & J9_ROM_METHOD_FROM_RAM_METHOD(method)->modifiers)) {
+					if(0 == ((J9AccNative | J9AccAbstract) & J9_ROM_METHOD_FROM_RAM_METHOD(method)->modifiers)) {
 						if(J9_JIT_NEVER_TRANSLATE == (IDATA)method->extra) {
 							/* This call resets the methodRunAddress to the JIT counting send target, and reinitializes the count (extra) field. */
 							vmThread->javaVM->internalVMFunctions->initializeMethodRunAddress(vmThread, method);

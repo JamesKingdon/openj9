@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2017 IBM Corp. and others
+ * Copyright (c) 2009, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef _J9MODIFIERS_API_H
@@ -39,35 +39,6 @@
 #define _J9ROMCLASS_SUNMODIFIER_IS_ANY_SET(romClass,sunModifiers) \
 				J9_ARE_ANY_BITS_SET((romClass)->modifiers, sunModifiers)
 
-#ifdef J9VM_OUT_OF_PROCESS
-#define _REMOTE_J9ROMCLASS_J9MODIFIER_IS_SET(romClass,j9Modifiers) \
-                (((dbgReadU32((U_32 *) &(romClass)->extraModifiers)) & (j9Modifiers)) == (j9Modifiers))
-#define _REMOTE_J9ROMCLASS_J9MODIFIER_IS_ANY_SET(romClass,j9Modifiers) \
-                (((dbgReadU32((U_32 *) &(romClass)->extraModifiers)) & (j9Modifiers)) != 0)
-#define _REMOTE_J9ROMCLASS_SUNMODIFIER_IS_SET(romClass,sunModifiers) \
-                (((dbgReadU32((U_32 *) &(romClass)->modifiers)) & (sunModifiers)) == (sunModifiers))
-#define _REMOTE_J9ROMCLASS_SUNMODIFIER_IS_ANY_SET(romClass,sunModifiers) \
-                (((dbgReadU32((U_32 *) &(romClass)->modifiers)) & (sunModifiers)) != 0)
-#define _REMOTE_J9ROMMETHOD_J9MODIFIER_IS_SET(romMethod,j9Modifiers) \
-                (((dbgReadU32((U_32 *) &(romMethod)->modifiers)) & (j9Modifiers)) == (j9Modifiers))
-#define _REMOTE_J9ROMMETHOD_J9MODIFIER_IS_ANY_SET(romMethod,j9Modifiers) \
-                (((dbgReadU32((U_32 *) &(romMethod)->modifiers)) & (j9Modifiers)) != 0)
-#else
-#define _REMOTE_J9ROMCLASS_J9MODIFIER_IS_SET(romClass,j9Modifiers) \
-                _J9ROMCLASS_J9MODIFIER_IS_SET(romClass,j9Modifiers)
-#define _REMOTE_J9ROMCLASS_J9MODIFIER_IS_ANY_SET(romClass,j9Modifiers) \
-                _J9ROMCLASS_J9MODIFIER_IS_ANY_SET(romClass,j9Modifiers)
-#define _REMOTE_J9ROMCLASS_SUNMODIFIER_IS_SET(romClass,sunModifiers) \
-                _J9ROMCLASS_SUNMODIFIER_IS_SET(romClass,sunModifiers)
-#define _REMOTE_J9ROMCLASS_SUNMODIFIER_IS_ANY_SET(romClass,sunModifiers) \
-                _J9ROMCLASS_SUNMODIFIER_IS_ANY_SET(romClass,sunModifiers)
-#define _REMOTE_J9ROMMETHOD_J9MODIFIER_IS_SET(romMethod,j9Modifiers) \
-                _J9ROMMETHOD_J9MODIFIER_IS_SET(romMethod,j9Modifiers)
-#define _REMOTE_J9ROMMETHOD_J9MODIFIER_IS_ANY_SET(romMethod,j9Modifiers) \
-                _J9ROMMETHOD_J9MODIFIER_IS_ANY_SET(romMethod,j9Modifiers)
-#endif
-
-
 
 /* Macros that always operate directly a romClass copy, be it in process or out of process given a romClass
  * that has already been read in */
@@ -85,18 +56,15 @@
 #define J9ROMCLASS_HAS_VERIFY_DATA(romClass)	_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassHasVerifyData)
 #define J9ROMCLASS_HAS_MODIFIED_BYTECODES(romClass)	_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassBytecodesModified)
 #define J9ROMCLASS_HAS_EMPTY_FINALIZE(romClass)	_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassHasEmptyFinalize)
-#define J9ROMCLASS_HAS_JDBC_NATIVES(romClass)	_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassHasJDBCNatives)
-#define J9ROMCLASS_IS_GC_SPECIAL(romClass)		_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassGCSpecial)
 #define J9ROMCLASS_HAS_FINAL_FIELDS(romClass)	_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassHasFinalFields)
 #define J9ROMCLASS_HAS_CLINIT(romClass)			_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassHasClinit)
-#define J9ROMCLASS_IS_HOTSWAPPED_OUT(romClass)	_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassHotSwappedOut)
-#define J9ROMCLASS_IS_DYING(romClass)			_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassDying)
 #define J9ROMCLASS_REFERENCE_WEAK(romClass)		_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassReferenceWeak)
 #define J9ROMCLASS_REFERENCE_SOFT(romClass)		_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassReferenceSoft)
 #define J9ROMCLASS_REFERENCE_PHANTOM(romClass)	_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassReferencePhantom)
 #define J9ROMCLASS_FINALIZE_NEEDED(romClass)	_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassFinalizeNeeded)
 #define J9ROMCLASS_IS_CLONEABLE(romClass)		_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassCloneable)
 #define J9ROMCLASS_ANNOTATION_REFERS_DOUBLE_SLOT_ENTRY(romClass)	_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassAnnnotionRefersDoubleSlotEntry)
+#define J9ROMCLASS_IS_UNMODIFIABLE(romClass)	_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassIsUnmodifiable)
 
 /* 
  * Note that resolvefield ignores this flag if the cache line size cannot be determined.
@@ -104,6 +72,11 @@
  * per JEP-142.
  */
 #define J9ROMCLASS_IS_CONTENDED(romClass)	_J9ROMCLASS_J9MODIFIER_IS_SET((romClass), J9AccClassIsContended)
+
+#ifdef J9VM_OPT_VALHALLA_VALUE_TYPES
+/* Will need to modify this if ValObject/RefObject proposal goes through */
+#define J9ROMCLASS_IS_VALUE(romClass)	_J9ROMCLASS_SUNMODIFIER_IS_SET((romClass), J9AccValueType)
+#endif/* #ifdef J9VM_OPT_VALHALLA_VALUE_TYPES */
 
 #define J9ROMMETHOD_IS_GETTER(romMethod)				_J9ROMMETHOD_J9MODIFIER_IS_SET((romMethod), J9AccGetterMethod)
 #define J9ROMMETHOD_IS_FORWARDER(romMethod)				_J9ROMMETHOD_J9MODIFIER_IS_SET((romMethod), J9AccForwarderMethod)
@@ -124,22 +97,25 @@
 #define J9ROMMETHOD_IS_OBJECT_CONSTRUCTOR(romMethod)	_J9ROMMETHOD_J9MODIFIER_IS_SET((romMethod), J9AccMethodObjectConstructor)
 #define J9ROMMETHOD_IS_CALLER_SENSITIVE(romMethod)	_J9ROMMETHOD_J9MODIFIER_IS_SET((romMethod), J9AccMethodCallerSensitive)
 
-#if 0 /* fix this for JEP142 */
-#define J9ROMCLASS_FIELD_IS_CONTENDED(romClassField)	J9_ARE_ALL_BITS_SET(field->modifiers, J9FieldFlagIsContended)
-#else
-#define J9ROMCLASS_FIELD_IS_CONTENDED(romClassField)	FALSE
-#endif
+#define J9ROMFIELD_IS_CONTENDED(romField)	J9_ARE_ALL_BITS_SET((romField)->modifiers, J9FieldFlagIsContended)
 
-
-/* Macros that operate on a romClass pointer that is assumed to be local and needs to have the romClass fetched from
- * the remote (in the OUT OF PROCESS case).  */
-
-#define REMOTE_J9ROMCLASS_IS_ARRAY(romClass)    _REMOTE_J9ROMCLASS_SUNMODIFIER_IS_SET((romClass), J9AccClassArray)
 
 /* Composite Flag checks */
 
 #define J9ROMCLASS_IS_PRIMITIVE_OR_ARRAY(romClass) _J9ROMCLASS_SUNMODIFIER_IS_ANY_SET((romClass), J9AccClassArray | J9AccClassInternalPrimitiveType)
 #define J9ROMMETHOD_IS_NON_EMPTY_OBJECT_CONSTRUCTOR(romMethod) \
 	((((romMethod)->modifiers) & (J9AccMethodObjectConstructor | J9AccEmptyMethod)) == J9AccMethodObjectConstructor)
+
+/* Class instances are allocated via the new bytecode */
+#define J9ROMCLASS_ALLOCATES_VIA_NEW(romClass) \
+	J9_ARE_NO_BITS_SET((romClass)->modifiers, J9AccAbstract | J9AccInterface | J9AccClassArray | J9AccValueType)
+
+/* Class instances are allocated via J9RAMClass->totalInstanceSize */
+#define J9ROMCLASS_ALLOCATE_USES_TOTALINSTANCESIZE(romClass) \
+	J9_ARE_NO_BITS_SET((romClass)->modifiers, J9AccAbstract | J9AccInterface | J9AccClassArray)
+
+/* Only public vTable methods go into the iTable */
+#define J9ROMMETHOD_IN_ITABLE(romMethod) \
+	J9_ARE_ALL_BITS_SET((romMethod)->modifiers, J9AccMethodVTable | J9AccPublic)
 
 #endif	/* _J9MODIFIERS_API_H */

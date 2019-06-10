@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9protos.h"
@@ -27,6 +27,7 @@
 #include "VMHelpers.hpp"
 #include "AtomicSupport.hpp"
 #include "MethodMetaData.h"
+#include "ut_j9codertvm.h"
 
 extern "C" {
 
@@ -80,7 +81,7 @@ static void *i2jReturnTable[16] = {0};
 
 void *jit2InterpreterSendTargetTable[13] = {0};
 
-static UDATA jitGetExceptionCatcher(J9VMThread *currentThread, void *handlerPC, J9JITExceptionTable *metaData, J9Method **method, IDATA *location);
+static J9Method* jitGetExceptionCatcher(J9VMThread *currentThread, void *handlerPC, J9JITExceptionTable *metaData, IDATA *location);
 
 void
 initializeCodertFunctionTable(J9JavaVM *javaVM)
@@ -179,7 +180,7 @@ jitMethodFailedTranslation(J9VMThread *currentThread, J9Method *method)
 {
 	J9JITConfig *jitConfig = currentThread->javaVM->jitConfig;
 	if (J9_ARE_NO_BITS_SET(jitConfig->runtimeFlags, J9JIT_TOSS_CODE)) {
-		/* Natives are already set corectly before the translation attempt */
+		/* Natives are already set correctly before the translation attempt */
 		if (J9_ARE_NO_BITS_SET(J9_ROM_METHOD_FROM_RAM_METHOD(method)->modifiers, J9AccNative)) {
 			method->extra = (void*)(UDATA)(IDATA)J9_JIT_NEVER_TRANSLATE;
 		}
@@ -207,14 +208,15 @@ jitMethodTranslated(J9VMThread *currentThread, J9Method *method, void *jitStartA
 			UDATA initialClassDepth = VM_VMHelpers::getClassDepth(currentClass);
 			void *j2jAddress = VM_VMHelpers::jitToJitStartAddress(jitStartAddress);
 			do {
-				UDATA *vTable = (UDATA*)(currentClass + 1);
-				UDATA vTableWriteIndex = vTable[0];
+				J9VTableHeader* vTableHeader = J9VTABLE_HEADER_FROM_RAM_CLASS(currentClass);
+
+				/* get number of real methods in Interpreter vTable */
+				UDATA vTableWriteIndex = vTableHeader->size;
 				if (0 != vTableWriteIndex) {
 					/* initialize pointer to first real vTable method */
-					void **vTableWriteCursor = (void**)currentClass - 2;
-					J9Method **vTableReadCursor = (J9Method**)vTable + 2;
-					/* JIT vTable does not contain the default method */
-					vTableWriteIndex -= 1;
+					void **vTableWriteCursor = (void**)JIT_VTABLE_START_ADDRESS(currentClass);
+					J9Method **vTableReadCursor = J9VTABLE_FROM_HEADER(vTableHeader);
+
 					while (0 != vTableWriteIndex) {
 						if (method == *vTableReadCursor) {
 							*vTableWriteCursor = j2jAddress;
@@ -293,10 +295,10 @@ jitUpdateInlineAttribute(J9VMThread *currentThread, J9Class * classPtr, void *ji
 		/* Methods in Object never override anything */
 		if (NULL != superclass) {
 			/* Skip the count field and the first method in the table (not a real method) */
-			UDATA *superVTable = (UDATA*)(superclass + 1);
-			UDATA methodCount = superVTable[0] - 1;
-			J9Method **superMethods = (J9Method**)(superVTable + 2);
-			J9Method **subMethods = (J9Method**)(classPtr + 1) + 2;
+			J9VTableHeader *superVTableHeader = J9VTABLE_HEADER_FROM_RAM_CLASS(superclass);
+			UDATA methodCount = superVTableHeader->size;
+			J9Method **superMethods = J9VTABLE_FROM_HEADER(superVTableHeader);
+			J9Method **subMethods = J9VTABLE_FROM_RAM_CLASS(classPtr);
 			/* Walk all methods which could possibly be overridden */
 			while (0 != methodCount) {
 				J9Method *superMethod = *superMethods;
@@ -318,28 +320,27 @@ jitUpdateInlineAttribute(J9VMThread *currentThread, J9Class * classPtr, void *ji
 	}
 }
 
-static UDATA
-jitGetExceptionCatcher(J9VMThread *currentThread, void *handlerPC, J9JITExceptionTable *metaData, J9Method **method, IDATA *location)
+static J9Method*
+jitGetExceptionCatcher(J9VMThread *currentThread, void *handlerPC, J9JITExceptionTable *metaData, IDATA *location)
 {
-	UDATA inlinedCatcherFound = FALSE;
+	J9Method *method = metaData->ramMethod;
+	void *stackMap = NULL;
+	void *inlineMap = NULL;
+	void *inlinedCallSite = NULL;
+	/* Note we need to add 1 to the JIT PC here in order to get the correct map at the exception handler
+	 * because jitGetMapsFromPC is expecting a return address, so it subtracts 1.  The value passed in is
+	 * the start address of the compiled exception handler.
+	 */
+	jitGetMapsFromPC(currentThread->javaVM, metaData, (UDATA)handlerPC + 1, &stackMap, &inlineMap);
+	Assert_CodertVM_false(NULL == inlineMap);
 	if (NULL != getJitInlinedCallInfo(metaData)) {
-		void *stackMap = NULL;
-		void *inlineMap = NULL;
-		/* Note we need to add 1 to the JIT PC here in order to get the correct map at the exception handler
-		 * because jitGetMapsFromPC is expecting a return address, so it subtracts 1.  The value passed in is
-		 * the start address of the compiled exception handler.
-		 */
-		jitGetMapsFromPC(currentThread->javaVM, metaData, (UDATA)handlerPC + 1, &stackMap, &inlineMap);
-		if (NULL != inlineMap) {
-			void *inlinedCallSite = getFirstInlinedCallSite(metaData, inlineMap);
-			if (NULL != inlinedCallSite) {
-				*method = (J9Method*)getInlinedMethod(inlinedCallSite);
-				*location = (IDATA)getJitPCOffsetFromExceptionHandler(metaData, handlerPC);
-				inlinedCatcherFound = TRUE;
-			}
+		inlinedCallSite = getFirstInlinedCallSite(metaData, inlineMap);
+		if (NULL != inlinedCallSite) {
+			method = (J9Method*)getInlinedMethod(inlinedCallSite);
 		}
 	}
-	return inlinedCatcherFound;
+	*location = (IDATA)getCurrentByteCodeIndexAndIsSameReceiver(metaData, inlineMap, inlinedCallSite, NULL);
+	return method;
 }
 
 } /* extern "C" */

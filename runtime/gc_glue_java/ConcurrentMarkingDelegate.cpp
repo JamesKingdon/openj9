@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "ConcurrentMarkingDelegate.hpp"
@@ -38,7 +38,7 @@
  * Concurrents stack slot iterator.
  * Called for each slot in a threads active stack frames which contains a object reference.
  *
- * @param objectInidrect
+ * @param objectIndirect
  * @param localdata
  * @param isDerivedPointer
  * @param objectIndirectBase
@@ -91,6 +91,37 @@ MM_ConcurrentMarkingDelegate::signalThreadsToTraceStacks(MM_EnvironmentBase *env
 	GC_VMInterface::unlockVMThreadList(extensions);
 
 	_collector->getConcurrentGCStats()->setThreadsToScanCount(threadCount);
+}
+
+void
+MM_ConcurrentMarkingDelegate::signalThreadsToActivateWriteBarrier(MM_EnvironmentBase *env)
+{
+	MM_GCExtensions *extensions = MM_GCExtensions::getExtensions(env);
+	GC_VMInterface::lockVMThreadList(extensions);
+
+	J9VMThread *walkThread;
+	GC_VMThreadListIterator vmThreadListIterator(_javaVM);
+	while ((walkThread = vmThreadListIterator.nextVMThread()) != NULL) {
+		walkThread->privateFlags |= J9_PRIVATE_FLAGS_CONCURRENT_MARK_ACTIVE;
+	}
+	GC_VMInterface::unlockVMThreadList(extensions);
+}
+
+void
+MM_ConcurrentMarkingDelegate::signalThreadsToDeactivateWriteBarrier(MM_EnvironmentBase *env)
+{
+	MM_GCExtensions *extensions = MM_GCExtensions::getExtensions(_javaVM);
+	if (extensions->optimizeConcurrentWB) {
+		GC_VMInterface::lockVMThreadList(extensions);
+		GC_VMThreadListIterator vmThreadListIterator(_javaVM);
+		J9VMThread *walkThread;
+
+		/* Reset vmThread flag so mutators don't dirty cards or run write barriers until next concurrent KO */
+		while ((walkThread = vmThreadListIterator.nextVMThread()) != NULL) {
+			walkThread->privateFlags &= ~J9_PRIVATE_FLAGS_CONCURRENT_MARK_ACTIVE;
+		}
+		GC_VMInterface::unlockVMThreadList(extensions);
+	}
 }
 
 void
@@ -386,7 +417,7 @@ MM_ConcurrentMarkingDelegate::concurrentClassMark(MM_EnvironmentBase *env, bool 
 				J9HashTableState walkState;
 				/*
 				 * We believe that (NULL == classLoader->classHashTable) is set ONLY for DEAD class loader
-				 * so, if this pointer happend to be NULL at this point let it crash here
+				 * so, if this pointer happened to be NULL at this point let it crash here
 				 */
 				Assert_MM_true(NULL != classLoader->classHashTable);
 				clazz = _javaVM->internalVMFunctions->hashClassTableStartDo(classLoader, &walkState);
@@ -399,23 +430,24 @@ MM_ConcurrentMarkingDelegate::concurrentClassMark(MM_EnvironmentBase *env, bool 
 					clazz = _javaVM->internalVMFunctions->hashClassTableNextDo(&walkState);
 				}
 
-				Assert_MM_true(NULL != classLoader->moduleHashTable);
-				J9HashTableState moduleWalkState;
-				J9Module **modulePtr = (J9Module**)hashTableStartDo(classLoader->moduleHashTable, &moduleWalkState);
-				while (NULL != modulePtr) {
-					J9Module * const module = *modulePtr;
+				if (NULL != classLoader->moduleHashTable) {
+					J9HashTableState moduleWalkState;
+					J9Module **modulePtr = (J9Module**)hashTableStartDo(classLoader->moduleHashTable, &moduleWalkState);
+					while (NULL != modulePtr) {
+						J9Module * const module = *modulePtr;
 
-					_markingScheme->markObject(env, (j9object_t)module->moduleObject);
-					if (NULL != module->moduleName) {
-						_markingScheme->markObject(env, (j9object_t)module->moduleName);
+						_markingScheme->markObject(env, (j9object_t)module->moduleObject);
+						if (NULL != module->moduleName) {
+							_markingScheme->markObject(env, (j9object_t)module->moduleName);
+						}
+						if (NULL != module->version) {
+							_markingScheme->markObject(env, (j9object_t)module->version);
+						}
+						if (env->isExclusiveAccessRequestWaiting()) {	/* interrupt if exclusive access request is waiting */
+							goto quitConcurrentClassMark;
+						}
+						modulePtr = (J9Module**)hashTableNextDo(&moduleWalkState);
 					}
-					if (NULL != module->version) {
-						_markingScheme->markObject(env, (j9object_t)module->version);
-					}
-					if (env->isExclusiveAccessRequestWaiting()) {	/* interrupt if exclusive access request is waiting */
-						goto quitConcurrentClassMark;
-					}
-					modulePtr = (J9Module**)hashTableNextDo(&moduleWalkState);
 				}
 
 				classLoader->gcFlags |= J9_GC_CLASS_LOADER_SCANNED;

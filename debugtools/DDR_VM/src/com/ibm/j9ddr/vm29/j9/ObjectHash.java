@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2013, 2014 IBM Corp. and others
+ * Copyright (c) 2013, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,27 +17,31 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.j9;
 
 import com.ibm.j9ddr.CorruptDataException;
-import com.ibm.j9ddr.vm29.structure.J9Consts;
 import com.ibm.j9ddr.vm29.pointer.generated.J9BuildFlags;
+import com.ibm.j9ddr.vm29.structure.J9Consts;
 import com.ibm.j9ddr.vm29.pointer.generated.J9IdentityHashDataPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9JavaVMPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ObjectPointer;
+import com.ibm.j9ddr.vm29.pointer.helper.J9JavaVMHelper;
 import com.ibm.j9ddr.vm29.structure.J9IdentityHashData;
 import com.ibm.j9ddr.vm29.types.I32;
 import com.ibm.j9ddr.vm29.types.U32;
 import com.ibm.j9ddr.vm29.types.UDATA;
 
-public class ObjectHash 
-{
+public class ObjectHash {
+
+	private static final long J9_EXTENDED_RUNTIME_POSITIVE_HASHCODE =
+			J9ConstantHelper.getLong(J9Consts.class, "J9_EXTENDED_RUNTIME_POSITIVE_HASHCODE", 0);
+
 	private static U32 getSalt(J9JavaVMPointer vm, UDATA objectPointer) throws CorruptDataException
 	{
 		/* set up the default salt */
-		U32 salt = (new U32(1421595292)).bitXor(new U32(UDATA.cast(vm)));
+		UDATA salt = new U32(1421595292).bitXor(new U32(UDATA.cast(vm)));
 		J9IdentityHashDataPointer hashData = vm.identityHashData();
 		UDATA saltPolicy = hashData.hashSaltPolicy();
 		
@@ -86,7 +90,7 @@ public class ObjectHash
 			throw new CorruptDataException("Invalid salt policy");
 		}
 		
-		return salt;
+		return new U32(salt);
 	}
 	
 	static U32 rotateLeft(U32 value, int count)
@@ -135,11 +139,14 @@ public class ObjectHash
 		hashValue = hashValue.mult(MUL2);
 		hashValue = hashValue.bitXor(hashValue.rightShift(16));
 
+		/* If forcing positive hash codes, AND out the sign bit */
+		if (J9JavaVMHelper.extendedRuntimeFlagIsSet(vm, J9_EXTENDED_RUNTIME_POSITIVE_HASHCODE)) {
+			hashValue = hashValue.bitAnd(0x7FFFFFFF);
+		}
 
 		return new I32(hashValue);
 	}
 
-	
 	public static I32 convertObjectAddressToHash(J9JavaVMPointer vm, J9ObjectPointer object) throws CorruptDataException
 	{
 		return inlineConvertValueToHash(vm, UDATA.cast(object));

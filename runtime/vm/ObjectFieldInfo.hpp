@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef OBJECTFIELDINFO_HPP_
@@ -54,6 +54,15 @@ private:
 	U_32 _contendedObjectCount;
 	U_32 _contendedSingleCount;
 	U_32 _contendedDoubleCount;
+
+#ifdef J9VM_OPT_VALHALLA_VALUE_TYPES
+	bool _isValue;
+	J9FlattenedClassCache *_flattenedClassCache;
+	U_32 _totalFlatFieldDoubleBytes;
+	U_32 _totalFlatFieldRefBytes;
+	U_32 _totalFlatFieldSingleBytes;
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
+
 	bool _hiddenFieldOffsetResolutionRequired;
 	bool _instanceFieldBackfillEligible; /* use this to give instance fields priority over the hidden fields for backfill slots */
 	U_32 _hiddenFieldCount;
@@ -84,7 +93,11 @@ public:
 		OBJECT_SIZE_INCREMENT_IN_BYTES = 8
 	};
 
+#ifdef J9VM_OPT_VALHALLA_VALUE_TYPES
+	ObjectFieldInfo(J9JavaVM *vm, J9ROMClass *romClass, J9FlattenedClassCache *flattenedClassCache):
+#else
 	ObjectFieldInfo(J9JavaVM *vm, J9ROMClass *romClass):
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 		_cacheLineSize(0),
 		_useContendedClassLayout(false),
 		_romClass(romClass),
@@ -99,7 +112,13 @@ public:
 		_contendedObjectCount(0),
 		_contendedSingleCount(0),
 		_contendedDoubleCount(0),
-
+#ifdef J9VM_OPT_VALHALLA_VALUE_TYPES
+		_isValue(J9ROMCLASS_IS_VALUE(romClass)),
+		_flattenedClassCache(flattenedClassCache),
+		_totalFlatFieldDoubleBytes(0),
+		_totalFlatFieldRefBytes(0),
+		_totalFlatFieldSingleBytes(0),
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 		_hiddenFieldOffsetResolutionRequired(false),
 		_instanceFieldBackfillEligible(false),
 		_hiddenFieldCount(0),
@@ -306,7 +325,7 @@ public:
 
 	/**
 	 * Compute the total size of the object including padding to end on 8-byte boundary.
-	 * Update the backfill values to use for this class's fields and thoise of subclasses
+	 * Update the backfill values to use for this class's fields and those of subclasses
 	 * @return size of the object in bytes, not including the header
 	 */
 	U_32
@@ -323,11 +342,15 @@ public:
 	{
 		U_32 fieldDataStart = 0;
 		if (!isContendedClassLayout()) {
-			fieldDataStart = getSuperclassFieldsSize();
+			bool doubleAlignment = (_totalDoubleCount > 0);
+#ifdef J9VM_OPT_VALHALLA_VALUE_TYPES
+			doubleAlignment = doubleAlignment || (_totalFlatFieldDoubleBytes > 0);
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 
+			fieldDataStart = getSuperclassFieldsSize();
 			if (
 					((getSuperclassObjectSize() % OBJECT_SIZE_INCREMENT_IN_BYTES) != 0) && /* superclass is not end-aligned */
-					((_totalDoubleCount > 0) || (!_objectCanUseBackfill && (_totalObjectCount > 0)))
+					(doubleAlignment || (!_objectCanUseBackfill && (_totalObjectCount > 0)))
 			){ /* our fields start on a 8-byte boundary */
 				fieldDataStart += BACKFILL_SIZE;
 			}
@@ -364,6 +387,44 @@ public:
 	{
 		return start + (isContendedClassLayout() ? _contendedObjectCount: getNonBackfilledObjectCount()) * sizeof(fj9object_t);
 	}
+
+#ifdef J9VM_OPT_VALHALLA_VALUE_TYPES
+	/**
+	 * @param start end of previous field area, which should be the first field area
+	 * @return offset to end of the flat doubles area
+	 */
+	VMINLINE UDATA
+	addFlatDoublesArea(UDATA start) const
+	{
+		return start + _totalFlatFieldDoubleBytes;
+	}
+
+	/**
+	 * @param start end of previous field area, which should be after doubles
+	 * @return offset to end of the flat doubles area
+	 */
+	VMINLINE UDATA
+	addFlatObjectsArea(UDATA start) const
+	{
+		return start + _totalFlatFieldRefBytes;
+	}
+
+	/**
+	 * @param start end of previous field area, which should be after objects
+	 * @return offset to end of the flat doubles area
+	 */
+	VMINLINE UDATA
+	addFlatSinglesArea(UDATA start) const
+	{
+		return start + _totalFlatFieldSingleBytes;
+	}
+
+	VMINLINE bool
+	isValue() const
+	{
+		return _isValue;
+	}
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 
 	VMINLINE bool
 	isHiddenFieldOffsetResolutionRequired(void) const

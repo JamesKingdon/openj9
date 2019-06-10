@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "jvmtiHelpers.h"
@@ -167,6 +167,7 @@ jvmtiGetTag(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	J9VMThread * currentThread;
 	jvmtiError rc;
+	jlong rv_tag = 0;
 
 	Trc_JVMTI_jvmtiGetTag_Entry(env);
 
@@ -183,12 +184,6 @@ jvmtiGetTag(jvmtiEnv* env,
 		ENSURE_JOBJECT_NON_NULL(object);
 		ENSURE_NON_NULL(tag_ptr);
 
-		if (AUTOTAGGING_OBJECTS(env)) {
-			if ( !J9VM_IS_INITIALIZED_HEAPCLASS(currentThread, (*(j9object_t *)object)) ) {
-				JVMTI_ERROR(JVMTI_ERROR_INVALID_OBJECT);
-			}
-		}		
-		
 		entry.ref = *(j9object_t *)object;
 
 		if ( entry.ref ) {
@@ -198,9 +193,7 @@ jvmtiGetTag(jvmtiEnv* env,
 
 			objectTag = hashTableFind(((J9JVMTIEnv *)env)->objectTagTable, &entry);
 			if (objectTag) {
-				*tag_ptr = objectTag->tag;
-			} else {
-				*tag_ptr = 0;
+				rv_tag = objectTag->tag;
 			}
 
 			omrthread_monitor_exit(((J9JVMTIEnv *)env)->mutex);
@@ -210,9 +203,12 @@ jvmtiGetTag(jvmtiEnv* env,
 		}
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != tag_ptr) {
+		*tag_ptr = rv_tag;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetTag);
 }
 
@@ -239,12 +235,6 @@ jvmtiSetTag(jvmtiEnv* env,
 		ENSURE_CAPABILITY(env, can_tag_objects);
 
 		ENSURE_JOBJECT_NON_NULL(object);
-		
-		if (AUTOTAGGING_OBJECTS(env)) {
-			if ( !J9VM_IS_INITIALIZED_HEAPCLASS(currentThread, (*(j9object_t *)object)) ) {
-				JVMTI_ERROR(JVMTI_ERROR_INVALID_OBJECT);
-			}
-		}		
 
 		entry.ref = *(j9object_t *)object;
 		entry.tag = tag;
@@ -275,7 +265,7 @@ jvmtiSetTag(jvmtiEnv* env,
 			rc = JVMTI_ERROR_INVALID_OBJECT;
 		}
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	TRACE_JVMTI_RETURN(jvmtiSetTag);
@@ -302,7 +292,7 @@ jvmtiForceGarbageCollection(jvmtiEnv* env)
 		vm->memoryManagerFunctions->j9gc_modron_global_collect(currentThread);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	TRACE_JVMTI_RETURN(jvmtiForceGarbageCollection);
@@ -325,6 +315,9 @@ jvmtiGetObjectsWithTags(jvmtiEnv* env,
 	J9VMThread * currentThread;
 	jvmtiError rc;
 	PORT_ACCESS_FROM_JAVAVM(vm);
+	jint rv_count = 0;
+	jobject *rv_object_result = NULL;
+	jlong *rv_tag_result = NULL;
 
 	Trc_JVMTI_jvmtiGetObjectsWithTags_Entry(env);
 
@@ -343,7 +336,6 @@ jvmtiGetObjectsWithTags(jvmtiEnv* env,
 		ENSURE_NON_NULL(count_ptr);
 
 		if ( tag_count == 0 ) {
-			*count_ptr = 0;
 			JVMTI_ERROR(JVMTI_ERROR_NONE);
 		}
 
@@ -382,13 +374,13 @@ jvmtiGetObjectsWithTags(jvmtiEnv* env,
 
 		if (rc == JVMTI_ERROR_NONE) {
 
-			*count_ptr = results.count;
+			rv_count = results.count;
 
 			if (object_result_ptr) {
-				*object_result_ptr = results.objects;
+				rv_object_result = results.objects;
 			}
 			if (tag_result_ptr) {
-				*tag_result_ptr = results.tags;
+				rv_tag_result = results.tags;
 			}
 
 			/* Fill in elements ... unwinds results.count */
@@ -405,9 +397,18 @@ jvmtiGetObjectsWithTags(jvmtiEnv* env,
 		omrthread_monitor_exit(((J9JVMTIEnv *)env)->mutex);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != count_ptr) {
+		*count_ptr = rv_count;
+	}
+	if (NULL != object_result_ptr) {
+		*object_result_ptr = rv_object_result;
+	}
+	if (NULL != tag_result_ptr) {
+		*tag_result_ptr = rv_tag_result;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetObjectsWithTags);
 }
 
@@ -469,12 +470,10 @@ countObjectTags(J9JVMTIObjectTag * entry, J9JVMTIObjectTagMatch * results)
  * @param env             jvmti environment
  * @param heap_filter     tag filter flags used to determine which objects are to be reported
  * @param klass           class filter 
- * @param initial_object  object to start following the references from. Set to null to start witht the Heap Roots
+ * @param initial_object  object to start following the references from. Set to null to start with the Heap Roots
  * @param callbacks       callbacks to be invoked for each reference type
  * @param user_data       user data to be passed back via the callbacks
  * @return                a jvmtiError value
- * 
- *	Full spec is available here: http://j9.ottawa.ibm.com/j9dt/specs/jvmti.html#FollowReferences
  */
 jvmtiError JNICALL
 jvmtiFollowReferences(jvmtiEnv* env, jint heap_filter, jclass klass, jobject initial_object, const jvmtiHeapCallbacks* callbacks,
@@ -519,7 +518,8 @@ jvmtiFollowReferences(jvmtiEnv* env, jint heap_filter, jclass klass, jobject ini
 		}
 
 		vm->internalVMFunctions->acquireExclusiveVMAccess(currentThread);
-		
+		ensureHeapWalkable(currentThread);
+
 		/* Walk the heap */
 		if (initial_object) {
 			j9object_t object = *(j9object_t *) initial_object;
@@ -548,7 +548,7 @@ jvmtiFollowReferences(jvmtiEnv* env, jint heap_filter, jclass klass, jobject ini
 		vm->internalVMFunctions->releaseExclusiveVMAccess(currentThread);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	TRACE_JVMTI_RETURN(jvmtiFollowReferences);
@@ -698,7 +698,7 @@ heapReferenceFilter(J9JVMTIHeapData * iteratorData)
 {
 
 	/* If the class filter is set, check if this reference is what we are looking for,
-	 * otherwise continue itterating */
+	 * otherwise continue iterating */
 	if ((iteratorData->classFilter != NULL) && (iteratorData->classFilter != iteratorData->clazz)) {
 		if (iteratorData->event.type == J9JVMTI_HEAP_EVENT_NONE_REPORT_NOFOLLOW) {
 			return JVMTI_ITERATION_IGNORE;
@@ -884,12 +884,7 @@ jvmtiHeapFollowRefs_getStackData(J9JVMTIHeapData * iteratorData, J9StackWalkStat
 	/* Find thread tag */
 	
 	search.ref = (j9object_t ) walkState->walkThread->threadObject;
-	if (!AUTOTAGGING_OBJECTS(iteratorData->env)) {
-		result = hashTableFind(iteratorData->env->objectTagTable, &search);
-	} else {
-		search.tag = (jlong)(UDATA)search.ref;
-		result = &search;
-	}	
+	result = hashTableFind(iteratorData->env->objectTagTable, &search);
 
 	/* Figure out the Thread ID */
 
@@ -999,17 +994,12 @@ static void
 jvmtiFollowRefs_getTags(J9JVMTIHeapData * iteratorData, j9object_t  referrer, j9object_t  object) 
 {
 	J9JVMTIObjectTag entry, *result;
-	J9JavaVM *vm = JAVAVM_FROM_ENV(iteratorData->env);
 	J9Class *clazz;
 
 	/* get the object tag */
-	if (OBJECT_IS_TAGGABLE(iteratorData->env, vm, object)) {
-		entry.ref = object;
-		result = hashTableFind(iteratorData->env->objectTagTable, &entry);
-		iteratorData->tags.objectTag = (result == NULL) ? 0 : result->tag;
-	} else	{
-		iteratorData->tags.objectTag = (jlong)(UDATA)object;
-	}
+	entry.ref = object;
+	result = hashTableFind(iteratorData->env->objectTagTable, &entry);
+	iteratorData->tags.objectTag = (result == NULL) ? 0 : result->tag;
 	
 	/* get the class (of object) tag */
 	clazz = J9OBJECT_CLAZZ(iteratorData->currentThread, object);
@@ -1021,13 +1011,9 @@ jvmtiFollowRefs_getTags(J9JVMTIHeapData * iteratorData, j9object_t  referrer, j9
 	 * the usual j9object, ignore it here */   
 	if ((referrer != NULL) && (iteratorData->event.type != J9JVMTI_HEAP_EVENT_STACK)) {
 		/* get the referrer object tag */
-		if (OBJECT_IS_TAGGABLE(iteratorData->env, vm, referrer)) {
-			entry.ref = referrer;
-			result = hashTableFind(iteratorData->env->objectTagTable, &entry);
-			iteratorData->tags.referrerObjectTag = (result == NULL) ? 0 : result->tag;
-		} else {
-			iteratorData->tags.referrerObjectTag = (jlong)(UDATA)referrer;
-		}
+		entry.ref = referrer;
+		result = hashTableFind(iteratorData->env->objectTagTable, &entry);
+		iteratorData->tags.referrerObjectTag = (result == NULL) ? 0 : result->tag;
 
 		/* get the referrer object class tag */
 		clazz = J9OBJECT_CLAZZ(iteratorData->currentThread, referrer);
@@ -1134,10 +1120,23 @@ mapEventType(J9JVMTIHeapData * data, IDATA type, jint index, j9object_t referrer
 			break;
 				
 		case J9GC_REFERENCE_TYPE_CLASS:
-            event->type = J9JVMTI_HEAP_EVENT_OBJECT;
+			event->type = J9JVMTI_HEAP_EVENT_OBJECT;
 			event->refKind = JVMTI_HEAP_REFERENCE_CLASS;
 
-			if (referrer) {
+			if (NULL != referrer) {
+				clazz = J9OBJECT_CLAZZ(data->currentThread, referrer);
+				if (J9VMJAVALANGCLASS_OR_NULL(vm) == clazz) {
+					/*
+					 * Do not report class references from Class objects,
+					 * per JVMTI specification:
+					 * "* 	Classes report a reference to the superclass and
+					 * 		directly implemented/extended interfaces.
+					 *  * 	Classes report a reference to the class loader,
+					 * 		protection domain, signers, and resolved entries in the constant pool."
+					 */
+					event->type = J9JVMTI_HEAP_EVENT_NONE_NOFOLLOW;
+					break;
+				}
 				if (!J9VM_IS_INITIALIZED_HEAPCLASS(data->currentThread, referrer)) {
 					/* referrer is an instance object, report its class reference but do not follow it.
 					 * Its odd but follows the SUN behaviour. */
@@ -1275,9 +1274,6 @@ mapEventType(J9JVMTIHeapData * data, IDATA type, jint index, j9object_t referrer
  * @param callbacks       callbacks to be invoked for each reference type
  * @param user_data       user data to be passed back via the callbacks
  * @return                a jvmtiError value
- * 
- *	Full spec is available here: http://j9.ottawa.ibm.com/j9dt/specs/jvmti.html#IterateThroughHeap
- *
  */
 jvmtiError JNICALL jvmtiIterateThroughHeap(jvmtiEnv* env,
 					   jint heap_filter,
@@ -1323,7 +1319,8 @@ jvmtiError JNICALL jvmtiIterateThroughHeap(jvmtiEnv* env,
 		}
     
 		vmFuncs->acquireExclusiveVMAccess(currentThread);
-		
+		ensureHeapWalkable(currentThread);
+
 		/* Walk the heap */
 		vm->memoryManagerFunctions->j9mm_iterate_all_objects(vm, vm->portLibrary, 0, iterateThroughHeapCallback, &iteratorData);
 		rc = iteratorData.rc;
@@ -1331,7 +1328,7 @@ jvmtiError JNICALL jvmtiIterateThroughHeap(jvmtiEnv* env,
 		vmFuncs->releaseExclusiveVMAccess(currentThread);
 
 done:
-		vmFuncs->internalReleaseVMAccess(currentThread);
+		vmFuncs->internalExitVMToJNI(currentThread);
 	}
 
 	TRACE_JVMTI_RETURN(jvmtiIterateThroughHeap);
@@ -1367,7 +1364,7 @@ iterateThroughHeapCallback(J9JavaVM *vm, J9MM_IterateObjectDescriptor *objectDes
 	clazz = J9OBJECT_CLAZZ_VM(vm, object);
 
 	/* If the class filter is set, check if this references is what we are looking for,
-	 * otherwise continue itterating */
+	 * otherwise continue iterating */
 	if ((iteratorData->classFilter != NULL) && (iteratorData->classFilter != clazz)) {
 		return JVMTI_ITERATION_CONTINUE;
 	}
@@ -1678,8 +1675,7 @@ wrap_primitiveFieldCallback(J9JavaVM * vm, J9JVMTIHeapData * iteratorData, IDATA
 			goto nextField; 
 		}
 
-		/* The field index must reflect the index order returned by jvmtiGetClassFields in addition to being offset
-		 * as per the details in http://j9.ottawa.ibm.com/j9dt/specs/jvmti.html#jvmtiHeapReferenceInfoField */
+		/* The field index must reflect the index order returned by jvmtiGetClassFields in addition to being offset */
 		fieldInfo.field.index = (jint)(state.fieldOffsetWalkState.result.index + state.classIndexAdjust + state.referenceIndexOffset - 1);
 
 		primitiveValue.j = (jlong) 0;
@@ -1761,15 +1757,14 @@ wrap_stringPrimitiveCallback(J9JavaVM * vm, J9JVMTIHeapData * iteratorData)
 	j9object_t bytes = J9VMJAVALANGSTRING_VALUE(iteratorData->currentThread, iteratorData->object);
 	UDATA offset = 0;
 
-	/* Get the Unicode string data */
-
-	stringLength = J9VMJAVALANGSTRING_LENGTH(iteratorData->currentThread, iteratorData->object);
-	
 	/* Ignore uninitialized string */
 	if (NULL == bytes) {
 		return JVMTI_ITERATION_CONTINUE;
 	}
 
+	/* Get the Unicode string data */
+
+	stringLength = J9VMJAVALANGSTRING_LENGTH(iteratorData->currentThread, iteratorData->object);
 	stringValue = j9mem_allocate_memory(stringLength * sizeof(jchar), J9MEM_CATEGORY_JVMTI);
 	if (NULL == stringValue) {
 		JVMTI_HEAP_ERROR(JVMTI_ERROR_OUT_OF_MEMORY);
@@ -2003,12 +1998,6 @@ updateObjectTag(J9JVMTIHeapData * iteratorData, j9object_t object, jlong *origin
 {
 	J9JVMTIObjectTag entry;
 	J9JVMTIObjectTag *resultTag;
-	J9JavaVM *vm = JAVAVM_FROM_ENV(iteratorData->env);
-
-	/* Update the object tag only if not autotagging or if it is a class, i.e., if it is taggable */
-	if ( !OBJECT_IS_TAGGABLE(iteratorData->env, vm, object) ) {
-		return;
-	}
 	
 	/* The callback could have added or removed the tag. Modify the hashtable entry to
 	 * account for it */

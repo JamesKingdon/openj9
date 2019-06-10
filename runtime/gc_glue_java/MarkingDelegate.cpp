@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 2017, 2017 IBM Corp. and others
+ * Copyright (c) 2017, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -276,7 +276,7 @@ MM_MarkingDelegate::completeMarking(MM_EnvironmentBase *env)
 								GC_ClassHeapIterator classHeapIterator(javaVM, segment);
 								J9Class *clazz = NULL;
 								while (NULL != (clazz = classHeapIterator.nextClass())) {
-									Assert_MM_true(!J9_ARE_ANY_BITS_SET(clazz->classDepthAndFlags, J9_JAVA_CLASS_DYING));
+									Assert_MM_true(!J9_ARE_ANY_BITS_SET(clazz->classDepthAndFlags, J9AccClassDying));
 									if ((0 == (J9CLASS_EXTENDED_FLAGS(clazz) & J9ClassGCScanned)) && _markingScheme->isMarked(clazz->classObject)) {
 										J9CLASS_EXTENDED_FLAGS_SET(clazz, J9ClassGCScanned);
 
@@ -312,7 +312,7 @@ MM_MarkingDelegate::completeMarking(MM_EnvironmentBase *env)
 								J9HashTableState walkState;
 								/*
 								 * We believe that (NULL == classLoader->classHashTable) is set ONLY for DEAD class loader
-								 * so, if this pointer happend to be NULL at this point let it crash here
+								 * so, if this pointer happened to be NULL at this point let it crash here
 								 */
 								Assert_MM_true(NULL != classLoader->classHashTable);
 								clazz = javaVM->internalVMFunctions->hashClassTableStartDo(classLoader, &walkState);
@@ -322,20 +322,21 @@ MM_MarkingDelegate::completeMarking(MM_EnvironmentBase *env)
 									clazz = javaVM->internalVMFunctions->hashClassTableNextDo(&walkState);
 								}
 
-								Assert_MM_true(NULL != classLoader->moduleHashTable);
-								J9HashTableState moduleWalkState;
-								J9Module **modulePtr = (J9Module**)hashTableStartDo(classLoader->moduleHashTable, &moduleWalkState);
-								while (NULL != modulePtr) {
-									J9Module * const module = *modulePtr;
+								if (NULL != classLoader->moduleHashTable) {
+									J9HashTableState moduleWalkState;
+									J9Module **modulePtr = (J9Module**)hashTableStartDo(classLoader->moduleHashTable, &moduleWalkState);
+									while (NULL != modulePtr) {
+										J9Module * const module = *modulePtr;
 
-									_markingScheme->markObjectNoCheck(env, (omrobjectptr_t )module->moduleObject);
-									if (NULL != module->moduleName) {
-										_markingScheme->markObjectNoCheck(env, (omrobjectptr_t )module->moduleName);
+										_markingScheme->markObjectNoCheck(env, (omrobjectptr_t )module->moduleObject);
+										if (NULL != module->moduleName) {
+											_markingScheme->markObjectNoCheck(env, (omrobjectptr_t )module->moduleName);
+										}
+										if (NULL != module->version) {
+											_markingScheme->markObjectNoCheck(env, (omrobjectptr_t )module->version);
+										}
+										modulePtr = (J9Module**)hashTableNextDo(&moduleWalkState);
 									}
-									if (NULL != module->version) {
-										_markingScheme->markObjectNoCheck(env, (omrobjectptr_t )module->version);
-									}
-									modulePtr = (J9Module**)hashTableNextDo(&moduleWalkState);
 								}
 							}
 						}
@@ -366,108 +367,22 @@ void
 MM_MarkingDelegate::scanClass(MM_EnvironmentBase *env, J9Class *clazz)
 {
 	/* Note: Class loader objects are handled separately */
-	J9JavaVM * javaVM = (J9JavaVM*)env->getLanguageVM();
-	J9ROMClass *romClass = NULL;
-	omrobjectptr_t *scanPtr = NULL;
-	omrobjectptr_t *endScanPtr = NULL;
-
-	/* Mark the java.lang.Class object */
-	_markingScheme->markObject(env, (omrobjectptr_t )clazz->classObject);
-
-	romClass = clazz->romClass;
-
-	/* Constant pool */
-	scanPtr = (omrobjectptr_t *)J9_CP_FROM_CLASS(clazz);
-	endScanPtr = (omrobjectptr_t *)( ((U_8 *)scanPtr) + romClass->ramConstantPoolCount * sizeof(J9RAMConstantPoolItem) );
-
-	/* As this function can be invoked during concurrent mark the slot is
+	/*
+	 * Scan and mark using GC_ClassIterator:
+	 *  - class object
+	 *  - class constant pool
+	 *  - class statics
+	 *  - class method types
+	 *  - class call sites
+	 *  - class varhandle method types
+	 *
+	 * As this function can be invoked during concurrent mark the slot is
 	 * volatile so we must ensure that the compiler generates the correct
 	 * code if markObject() is inlined.
 	 */
-	volatile omrobjectptr_t *slotPtr = NULL;
-
-	UDATA descriptionIndex = 0;
-	U_32 *descriptionPtr = NNSRP_GET(romClass->cpShapeDescription, U_32 *);
-	U_32 descriptionBits = 0;
-	while (scanPtr < endScanPtr) {
-		if (descriptionIndex == 0) {
-			descriptionBits = *descriptionPtr++;
-			descriptionIndex = J9_CP_DESCRIPTIONS_PER_U32;
-		}
-
-		/* Determine if the slot should be processed. */
-		switch (descriptionBits & J9_CP_DESCRIPTION_MASK) {
-		case J9CPTYPE_STRING:
-		case J9CPTYPE_ANNOTATION_UTF8:
-			slotPtr = (omrobjectptr_t *) &(((J9RAMStringRef *) scanPtr)->stringObject);
-			_markingScheme->markObject(env, *slotPtr);
-			break;
-		case J9CPTYPE_METHOD_TYPE:
-			slotPtr = (omrobjectptr_t *) &(((J9RAMMethodTypeRef *) scanPtr)->type);
-			_markingScheme->markObject(env, *slotPtr);
-			break;
-		case J9CPTYPE_METHODHANDLE:
-			slotPtr = (omrobjectptr_t *) &(((J9RAMMethodHandleRef *) scanPtr)->methodHandle);
-			_markingScheme->markObject(env, *slotPtr);
-			break;
-#if defined(J9VM_GC_DYNAMIC_CLASS_UNLOADING)
-		case J9CPTYPE_CLASS:
-			if (isDynamicClassUnloadingEnabled()) {
-				J9Class *clazzPtr = ((J9RAMClassRef *) scanPtr)->value;
-				if (NULL != clazzPtr) {
-					slotPtr = (omrobjectptr_t*) &(clazzPtr->classObject);
-					_markingScheme->markObject(env, *slotPtr);
-				}
-			}
-			break;
-#endif /* J9VM_GC_DYNAMIC_CLASS_UNLOADING */
-		default:
-			break;
-		}
-
-		scanPtr = (omrobjectptr_t *)( ((U_8 *)scanPtr) + sizeof(J9RAMConstantPoolItem) );
-		descriptionIndex -= 1;
-		descriptionBits >>= J9_CP_BITS_PER_DESCRIPTION;
-	}
-
-	/* Statics */
-	scanPtr = (omrobjectptr_t *)clazz->ramStatics;
-	endScanPtr = scanPtr + romClass->objectStaticCount;
-	if (scanPtr != NULL) {
-		while (scanPtr < endScanPtr) {
-			slotPtr = scanPtr++;
-			_markingScheme->markObject(env, *slotPtr);
-		}
-	}
-
-	/* Call sites */
-	scanPtr = (omrobjectptr_t *)clazz->callSites;
-	endScanPtr = scanPtr + romClass->callSiteCount;
-	if (NULL != scanPtr) {
-		while (scanPtr < endScanPtr) {
-			slotPtr = scanPtr++;
-			_markingScheme->markObject(env, *slotPtr);
-		}
-	}
-
-	/* Method types */
-	scanPtr = (omrobjectptr_t *)clazz->methodTypes;
-	if (NULL != scanPtr) {
-		endScanPtr = scanPtr + romClass->methodTypeCount;
-		while (scanPtr < endScanPtr) {
-			slotPtr = scanPtr++;
-			_markingScheme->markObject(env, *slotPtr);
-		}
-	}
-
-	/* VarHandle method types */
-	scanPtr = (omrobjectptr_t *)clazz->varHandleMethodTypes;
-	if (NULL != scanPtr) {
-		endScanPtr = scanPtr + romClass->varHandleMethodTypeCount;
-		while (scanPtr < endScanPtr) {
-			slotPtr = scanPtr++;
-			_markingScheme->markObject(env, *slotPtr);
-		}
+	GC_ClassIterator classIterator(env, clazz, true);
+	while (volatile omrobjectptr_t *slotPtr = classIterator.nextSlot()) {
+		_markingScheme->markObject(env, *slotPtr);
 	}
 
 #if defined(J9VM_GC_DYNAMIC_CLASS_UNLOADING)
@@ -479,23 +394,20 @@ MM_MarkingDelegate::scanClass(MM_EnvironmentBase *env, J9Class *clazz)
 			J9Class** superclassEndScanPtr = superclassScanPtr + classDepth;
 			while (superclassScanPtr < superclassEndScanPtr) {
 				J9Class *clazzPtr = *superclassScanPtr++;
-				slotPtr = (omrobjectptr_t *) &(clazzPtr->classObject);
-				_markingScheme->markObject(env, *slotPtr);
+				_markingScheme->markObject(env, clazzPtr->classObject);
 			}
 		}
 
 		if (NULL != clazz->arrayClass) {
 			J9Class *clazzPtr = clazz->arrayClass;
-			slotPtr = (omrobjectptr_t *) &(clazzPtr->classObject);
-			_markingScheme->markObject(env, *slotPtr);
+			_markingScheme->markObject(env, clazzPtr->classObject);
 		}
 
 		/* Component type and Leaf Component type for indexable */
 		if (_extensions->objectModel.isIndexable(clazz)) {
 			J9ArrayClass *indexableClass = (J9ArrayClass *)clazz;
 			J9Class *clazzPtr = indexableClass->componentType;
-			slotPtr = (omrobjectptr_t *) &(clazzPtr->classObject);
-			_markingScheme->markObject(env, *slotPtr);
+			_markingScheme->markObject(env, clazzPtr->classObject);
 
 			/*
 			 * There is no mandatory need to scan leafComponentType here because this class
@@ -504,17 +416,16 @@ MM_MarkingDelegate::scanClass(MM_EnvironmentBase *env, J9Class *clazz)
 			 * might reduce number of loops to scan
 			 */
 			clazzPtr = indexableClass->leafComponentType;
-			slotPtr = (omrobjectptr_t *) &(clazzPtr->classObject);
-			_markingScheme->markObject(env, *slotPtr);
+			_markingScheme->markObject(env, clazzPtr->classObject);
 		}
 
 		/* ITable */
+		J9JavaVM *javaVM = (J9JavaVM *)env->getLanguageVM();
 		if (!GC_ClassModel::usesSharedITable(javaVM, clazz)) {
 			J9ITable *clazzITable = (J9ITable *)clazz->iTable;
 			J9ITable *endITable = (0 != classDepth) ? (J9ITable *)(clazz->superclasses[classDepth - 1]->iTable) : NULL;
 			while (clazzITable != endITable) {
-				slotPtr = (omrobjectptr_t *) &(clazzITable->interfaceClass->classObject);
-				_markingScheme->markObject(env, *slotPtr);
+				_markingScheme->markObject(env, clazzITable->interfaceClass->classObject);
 				clazzITable = clazzITable->next;
 			}
 		}
@@ -549,9 +460,9 @@ MM_MarkingDelegate::processReferenceList(MM_EnvironmentBase *env, MM_HeapRegionD
 			_markingScheme->fixupForwardedSlot(&referentSlotObject);
 			omrobjectptr_t referent = referentSlotObject.readReferenceFromSlot();
 
-			UDATA referenceObjectType = J9CLASS_FLAGS(J9GC_J9OBJECT_CLAZZ(referenceObj)) & J9_JAVA_CLASS_REFERENCE_MASK;
+			UDATA referenceObjectType = J9CLASS_FLAGS(J9GC_J9OBJECT_CLAZZ(referenceObj)) & J9AccClassReferenceMask;
 			if (_markingScheme->isMarked(referent)) {
-				if (J9_JAVA_CLASS_REFERENCE_SOFT == referenceObjectType) {
+				if (J9AccClassReferenceSoft == referenceObjectType) {
 					U_32 age = J9GC_J9VMJAVALANGSOFTREFERENCE_AGE(env, referenceObj);
 					if (age < _extensions->getMaxSoftReferenceAge()) {
 						/* Soft reference hasn't aged sufficiently yet - increment the age */
@@ -567,7 +478,7 @@ MM_MarkingDelegate::processReferenceList(MM_EnvironmentBase *env, MM_HeapRegionD
 
 				/* Phantom references keep it's referent alive in Java 8 and doesn't in Java 9 and later */
 				J9JavaVM * javaVM = (J9JavaVM*)env->getLanguageVM();
-				if ((J9_JAVA_CLASS_REFERENCE_PHANTOM == referenceObjectType) && ((J2SE_VERSION(javaVM) & J2SE_VERSION_MASK) <= J2SE_18)) {
+				if ((J9AccClassReferencePhantom == referenceObjectType) && ((J2SE_VERSION(javaVM) & J2SE_VERSION_MASK) <= J2SE_18)) {
 					/* Phantom objects keep their referent - scanning will be done after the enqueuing */
 					_markingScheme->inlineMarkObject(env, referent);
 				} else {
@@ -627,18 +538,18 @@ MM_MarkingDelegate::getReferenceStatus(MM_EnvironmentBase *env, omrobjectptr_t o
 	*referentMustBeMarked = *isReferenceCleared;
 	bool referentMustBeCleared = false;
 
-	UDATA referenceObjectType = J9CLASS_FLAGS(J9GC_J9OBJECT_CLAZZ(objectPtr)) & J9_JAVA_CLASS_REFERENCE_MASK;
+	UDATA referenceObjectType = J9CLASS_FLAGS(J9GC_J9OBJECT_CLAZZ(objectPtr)) & J9AccClassReferenceMask;
 	switch (referenceObjectType) {
-	case J9_JAVA_CLASS_REFERENCE_WEAK:
+	case J9AccClassReferenceWeak:
 		referentMustBeCleared = (0 != (referenceObjectOptions & MM_CycleState::references_clear_weak));
 		break;
-	case J9_JAVA_CLASS_REFERENCE_SOFT:
+	case J9AccClassReferenceSoft:
 		referentMustBeCleared = (0 != (referenceObjectOptions & MM_CycleState::references_clear_soft));
 		*referentMustBeMarked = *referentMustBeMarked || (
 			((0 == (referenceObjectOptions & MM_CycleState::references_soft_as_weak))
 			&& ((UDATA)J9GC_J9VMJAVALANGSOFTREFERENCE_AGE(env, objectPtr) < _extensions->getDynamicMaxSoftReferenceAge())));
 		break;
-	case J9_JAVA_CLASS_REFERENCE_PHANTOM:
+	case J9AccClassReferencePhantom:
 		referentMustBeCleared = (0 != (referenceObjectOptions & MM_CycleState::references_clear_phantom));
 		break;
 	default:

@@ -1,7 +1,7 @@
 /*[INCLUDE-IF Sidecar16]*/
 package com.ibm.tools.attach.attacher;
 /*******************************************************************************
- * Copyright (c) 2009, 2017 IBM Corp. and others
+ * Copyright (c) 2009, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -19,7 +19,7 @@ package com.ibm.tools.attach.attacher;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 import java.io.File;
@@ -57,6 +57,7 @@ final class OpenJ9VirtualMachineDescriptor extends VirtualMachineDescriptor {
 	private final String attachSyncFileValue;
 	private final long processId;
 	private final long uid;
+	private final boolean globalSemaphore;
 
 	/**
 	 * @param provider AttachProvider associated with this VM
@@ -70,6 +71,7 @@ final class OpenJ9VirtualMachineDescriptor extends VirtualMachineDescriptor {
 		replyFile = null;
 		processId = 0;
 		uid = 0;
+		globalSemaphore = true;
 	}
 
 	/**
@@ -82,6 +84,7 @@ final class OpenJ9VirtualMachineDescriptor extends VirtualMachineDescriptor {
 		replyFile = null;
 		processId = 0;
 		uid = 0;
+		globalSemaphore = true;
 	}
 
 	/**
@@ -96,6 +99,8 @@ final class OpenJ9VirtualMachineDescriptor extends VirtualMachineDescriptor {
 		attachSyncFileValue = advert.getNotificationSync();
 		processId = advert.getProcessId();
 		uid = advert.getUid();
+		globalSemaphore = advert.isGlobalSemaphore();
+
 	}
 
 	/**
@@ -104,6 +109,14 @@ final class OpenJ9VirtualMachineDescriptor extends VirtualMachineDescriptor {
 	 */
 	long getProcessId() {
 		return processId;
+	}
+
+	/**
+	 * 
+	 * @return true if the target uses the global semaphore (Windows only)
+	 */
+	public boolean isGlobalSemaphore() {
+		return globalSemaphore;
 	}
 
 	/**

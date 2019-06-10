@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar16]*/
 /*******************************************************************************
- * Copyright (c) 1998, 2017 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package java.security;
 
@@ -28,6 +28,9 @@ import java.io.StringReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+/*[IF Sidecar19-SE]*/
+import sun.security.util.FilePermCompat;
+/*[ENDIF] Sidecar19-SE*/
 
 /**
  * An AccessControlContext encapsulates the information which is needed
@@ -521,7 +524,11 @@ static int checkPermWithCachedPDsImplied(Permission perm, Object[] toCheck, Acce
 					}
 				}
 			}
+			/*[IF Sidecar19-SE]*/
+			if (!((ProtectionDomain) domain).impliesWithAltFilePerm(perm)) {
+			/*[ELSE]*/
 			if (!((ProtectionDomain) domain).implies(perm)) {
+			/*[ENDIF] Sidecar19-SE*/
 				return i; // NOT implied
 			}
 		}
@@ -578,6 +585,9 @@ static boolean checkPermWithCachedPermImplied(Permission perm, Permission[] perm
 					}
 				}
 			}
+			/*[IF Sidecar19-SE]*/
+			permsLimited[j] = FilePermCompat.newPermPlusAltPath(permsLimited[j]);
+			/*[ENDIF] Sidecar19-SE*/
 			if (!notImplied && permsLimited[j].implies(perm)) {
 				success = true; // just implied
 				if (null != cacheChecked) {
@@ -838,16 +848,10 @@ public boolean equals(Object o) {
 public int hashCode() {
 	int result = 0;
 	int i = context == null ? 0 : context.length;
-	while (--i >= 0)
+	while ((--i >= 0) && (context[i] != null)) {
 		result ^= context[i].hashCode();
-/*
-	// JCK test doesn't include following two fields during hashcode calculation
-	if (null != this.domainCombiner) {
-		result ^= this.domainCombiner.hashCode();
 	}
 
-	result = result + (this.isAuthorized ? 1231 : 1237);
-*/
 	// RI equals not impacted by limited context,
 	// JCK still passes with following cause the AccessControlContext in question doesn't have limited context
 	// J9 might fail JCK test if JCK hashcode test changes

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1999, 2017 IBM Corp. and others
+ * Copyright (c) 1999, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jpp.om;
 
@@ -293,7 +293,7 @@ public class ConfigObject {
 	}
 
 	/**
-	 * Returns the flags associaetd with this ConfigObject.
+	 * Returns the flags associated with this ConfigObject.
 	 * <p>
 	 * <b>Note:</b> the flagSet isn't completely correct until updateWithDependencies
 	 * is called, when the removes and adding of sets happens
@@ -305,7 +305,7 @@ public class ConfigObject {
 	}
 
 	/**
-	 * Returns the flags associaetd with this ConfigObject.
+	 * Returns the flags associated with this ConfigObject.
 	 * <p>
 	 * <b>Note:</b> the flagSet isn't completely correct until updateWithDependencies
 	 * is called, when the removes and adding of sets happens
@@ -393,7 +393,7 @@ public class ConfigObject {
 	}
 
 	/**
-	 * Returns thsi ConfigObject's immediate configuration dependencies.
+	 * Returns this ConfigObject's immediate configuration dependencies.
 	 *
 	 * @return      the configuration dependencies
 	 */
@@ -881,7 +881,7 @@ public class ConfigObject {
 	}
 
 	/**
-	 * Returns the numbe of sources defined for this ConfigObject.
+	 * Returns the number of sources defined for this ConfigObject.
 	 *
 	 * @return      the number of defined sources
 	 */
@@ -1247,7 +1247,7 @@ public class ConfigObject {
 	}
 
 	/**
-	 * Returns a string representation of the oonfig object with build info.
+	 * Returns a string representation of the config object with build info.
 	 *
 	 * @return      the string representation of the config object
 	 *
@@ -1259,7 +1259,7 @@ public class ConfigObject {
 	}
 
 	/**
-	 * Returns a string representation of the oonfig object with build info.
+	 * Returns a string representation of the config object with build info.
 	 * Build info includes the sources for the configuration and the output
 	 * directory.
 	 *

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef rasdump_api_h
@@ -212,7 +212,7 @@ printDumpSpec(struct J9JavaVM *vm, IDATA kind, IDATA verboseLevel);
  * @param state [inout] State bit flags. Used to maintain state between multiple calls of runDumpAgent. 
  *                 When you've performed all runDumpAgent calls you must call unwindAfterDump to make 
  *                 sure all locks are cleaned up. The first time runDumpAgent is called, state should 
- *                 be initialised to 0.
+ *                 be initialized to 0.
  * @param detail [in] Detail string for dump cause
  * @param timeNow [in] Time value as returned from j9time_current_time_millis. Used to timestamp the dumps.
  *
@@ -410,7 +410,7 @@ triggerOneOffDump(struct J9JavaVM *vm, char *optionString, char *caller, char *f
  * @param *vm VM pointer
  * @param buffer_size Size of the buffer passed in
  * @param *options_buffer pointer to the buffer to be populated with data
- * @param *data_size pointer to integer to recieve the required size of buffer.
+ * @param *data_size pointer to integer to receive the required size of buffer.
  */
 omr_error_t
 queryVmDump(struct J9JavaVM *vm, int buffer_size, void* options_buffer, int* data_size);

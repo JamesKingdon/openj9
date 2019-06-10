@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2014 IBM Corp. and others
+ * Copyright (c) 2008, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9comp.h"
@@ -248,7 +248,7 @@ testStringInternTableSRPRangeCheck(J9PortLibrary *portLib)
 	J9ClassLoader dummyClassLoader;
 	J9ClassLoader dummyClassLoader2;
 	J9ClassLoader dummySystemClassLoader;
-	/* Not needed for this testing. Used as one paremeter to create shared invariant intern table */
+	/* Not needed for this testing. Used as one parameter to create shared invariant intern table */
 	J9SharedCacheHeader dummyHeader;
 	/* String to be interned in string intern tables */
 	const char *commonString;
@@ -622,7 +622,7 @@ testStringInternTableStressLocal(J9PortLibrary *portLib, UDATA numIterations)
 	J9UTF8 *utf8s[5000];
 	const UDATA utfs8Count = sizeof(utf8s)/sizeof(utf8s[0]);
 
-	/* Class loaders are not initialised as currently the StringInternTable only uses their addresses. */
+	/* Class loaders are not initialized as currently the StringInternTable only uses their addresses. */
 	J9ClassLoader classLoaders[25];
 	const UDATA classLoadersCount = sizeof(classLoaders)/sizeof(classLoaders[0]);
 
@@ -764,7 +764,7 @@ testStringInternTableStressShared(J9PortLibrary *portLib, UDATA numIterations)
 	J9UTF8 *utf8s[5000];
 	const UDATA utfs8Count = sizeof(utf8s)/sizeof(utf8s[0]);
 
-	/* Class loaders are not initialised as currently the StringInternTable only uses their addresses. */
+	/* Class loaders are not initialized as currently the StringInternTable only uses their addresses. */
 	J9ClassLoader classLoaders[25];
 	const UDATA classLoadersCount = sizeof(classLoaders)/sizeof(classLoaders[0]);
 

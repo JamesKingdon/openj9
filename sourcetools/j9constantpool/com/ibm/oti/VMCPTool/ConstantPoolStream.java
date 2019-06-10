@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2017 IBM Corp. and others
+ * Copyright (c) 2004, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,12 +17,12 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.oti.VMCPTool;
 
-import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-//
 // The ConstantPoolStream class is a little ugly because it captures and writes state in 2 passes.
 // The two passes should consist of exactly the same sequence of calls to write*().  The first pass
 // captures offsets that may be "forward references".  The second pass then provides correct offsets
@@ -46,10 +45,10 @@ import java.util.Set;
 //  s.open(out);
 //  /* Second sequence of s.writeByte() and friends */
 //  s.close();
-//
 
+@SuppressWarnings("nls")
 public class ConstantPoolStream {
-	public final String jcl;
+	public final int version;
 	public final Set<String> flags;
 	private List<byte[]> outputQueue = new ArrayList<byte[]>();
 	private ConstantPool constantPool;
@@ -68,14 +67,14 @@ public class ConstantPoolStream {
 	private static final int J9CPTYPE_STATIC_METHOD = 10;
 	private static final int J9CPTYPE_SPECIAL_METHOD = 11;
 	private static final int J9CPTYPE_INTERFACE_METHOD = 12;
-	private static final int J9_CP_BITS_PER_DESCRIPTION = 4;
-	private static final int J9_CP_DESCRIPTION_MASK = 0xf;
-	private static final int J9_CP_DESCRIPTIONS_PER_U32 = 8;
+	private static final int J9_CP_BITS_PER_DESCRIPTION = 8;
+	private static final int J9_CP_DESCRIPTION_MASK = 0xff;
+	private static final int J9_CP_DESCRIPTIONS_PER_U32 = 4;
 
 	public static final int ITEM_SIZE = 8; // Bytes per Constant Pool Item
 
-	public ConstantPoolStream(String jcl, Set<String> flags, ConstantPool constantPool, int itemCount) {
-		this.jcl = jcl;
+	public ConstantPoolStream(int version, Set<String> flags, ConstantPool constantPool, int itemCount) {
+		this.version = version;
 		this.flags = Collections.unmodifiableSet(flags);
 		this.constantPool = constantPool;
 		this.itemCount = itemCount;
@@ -170,17 +169,12 @@ public class ConstantPoolStream {
 	}
 
 	public void writeUTF(String arg0) {
-		try {
-			byte[] data = arg0.getBytes("UTF-8");
-			for (int i = 0; i < data.length; i++) {
-				writeByte(data[i]);
-			}
-		} catch (IOException e) {
-			throw new Error("UTF-8 is not a supported encoding! (Shouldn't happen)");
+		byte[] data = arg0.getBytes(StandardCharsets.UTF_8);
+		for (int i = 0; i < data.length; i++) {
+			writeByte(data[i]);
 		}
 	}
 
-	
 	/**
 	 * Add the specified bytes to the constant pool.
 	 * The bytes must be in big endian order. They will
@@ -250,18 +244,18 @@ public class ConstantPoolStream {
 	private static final String HEX = "0123456789ABCDEF";
 
 	private static String hex(byte[] array) {
-		char[] result = new char[array.length * 2];
+		StringBuilder buffer = new StringBuilder(array.length * 2 + 2);
+
+		buffer.append("0x");
+
 		for (int i = 0; i < array.length; i++) {
-			result[i * 2] = HEX.charAt((array[i] & 0xf0) >> 4);
-			result[i * 2 + 1] = HEX.charAt(array[i] & 0x0f);
+			buffer.append(HEX.charAt((array[i] >> 4) & 0x0F));
+			buffer.append(HEX.charAt((array[i] >> 0) & 0x0F));
 		}
-		return "0x" + String.copyValueOf(result);
+
+		return buffer.toString();
 	}
 
-	private static String hex(byte value) {
-		return "0x" + String.copyValueOf(new char[]{HEX.charAt((value & 0xf0) >> 4), HEX.charAt(value & 0x0f)});
-	}
-	
 	private Map<ConstantPoolItem, Offset> secondaryItems = new HashMap<ConstantPoolItem, Offset>();
 	
 	private class Offset {
@@ -289,12 +283,11 @@ public class ConstantPoolStream {
 		}
 		secondaryItems.put(item, new Offset(getOffset(), null != out));
 	}
-	
+
 	public int getOffset(ConstantPoolItem item) {
 		Offset offset = secondaryItems.get(item);
 		return null == offset ? -1 : offset.offset;
 	}
-
 
 	public void open(PrintWriter out) {
 		int size = offset;
@@ -336,7 +329,7 @@ public class ConstantPoolStream {
 			out.println("} _jclROMClass = {");
 
 			String shapeDescriptionOffset = "sizeof(J9ROMClass) - offsetof(J9ROMClass, cpShapeDescription) + " + size;
-			out.println("\t{0,0,0,0,0,J9_JAVA_CLASS_UNSAFE, 0,0,0,0,0,0,0,0, " + itemCount + ", " + itemCount + ", 0,0,0, " + shapeDescriptionOffset + ", 0,},");
+			out.println("\t{0,0,0,0,0,J9AccClassUnsafe, 0,0,0,0,0,0,0,0, " + itemCount + ", " + itemCount + ", 0,0,0, " + shapeDescriptionOffset + ", 0,},");
 			out.println("\t{");
 		}
 	}

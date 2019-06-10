@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if !defined(CONCURRENTMARKINGDELEGATE_HPP_)
@@ -245,9 +245,15 @@ public:
 	 */
 	void signalThreadsToTraceStacks(MM_EnvironmentBase *env);
 
+	void signalThreadsToActivateWriteBarrier(MM_EnvironmentBase *env);
+
+	void signalThreadsToDeactivateWriteBarrier(MM_EnvironmentBase *env);
+
+	//TODO: STAB remove two methods bellow after the initial changes are in
 	void signalThreadsToDirtyCards(MM_EnvironmentBase *env);
 
 	void signalThreadsToStopDirtyingCards(MM_EnvironmentBase *env);
+
 
 	/**
 	 * This method is called during card cleaning for each object associated with an uncleaned, dirty card in the card

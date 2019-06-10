@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010, 2014 IBM Corp. and others
+ * Copyright (c) 2010, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if !defined(J9SC_STRING_INTERN_TYPES_H_INCLUDED)
@@ -70,7 +70,7 @@ sharedInternTable_performNodeAction(J9SharedInvariantInternTable *table, J9Share
 /*
  * Key is the user passed search key.
  * existingEntry is the SRP Hashtable entry with the hash calculated by using the given key
- * @param exisitingEntry Entry in the SRP hashtable
+ * @param existingEntry Entry in the SRP hashtable
  * @param key is compared with the existingEntry.
  * @return 0, meaning false, if key does not match with the existingEntry,
  * 		   1, otherwise

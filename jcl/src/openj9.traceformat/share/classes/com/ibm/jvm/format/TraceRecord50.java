@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar18-SE]*/
 /*******************************************************************************
- * Copyright (c) 2000, 2016 IBM Corp. and others
+ * Copyright (c) 2000, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jvm.format;
 
@@ -302,7 +302,7 @@ public class TraceRecord50 implements Comparable {
 	/**
 	 * primeRecord readies this UtTraceRecord to have its tracepoint data read.
 	 * 
-	 * Each tracepoint's length field is at the end of the tracepoint, so the traceoints are
+	 * Each tracepoint's length field is at the end of the tracepoint, so the tracepoints are
 	 * formatted backwards out of the record. To enable forward iteration, the whole record 
 	 * must be formatted into a queue, which is then iterated over in reverse order.
 	 * 
@@ -409,7 +409,7 @@ public class TraceRecord50 implements Comparable {
 						 * incompleteTracePoint contain the beginning of that
 						 * tracepoint, and probably several more tracepoints
 						 * before that. So I create a temporary buffer,
-						 * concatonate those two arrays of bytes, and then
+						 * concatenate those two arrays of bytes, and then
 						 * simply replace the rawTraceRecord (which has been
 						 * fully processed if we have reached this point) with
 						 * the new array and process it as a normal buffer

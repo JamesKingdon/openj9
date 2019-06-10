@@ -1,5 +1,5 @@
 ###############################################################################
-# Copyright (c) 2016, 2017 IBM Corp. and others
+# Copyright (c) 2016, 2019 IBM Corp. and others
 #
 # This program and the accompanying materials are made available under
 # the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
 # [1] https://www.gnu.org/software/classpath/license.html
 # [2] http://openjdk.java.net/legal/assembly-exception.html
 #
-# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 ###############################################################################
 
 include $(CONFIG_INCL_DIR)/configure_common.mk
@@ -33,6 +33,7 @@ ifeq (aix_ppc-64_cmprssptrs, $(SPEC))
 		--enable-OMR_ARCH_POWER \
 		--enable-OMR_ENV_DATA64 \
 		--enable-OMR_GC_COMPRESSED_POINTERS \
+		--enable-OMR_GC_CONCURRENT_SCAVENGER \
 		--enable-OMR_INTERP_COMPRESSED_OBJECT_HEADER \
 		--enable-OMR_INTERP_SMALL_MONITOR_SLOT \
 		--enable-OMR_PORT_CAN_RESERVE_SPECIFIC_ADDRESS
@@ -62,6 +63,7 @@ ifeq (aix_ppc-64, $(SPEC))
 		--enable-OMRTHREAD_LIB_AIX \
 		--enable-OMR_ARCH_POWER \
 		--enable-OMR_ENV_DATA64 \
+		--enable-OMR_GC_CONCURRENT_SCAVENGER \
 		--enable-OMR_PORT_CAN_RESERVE_SPECIFIC_ADDRESS
 endif
 
@@ -96,14 +98,21 @@ endif
 
 CONFIGURE_ARGS += libprefix=lib exeext= solibext=.so arlibext=.a objext=.o
 
-CONFIGURE_ARGS += 'AS=as'
-CONFIGURE_ARGS += 'CC=xlC_r'
-CONFIGURE_ARGS += 'CXX=$$(CC)'
+ifeq (default,$(origin CC))
+	CC = xlC_r
+endif
+ifeq (default,$(origin CXX))
+	CXX = $(CC)
+endif
+
+CONFIGURE_ARGS += 'AS=$(AS)'
+CONFIGURE_ARGS += 'CC=$(CC)'
+CONFIGURE_ARGS += 'CXX=$(CXX)'
 CONFIGURE_ARGS += 'CCLINKEXE=$$(CC)'
 CONFIGURE_ARGS += 'CCLINKSHARED=ld'
 CONFIGURE_ARGS += 'CXXLINKEXE=$$(CC)'
 CONFIGURE_ARGS += 'CXXLINKSHARED=makeC++SharedLib_r'
-CONFIGURE_ARGS += 'AR=ar'
+CONFIGURE_ARGS += 'AR=$(AR)'
 
 CONFIGURE_ARGS += 'OMR_HOST_OS=aix'
 CONFIGURE_ARGS += 'OMR_HOST_ARCH=ppc'

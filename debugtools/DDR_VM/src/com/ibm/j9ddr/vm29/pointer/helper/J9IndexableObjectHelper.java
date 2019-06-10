@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.pointer.helper;
 
@@ -25,6 +25,7 @@ import java.io.StringWriter;
 
 import com.ibm.j9ddr.CorruptDataException;
 import com.ibm.j9ddr.vm29.j9.ObjectModel;
+import com.ibm.j9ddr.vm29.pointer.I16Pointer;
 import com.ibm.j9ddr.vm29.pointer.I32Pointer;
 import com.ibm.j9ddr.vm29.pointer.I64Pointer;
 import com.ibm.j9ddr.vm29.pointer.ObjectReferencePointer;
@@ -65,7 +66,7 @@ public class J9IndexableObjectHelper extends J9ObjectHelper
 
 	public static U32 size(J9IndexableObjectPointer objPointer) throws CorruptDataException 
 	{
-		U32 size = J9IndexableObjectContiguousPointer.cast(objPointer).size();
+		UDATA size = J9IndexableObjectContiguousPointer.cast(objPointer).size();
 		if(J9BuildFlags.gc_hybridArraylets) {
 			if(size.eq(0)) {
 				size = J9IndexableObjectDiscontiguousPointer.cast(objPointer).size();	 
@@ -75,7 +76,7 @@ public class J9IndexableObjectHelper extends J9ObjectHelper
 			throw new CorruptDataException("java array size with sign bit set");
 		}
 
-		return size;
+		return new U32(size);
 	}
 	
 	public static U32 size(J9ObjectPointer objPointer) throws CorruptDataException 
@@ -95,7 +96,7 @@ public class J9IndexableObjectHelper extends J9ObjectHelper
 	}
 	
 	/**
-	 *  @param objPointer array object who's elements we are outputing to dst
+	 *  @param objPointer array object who's elements we are outputting to dst
 	 *  @param dst destination array where we will output the elements
 	 *  @param start starting index of the elements we are interested in
 	 *  @param length number of elements to output 
@@ -212,7 +213,7 @@ public class J9IndexableObjectHelper extends J9ObjectHelper
 			throw new ArrayIndexOutOfBoundsException("Supplied destination array too small. Requires: " + destStart + length + ", was " + dst.length);
 		}
 		for (int i = 0; i < length; i++) {
-			dst[destStart + i] = (byte)U8Pointer.cast(ObjectModel.getElementAddress(objPointer, start + i, 1)).at(0).intValue();
+			dst[destStart + i] = U8Pointer.cast(ObjectModel.getElementAddress(objPointer, start + i, 1)).at(0).byteValue();
 		}
 	}
 	
@@ -274,7 +275,7 @@ public class J9IndexableObjectHelper extends J9ObjectHelper
 			throw new ArrayIndexOutOfBoundsException("Supplied destination array too small. Requires: " + destStart + length + ", was " + dst.length);
 		}
 		for (int i = 0; i < length; i++) {
-			dst[destStart + i] = (short)U16Pointer.cast(ObjectModel.getElementAddress(objPointer, start + i, 2)).at(0).intValue();
+			dst[destStart + i] = I16Pointer.cast(ObjectModel.getElementAddress(objPointer, start + i, 2)).at(0).shortValue();
 		}
 	}
 	

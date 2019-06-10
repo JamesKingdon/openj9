@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "ddr.h"
@@ -29,7 +29,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#if defined(LINUX) || defined(AIXPPC) || defined(J9ZOS390)
+#if defined(LINUX) || defined(AIXPPC) || defined(J9ZOS390) || defined(OSX)
 #include <unistd.h>
 #endif
 
@@ -109,7 +109,7 @@ JNU_FindCreateJavaVM(char* vmlibpath)
 }
 #endif
 
-#if defined(LINUX) || defined(AIXPPC)
+#if defined(LINUX) || defined(AIXPPC) || defined(OSX)
 void *
 JNU_FindCreateJavaVM(char *vmlibpath)
 {
@@ -122,59 +122,6 @@ JNU_FindCreateJavaVM(char *vmlibpath)
 }
 #endif
 
-char *
-ddrFindDefaultVM()
-{
-#if defined(LINUX)
-#if defined(J9ARM)
-	return "/bluebird/sdk/ibm-jdk-6/linux_arm/jre/bin/j9vm/libjvm.so";
-#endif
-#if defined(J9X86)
-	return "/bluebird/sdk/ibm-jdk-6/linux_x86-32/jre/bin/j9vm/libjvm.so";
-#endif
-#if defined(J9HAMMER)
-	return "/bluebird/sdk/ibm-jdk-6/linux_x86-64/jre/bin/j9vm/libjvm.so";
-#endif
-    
-#if defined(LINUXPPC)
-#if defined(LINUXPPC64)
-	return "/bluebird/sdk/ibm-jdk-8/linux_ppc-64/jre/bin/j9vm/libjvm.so";
-#else
-	return "/bluebird/sdk/ibm-jdk-8/linux_ppc-32/jre/bin/j9vm/libjvm.so";
-#endif	
-#endif
-#if defined(S390)
-#if  defined(S39064)
-	return "/j9vm/ascii/sdk/ibm-jdk-6/linux-s390-64/jre/bin/j9vm/libjvm.so";
-#else
-	return "/j9vm/ascii/sdk/ibm-jdk-6/linux-s390-31/jre/bin/j9vm/libjvm.so";
-#endif
-#endif
-#endif  /* LINUX */
-
-#if defined(AIXPPC)
-#if defined(PPC64)
-	return "/bluebird/sdk/ibm-jdk-6/aix_ppc-64/jre/bin/j9vm/libjvm.so";
-#else
-	return "/bluebird/sdk/ibm-jdk-6/aix_ppc-32/jre/bin/j9vm/libjvm.so";
-#endif
-#endif
-
-#if defined(WIN32) 
-#if defined(J9HAMMER)
-	/* Use the windows bluebird drive (w:) not the nfs bluebird drive (l:) */
-	return "w:\\sdk\\ibm-jdk-6\\win_x86-64\\jre\\bin\\j9vm\\jvm.dll";
-#else
-	return "w:\\sdk\\ibm-jdk-6\\win_x86-32\\jre\\bin\\j9vm\\jvm.dll";
-#endif
-#endif
- 
-#if defined(J9ZOS390)
-	return "/j9vm/ebcdic/sdk/ibm-jdk-6/zos-31/jre/bin/j9vm/libjvm.so";
-#endif
-}
-
-
 /** 
  * \brief   Return default classpath required to run DDR  
  * \ingroup 
@@ -186,7 +133,7 @@ char *
 ddrFindDefaultClasspath()
 {
 #if defined(LINUX)
-#if defined(J9X86) || defined(J9HAMMER) || defined(LINUXPPC) || defined(LINUXPPC64) || defined(J9ARM)
+#if defined(J9X86) || defined(J9HAMMER) || defined(LINUXPPC) || defined(LINUXPPC64) || defined(J9ARM) || defined(J9AARCH64)
 	return "/bluebird/tools/ddr/j9ddr.jar:/bluebird/tools/ddr/asm.jar";
 #endif
 #if defined(S390) || defined(S39064)
@@ -457,13 +404,7 @@ ddrStart()
 		}
 	}
 	if (ddr_vm == NULL) {
-		ddr_vm = ddrFindDefaultVM();
-		if (ddrValidatePath(ddr_vm) == JNI_FALSE) {
-			dbgPrint("DDR: Unable to find default libjvm.so @ [%s]\n", ddr_vm);
-			goto failed_detection;
-		} else {
-			default_vm = JNI_TRUE;
-		}
+		goto failed_detection;
 	}
 
 	/* Get the vm options to pass to the DDR VM */
@@ -560,7 +501,7 @@ ddrStart()
 		goto destroy;
 	}
 
-	/** Load and initalize a virtual machine. Start DDR on main thread **/
+	/** Load and initialize a virtual machine. Start DDR on main thread **/
 	if ((rc = (*createJVM)(&jvm, (void**) &env, &vm_args)) != 0) {
 		dbgPrint("DDR: Failed to create JavaVM. rc = %lx %d\n", rc, rc);
 		goto destroy;

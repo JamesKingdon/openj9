@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -147,13 +147,13 @@ private:
 
 	/**
 	 * Rebuild Compressed Card Table for Mark (multithreaded, by regions)
-	 * @param env current thread envirinment
+	 * @param env current thread environment
 	 */
 	void rebuildCompressedCardTableForMark(MM_EnvironmentVLHGC* env);
 
 	/**
 	 * Rebuild Compressed Card Table for Compact (multithreaded, by regions)
-	 * @param env current thread envirinment
+	 * @param env current thread environment
 	 */
 	void rebuildCompressedCardTableForCompact(MM_EnvironmentVLHGC* env);
 
@@ -235,6 +235,11 @@ public:
 	 * @return the number of buffers in the list being released 
 	 */
 	UDATA releaseCardBufferControlBlockList(MM_EnvironmentVLHGC* env, MM_CardBufferControlBlock *controlBlockHead, MM_CardBufferControlBlock *controlBlockTail = NULL);
+	
+	/**
+	 * release the complete list (from head to tail) of BufferControlBlocks for a given thread, and set the head and tail pointers to null.
+	 */
+	void releaseCardBufferControlBlockListForThread(MM_EnvironmentVLHGC* env, MM_EnvironmentVLHGC* threadEnv);
 
 	/**
 	 * release a BufferControlBlock list to the thread local pool.
@@ -375,7 +380,7 @@ public:
 	convertRememberedSetCardFromHeapAddress(void* address)
 	{
 		MM_RememberedSetCard card = 0;
-#if defined(J9VM_GC_COMPRESSED_POINTERS)
+#if defined(OMR_GC_COMPRESSED_POINTERS)
 		card = (MM_RememberedSetCard)((UDATA)address >> CARD_SIZE_SHIFT);
 #else
 		card = (MM_RememberedSetCard) address;	
@@ -392,7 +397,7 @@ public:
 	convertHeapAddressFromRememberedSetCard(MM_RememberedSetCard card)
 	{
 		void *address = NULL;
-#if defined(J9VM_GC_COMPRESSED_POINTERS)
+#if defined(OMR_GC_COMPRESSED_POINTERS)
 		address = (void *)((UDATA)card << CARD_SIZE_SHIFT);
 #else
 		address = (void *) card;
@@ -408,7 +413,7 @@ public:
 	 */
 	MMINLINE Card *rememberedSetCardToCardAddr(MM_EnvironmentVLHGC *env, MM_RememberedSetCard card)
 	{
-#if defined(J9VM_GC_COMPRESSED_POINTERS)
+#if defined(OMR_GC_COMPRESSED_POINTERS)
 		Card *virtualStart = _cardTable->getCardTableVirtualStart();
 		return virtualStart + card;
 #else
@@ -457,14 +462,14 @@ public:
 	/**
 	 * Clears references from Collection Set and from dirty cards
 	 * (top level dispatcher)
-	 * temporary call until opimized or not optimized version is chosen
+	 * temporary call until optimized or not optimized version is chosen
 	 */
 	void clearFromRegionReferencesForMark(MM_EnvironmentVLHGC* env);
 
 	/**
 	 * Clears references from Compaction Set and from dirty cards
 	 * (top level dispatcher)
-	 * temporary call until opimized or not optimized version is chosen
+	 * temporary call until optimized or not optimized version is chosen
 	 */
 	void clearFromRegionReferencesForCompact(MM_EnvironmentVLHGC* env);
 

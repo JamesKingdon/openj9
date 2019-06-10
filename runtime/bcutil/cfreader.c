@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "cfreader.h"
@@ -50,13 +50,13 @@ static U_8 attributeTagFor (J9CfrConstantPoolInfo *utf8, BOOLEAN stripDebugAttri
 static I_32 readAnnotations (J9CfrClassFile * classfile, J9CfrAnnotation * pAnnotations, U_32 annotationCount, U_8 * data, U_8 * dataEnd, U_8 * segment, U_8 * segmentEnd, U_8 ** pIndex, U_8 ** pFreePointer, U_32 flags);
 static I_32 readTypeAnnotation (J9CfrClassFile * classfile, J9CfrTypeAnnotation * pAnnotations, U_8 * data, U_8 * dataEnd, U_8 * segment, U_8 * segmentEnd, U_8 ** pIndex, U_8 ** pFreePointer, U_32 flags);
 static I_32 readAnnotationElement (J9CfrClassFile * classfile, J9CfrAnnotationElement ** pAnnotationElement, U_8 * data, U_8 * dataEnd, U_8 * segment, U_8 * segmentEnd, U_8 ** pIndex, U_8 ** pFreePointer, U_32 flags);
-static I_32 checkClassVersion (J9CfrClassFile* classfile, U_8* segment, U_32 flags);
+static I_32 checkClassVersion (J9CfrClassFile* classfile, U_8* segment, U_32 vmVersionShifted, U_32 flags);
 static BOOLEAN utf8EqualUtf8 (J9CfrConstantPoolInfo *utf8a, J9CfrConstantPoolInfo *utf8b);
 static BOOLEAN utf8Equal (J9CfrConstantPoolInfo* utf8, char* string, UDATA length);
 static I_32 readMethods (J9CfrClassFile* classfile, U_8* data, U_8* dataEnd, U_8* segment, U_8* segmentEnd, U_8** pIndex, U_8** pFreePointer, U_32 flags);
 static I_32 readPool (J9CfrClassFile* classfile, U_8* data, U_8* dataEnd, U_8* segment, U_8* segmentEnd, U_8** pIndex, U_8** pFreePointer);
 static I_32 checkDuplicateMembers (J9PortLibrary* portLib, J9CfrClassFile * classfile, U_8 * segment, U_32 flags, UDATA memberSize);
-static I_32 checkPool (J9CfrClassFile* classfile, U_8* segment, U_8* poolStart, I_32 *maxBootstrapMethodIndex, U_32 vmVersionShifted, U_32 flags);
+static I_32 checkPool (J9CfrClassFile* classfile, U_8* segment, U_8* poolStart, I_32 *maxBootstrapMethodIndex, U_32 flags);
 static I_32 checkClass (J9PortLibrary *portLib, J9CfrClassFile* classfile, U_8* segment, U_32 endOfConstantPool, U_32 vmVersionShifted, U_32 flags);
 static I_32 readFields (J9CfrClassFile* classfile, U_8* data, U_8* dataEnd, U_8* segment, U_8* segmentEnd, U_8** pIndex, U_8** pFreePointer, U_32 flags);
 static I_32 checkMethods (J9CfrClassFile* classfile, U_8* segment, U_32 vmVersionShifted, U_32 flags);
@@ -74,6 +74,8 @@ static U_16 getUTF8Length(J9CfrConstantPoolInfo* constantPool, U_16 cpIndex);
  */
 #define DUP_TIMING 0
 #define DUP_HASH_THRESHOLD 30
+
+#define MAX_CONSTANT_POOL_SIZE 0xFFFF
 
 /* mapping characters A..Z */
 static const U_8 cpTypeCharConversion[] = {
@@ -143,7 +145,7 @@ readAttributes(J9CfrClassFile * classfile, J9CfrAttribute *** pAttributes, U_32 
 	J9CfrAttributeStackMap *stackMap;
 	J9CfrAttributeBootstrapMethods *bootstrapMethods;
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
-	J9CfrAttributeMemberOfNest *memberOfNest;
+	J9CfrAttributeNestHost *nestHost;
 	J9CfrAttributeNestMembers *nestMembers;
 #endif /* J9VM_OPT_VALHALLA_NESTMATES */
 	U_32 name, length;
@@ -425,7 +427,11 @@ readAttributes(J9CfrClassFile * classfile, J9CfrAttribute *** pAttributes, U_32 
 			}
 
 			result = readAnnotations(classfile, annotations->annotations, annotations->numberOfAnnotations, data, dataEnd, segment, segmentEnd, &index, &freePointer, flags);
-			if ((BCT_ERR_NO_ERROR != result) || (index != end)) {
+
+			if (BCT_ERR_OUT_OF_ROM == result) {
+				/* Return out of memory error code to allocate larger buffer for classfile */
+				return result;
+			} else if ((BCT_ERR_NO_ERROR != result) || (index != end)) {
 				U_32 cursor = 0;
 				Trc_BCU_MalformedAnnotation(address);
 
@@ -526,7 +532,8 @@ readAttributes(J9CfrClassFile * classfile, J9CfrAttribute *** pAttributes, U_32 
 
 				result = readAnnotations(classfile, parameterAnnotations->annotations,	parameterAnnotations->numberOfAnnotations, data, dataEnd,
 						segment, segmentEnd, &index, &freePointer, flags);
-				if (result != 0) {
+
+				if (BCT_ERR_NO_ERROR != result) {
 					break;
 				}
 			}
@@ -534,7 +541,10 @@ readAttributes(J9CfrClassFile * classfile, J9CfrAttribute *** pAttributes, U_32 
 			 * num_parameters == 0 means there is no parameter for this method and naturally no annotations 
 			 * for these parameters, in which case the code should treat this attribute as bad and ignore it.
 			 */
-			if ((BCT_ERR_NO_ERROR != result) || (index != end) || (0 == annotations->numberOfParameters)) {
+			if (BCT_ERR_OUT_OF_ROM == result) {
+				/* Return out of memory error code to allocate larger buffer for classfile */
+				return result;
+			} else if ((BCT_ERR_NO_ERROR != result) || (index != end) || (0 == annotations->numberOfParameters)) {
 				U_32 cursor = 0;
 				/*
 				 * give up parsing.
@@ -626,11 +636,15 @@ readAttributes(J9CfrClassFile * classfile, J9CfrAttribute *** pAttributes, U_32 
 			 */
 			for (j = 0; j < annotations->numberOfAnnotations; j++, typeAnnotations++) {
 				result = readTypeAnnotation(classfile, typeAnnotations, data, dataEnd, segment, segmentEnd, &index, &freePointer, flags);
-				if (result != 0) {
+				if (BCT_ERR_NO_ERROR != result) {
 					break;
 				}
 			}
-			if ((BCT_ERR_NO_ERROR != result) || (index != end)) {
+
+			if (BCT_ERR_OUT_OF_ROM == result) {
+				/* Return out of memory error code to allocate larger buffer for classfile */
+				return result;
+			} else if ((BCT_ERR_NO_ERROR != result) || (index != end)) {
 				U_32 cursor = 0;
 				/*
 				 * give up parsing.
@@ -753,21 +767,21 @@ readAttributes(J9CfrClassFile * classfile, J9CfrAttribute *** pAttributes, U_32 
 			
 			break;
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
-		case CFR_ATTRIBUTE_MemberOfNest:
+		case CFR_ATTRIBUTE_NestHost:
 			if (nestAttributeRead) {
 				errorCode = J9NLS_CFR_ERR_MULTIPLE_NEST_ATTRIBUTES__ID;
 				offset = address;
 				goto _errorFound;
 			}
 
-			if (!ALLOC(memberOfNest, J9CfrAttributeMemberOfNest)) {
+			if (!ALLOC(nestHost, J9CfrAttributeNestHost)) {
 				return -2;
 			}
 			nestAttributeRead = TRUE;
-			attrib = (J9CfrAttribute*)memberOfNest;
+			attrib = (J9CfrAttribute*)nestHost;
 
 			CHECK_EOF(2);
-			NEXT_U16(memberOfNest->hostClassIndex, index);
+			NEXT_U16(nestHost->hostClassIndex, index);
 			break;
 
 		case CFR_ATTRIBUTE_NestMembers: {
@@ -1079,6 +1093,7 @@ readPool(J9CfrClassFile* classfile, U_8* data, U_8* dataEnd, U_8* segment, U_8* 
 				previousUTF8->nextCPIndex = (U_16)i;
 				previousUTF8 = info;
 			}
+			classfile->lastUTF8CPIndex = i;
 			i++;
 			break;
 
@@ -1125,12 +1140,20 @@ readPool(J9CfrClassFile* classfile, U_8* data, U_8* dataEnd, U_8* segment, U_8* 
 			i++;
 			break;
 
+		case CFR_CONSTANT_Dynamic:
+			if (classfile->majorVersion < 55) {
+				errorCode = J9NLS_CFR_ERR_CP_ENTRY_INVALID_BEFORE_V55__ID;
+				offset = (U_32) (index - data - 1);
+				goto _errorFound;
+			}
+			/* fall through */
 		case CFR_CONSTANT_InvokeDynamic:
 			if (classfile->majorVersion < 51) {
 				errorCode = J9NLS_CFR_ERR_CP_ENTRY_INVALID_BEFORE_V51__ID;
 				offset = (U_32) (index - data - 1);
 				goto _errorFound;
 			}
+			/* fall through */
 		case CFR_CONSTANT_Fieldref:
 		case CFR_CONSTANT_Methodref:
 		case CFR_CONSTANT_InterfaceMethodref:
@@ -1211,7 +1234,7 @@ _errorFound:
 */
 
 static I_32 
-checkPool(J9CfrClassFile* classfile, U_8* segment, U_8* poolStart, I_32 *maxBootstrapMethodIndex, U_32 vmVersionShifted, U_32 flags)
+checkPool(J9CfrClassFile* classfile, U_8* segment, U_8* poolStart, I_32 *maxBootstrapMethodIndex, U_32 flags)
 {
 	J9CfrConstantPoolInfo* info;
 	J9CfrConstantPoolInfo* utf8; 
@@ -1381,6 +1404,7 @@ checkPool(J9CfrClassFile* classfile, U_8* segment, U_8* poolStart, I_32 *maxBoot
 			index += 4;
 			break;
 
+		case CFR_CONSTANT_Dynamic: /* fall through */
 		case CFR_CONSTANT_InvokeDynamic:
 			/* Slot1 is an index into the BootstrapMethods_attribute - can't be validated yet */
 			if (((I_32) info->slot1) > *maxBootstrapMethodIndex) {
@@ -1584,7 +1608,8 @@ checkMethods(J9CfrClassFile* classfile, U_8* segment, U_32 vmVersionShifted, U_3
 				method->accessFlags |= CFR_ACC_STATIC;
 
 			/* Leave this here to find usages of the following check:
-			 * if (J2SE_VERSION(vm) >= J2SE_19) { 
+			 * J2SE_19 has been deprecated and replaced with J2SE_V11
+			 * if (J2SE_VERSION(vm) >= J2SE_V11) { 
 			 */
 			} else if (vmVersionShifted >= BCT_Java9MajorVersionShifted) {
 				if (J9_ARE_NO_BITS_SET(method->accessFlags, CFR_ACC_STATIC)) {
@@ -1993,7 +2018,7 @@ checkAttributes(J9CfrClassFile* classfile, J9CfrAttribute** attributes, U_32 att
 			}
 			enclosing = (J9CfrAttributeEnclosingMethod*)attrib;
 			value = enclosing->classIndex;
-			if((0 == value) || (value > cpCount)) {
+			if ((0 == value) || (value > cpCount)) {
 				errorCode = J9NLS_CFR_ERR_BAD_INDEX__ID;
 				goto _errorFound;
 			}
@@ -2023,14 +2048,50 @@ checkAttributes(J9CfrClassFile* classfile, J9CfrAttribute** attributes, U_32 att
 				}
 				bootstrapMethodAttributeRead = TRUE;
 				for (j = 0; j < bootstrapMethods->numberOfBootstrapMethods; j++) {
-					value = bootstrapMethods->bootstrapMethods[j].bootstrapMethodIndex;
-					if((0 == value) || (value > cpCount)) {
+					U_16 numberOfBootstrapArguments = 0;
+					J9CfrBootstrapMethod *bsm = &bootstrapMethods->bootstrapMethods[j];
+					value = bsm->bootstrapMethodIndex;
+					if ((0 == value) || (value > cpCount)) {
 						errorCode = J9NLS_CFR_ERR_BAD_INDEX__ID;
 						goto _errorFound;
 					}
-					if(cpBase[value].tag != CFR_CONSTANT_MethodHandle) {
+					if (cpBase[value].tag != CFR_CONSTANT_MethodHandle) {
 						errorCode = J9NLS_CFR_ERR_BOOTSTRAP_METHODHANDLE__ID;
 						goto _errorFound;
+					}
+
+					numberOfBootstrapArguments = bsm->numberOfBootstrapArguments;
+					for (k = 0; k < numberOfBootstrapArguments; k++) {
+						U_8 cpValueTag = 0;
+						value = bsm->bootstrapArguments[k];
+
+						if ((0 == value) || (value > cpCount)) {
+							errorCode = J9NLS_CFR_ERR_BAD_INDEX__ID;
+							goto _errorFound;
+						}
+						/* Validate the constant_pool indexes stored in the bootstrap_arguments array.
+						 * Note: The constant_pool entry at that index must be a CONSTANT_String_info,
+						 * CONSTANT_Class_info, CONSTANT_Integer_info, CONSTANT_Long_info, CONSTANT_Float_info,
+						 * CONSTANT_Double_info, CONSTANT_MethodHandle_info, CONSTANT_MethodType_info
+						 * or CFR_CONSTANT_Dynamic structure.
+						 */
+						cpValueTag = cpBase[value].tag;
+						switch(cpValueTag) {
+						case CFR_CONSTANT_String:
+						case CFR_CONSTANT_Class:
+						case CFR_CONSTANT_Integer:
+						case CFR_CONSTANT_Long:
+						case CFR_CONSTANT_Float:
+						case CFR_CONSTANT_Double:
+						case CFR_CONSTANT_MethodHandle:
+						case CFR_CONSTANT_MethodType:
+						case CFR_CONSTANT_Dynamic:
+							break;
+						default:
+							errorCode = J9NLS_CFR_ERR_BAD_BOOTSTRAP_ARGUMENT_ENTRY__ID;
+							buildBootstrapMethodError((J9CfrError *)segment, errorCode, errorType, attrib->romAddress, j, value, cpValueTag);
+							return -1;
+						}
 					}
 				}
 			}
@@ -2050,14 +2111,14 @@ checkAttributes(J9CfrClassFile* classfile, J9CfrAttribute** attributes, U_32 att
 			break;
 
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
-		case CFR_ATTRIBUTE_MemberOfNest:
-			value = ((J9CfrAttributeMemberOfNest*)attrib)->hostClassIndex;
+		case CFR_ATTRIBUTE_NestHost:
+			value = ((J9CfrAttributeNestHost*)attrib)->hostClassIndex;
 			if ((!value) || (value > cpCount)) {
 				errorCode = J9NLS_CFR_ERR_BAD_INDEX__ID;
 				goto _errorFound;
 			}
 			if (CFR_CONSTANT_Class != cpBase[value].tag) {
-				errorCode = J9NLS_CFR_ERR_BAD_NEST_TOP_INDEX__ID;
+				errorCode = J9NLS_CFR_ERR_BAD_NEST_HOST_INDEX__ID;
 				goto _errorFound;
 			}
 			break;
@@ -2087,7 +2148,7 @@ checkAttributes(J9CfrClassFile* classfile, J9CfrAttribute** attributes, U_32 att
 		case CFR_ATTRIBUTE_StrippedInnerClasses:
 		case CFR_ATTRIBUTE_StrippedUnknown:
 		case CFR_ATTRIBUTE_Unknown:
-			break;			
+			break;
 		}
 	}
 
@@ -2096,7 +2157,7 @@ checkAttributes(J9CfrClassFile* classfile, J9CfrAttribute** attributes, U_32 att
 		buildError((J9CfrError *) segment, errorCode, errorType, 0);
 		return -1;
 	}
-			
+
 	return 0;
 
 _errorFound:
@@ -2107,53 +2168,62 @@ _errorFound:
 
 
 /*
-	Check the class file in @classfile.
-
-	According the the JVMS 2nd ed: (1.2)
-		"Implementations of version 1.2 of the Java 2 platform can support
-		class file formats of versions in the range 45.0 through 46.0 inclusive."
-
-	According to http://access1.sun.com/SRDs/srd_repository/tools.pdf (1.3)
-		"The Java virtual machine (JVM) now accepts class files with version
-		numbers 45.3 through 47.0, inclusive."
-
-	According to http://home.ott.oti.com/teams/bluebird/doc/cldcng-f/CLDCSpecification1.1.pdf
-		"The class file format numbers used by different JDK versions are as follows:
-		- The 45.* (usually 45.3) version number identified JDK 1.1 class files
-		- The 46.* version number identifies JDK 1.2 class files.
-		- The 47.* version number identifies JDK 1.3 class files.
-		- The 48.* version number identifies JDK 1.4 class files."
-
-	- 49.* are JDK 5.0 class files (aka JDK 1.5)
-
-	Returns -1 on error, 0 on success.
-*/
+ * Java allows non-zero minor versions if the major version is less than
+ * the max supported version for this release:
+ * 	Java 8 - v52
+ * 	Java 11 - v55
+ * 	Java 12 - v56
+ *
+ * Starting in Java 12, only 0 & -1 are valid minor versions for classfiles with
+ * version >= 56.  The -1 version is only allowed when combined with the max 
+ * supported version for this release and the --enable-preview flag is specified.
+ *
+ * Returns -1 on error, 0 on success.
+ */
 
 static I_32 
-checkClassVersion(J9CfrClassFile* classfile, U_8* segment, U_32 flags)
+checkClassVersion(J9CfrClassFile* classfile, U_8* segment, U_32 vmVersionShifted, U_32 flags)
 {
+	const U_32 offset = 6;
+	const U_16 max_allowed_version = vmVersionShifted >> BCT_MajorClassFileVersionMaskShift;
+	const U_16 majorVersion = classfile->majorVersion;
+	const U_16 minorVersion = classfile->minorVersion;
 	U_32 errorCode = J9NLS_CFR_ERR_MAJOR_VERSION__ID;
-	U_32 offset = 6;
-	U_16 max_allowed_version = flags >> BCT_MajorClassFileVersionMaskShift;
 
 	/* Support versions 45.0 -> <whatever is legal for this VM> */
-	if((classfile->majorVersion >= 45) && (classfile->majorVersion <= max_allowed_version)) {
-		/* check minor version numbers */
-		if (classfile->majorVersion < max_allowed_version) {
-			return 0;
-		}
-
-		if (0 == classfile->minorVersion) {
-			/* only .0 is a valid minor version for max class major version */
-			return 0;
-		}
+	if (majorVersion == max_allowed_version) {
 		errorCode = J9NLS_CFR_ERR_MINOR_VERSION__ID;
+		if (0 == minorVersion) {
+			return 0;
+		} else if (0xffff == minorVersion) {
+			errorCode = J9NLS_CFR_ERR_PREVIEW_VERSION__ID;
+			/* Preview flags won't be set for Java 8 & earlier (excluding cfdump) */
+			if (J9_ARE_ANY_BITS_SET(flags, BCT_AnyPreviewVersion | BCT_EnablePreview)) {
+				return 0;
+			}
+		}
+	} else if ((majorVersion >= 45) && (majorVersion < max_allowed_version)) {
+		errorCode = J9NLS_CFR_ERR_MINOR_VERSION__ID;
+		if (majorVersion <= 55) {
+			/* versions prior to and including Java 11, allow any minor */
+			return 0;
+		}
+		/* only .0 is the only valid minor version for this range */
+		if (0 == minorVersion) {
+			return 0;
+		}
+		if (0xffff == minorVersion) {
+			errorCode = J9NLS_CFR_ERR_PREVIEW_VERSION__ID;
+			/* Allow cfdump to dump preview classes from other releases */
+			if (J9_ARE_ANY_BITS_SET(flags, BCT_AnyPreviewVersion)) {
+				return 0;
+			}
+		}
 	}
 
 	buildError((J9CfrError *) segment, errorCode, CFR_ThrowUnsupportedClassVersionError, offset);
 	return -1;
 }
-
 
 /*
 	Check the class file in @classfile.
@@ -2167,15 +2237,11 @@ checkClass(J9PortLibrary *portLib, J9CfrClassFile* classfile, U_8* segment, U_32
 	U_32 i;
 	I_32 maxBootstrapMethodIndex = -1;
 
-	if(checkPool(classfile, segment, (U_8*)10, &maxBootstrapMethodIndex, vmVersionShifted, flags)) {
+	if(checkPool(classfile, segment, (U_8*)10, &maxBootstrapMethodIndex, flags)) {
 		return -1;
 	}
 
-	if (vmVersionShifted >= BCT_Java9MajorVersionShifted) {
-		value = classfile->accessFlags & CFR_CLASS_ACCESS_MASK_9;
-	} else {
-		value = classfile->accessFlags & CFR_CLASS_ACCESS_MASK;
-	}
+	value = classfile->accessFlags & CFR_CLASS_ACCESS_MASK;
 
 	if ((flags & BCT_MajorClassFileVersionMask) < BCT_Java5MajorVersionShifted) {
 		value &= ~CFR_CLASS_ACCESS_NEWJDK5_MASK;
@@ -2311,7 +2377,7 @@ checkClass(J9PortLibrary *portLib, J9CfrClassFile* classfile, U_8* segment, U_32
 /*
 	Read the class file from the bytes in @data.
 	Returns:
-		-2 on insufficent space
+		-2 on insufficient space
 		-1 on error
 		0 on success
 		(required segment size)
@@ -2366,18 +2432,14 @@ j9bcutil_readClassFileBytes(J9PortLibrary *portLib,
 	I_32 hasRET = 0;
 	UDATA syntheticFound = FALSE;
 	U_32 vmVersionShifted = flags & BCT_MajorClassFileVersionMask;
+	U_16 constantPoolAllocationSize = 0;
 
 	Trc_BCU_j9bcutil_readClassFileBytes_Entry();
 
 	/* There must be at least enough space for the classfile struct. */
-	if(segmentLength < (UDATA) sizeof(J9CfrClassFile)) {
+	if (segmentLength < (UDATA) sizeof(J9CfrClassFile)) {
 		Trc_BCU_j9bcutil_readClassFileBytes_Exit(-2);
 		return -2;
-	}
-
-	/* protect the callers with default values */
-	if ((flags & BCT_MajorClassFileVersionMask) == 0) {
-		flags |= BCT_Java9MajorVersionShifted;
 	}
 
 	index = data;
@@ -2387,9 +2449,10 @@ j9bcutil_readClassFileBytes(J9PortLibrary *portLib,
 
 	ALLOC(classfile, J9CfrClassFile);
 
-	CHECK_EOF(10);
+	/* Verify the class version before any other checks. */
+	CHECK_EOF(8); /* magic, minor version, master version */
 	NEXT_U32(classfile->magic, index);
-	if(classfile->magic != (U_32) CFR_MAGIC) {
+	if (classfile->magic != (U_32) CFR_MAGIC) {
 		errorCode = J9NLS_CFR_ERR_MAGIC__ID;
 		offset = index - data - 4;
 		goto _errorFound;
@@ -2397,9 +2460,25 @@ j9bcutil_readClassFileBytes(J9PortLibrary *portLib,
 
 	NEXT_U16(classfile->minorVersion, index);
 	NEXT_U16(classfile->majorVersion, index);
+
+	/* Ensure that this is a supported class file version. */
+	if (checkClassVersion(classfile, segment, vmVersionShifted, flags)) {
+		Trc_BCU_j9bcutil_readClassFileBytes_Exit(-1);
+		return -1;
+	}
+
+	/* Make sure the structure and static verification below uses the class file version
+	 * number. VM version is maintained in vmVersionShifted.
+	 */
+	flags &= ~BCT_MajorClassFileVersionMask;
+	flags |= ((UDATA) classfile->majorVersion) << BCT_MajorClassFileVersionMaskShift;
+
+	CHECK_EOF(2); /* constantPoolCount */
 	NEXT_U16(classfile->constantPoolCount, index);
 
-	if(classfile->constantPoolCount < 1) {
+	constantPoolAllocationSize = classfile->constantPoolCount;
+
+	if (constantPoolAllocationSize < 1) {
 		errorCode = J9NLS_CFR_ERR_CONSTANT_POOL_EMPTY__ID;
 		offset = index - data - 2;
 		goto _errorFound;
@@ -2407,92 +2486,89 @@ j9bcutil_readClassFileBytes(J9PortLibrary *portLib,
 
 	VERBOSE_START(ParseClassFileConstantPool);
 	/* Space for the constant pool */
-	if(!ALLOC_ARRAY(classfile->constantPool, classfile->constantPoolCount, J9CfrConstantPoolInfo)) {
+
+	if (J9_ARE_ANY_BITS_SET(findClassFlags, J9_FINDCLASS_FLAG_ANON)) {
+		/* Preemptively add new entry to the end of the constantPool for the modified anonClassName.
+		 * If it turns out we dont need it, simply reduce the constantPoolCount by 1, which is
+		 * cheaper than allocating twice.
+		 *
+		 * Can't modify the classfile->constantPoolCount until after readPool is called so
+		 * the classfile is properly parsed. Instead use a temp variable to track the real
+		 * size for allocation, and re-assign to classfile->constantPoolCount later.
+		 *
+		 * If the size of the constantPool is MAX_CONSTANT_POOL_SIZE then throw an OOM.
+		 */
+		if (constantPoolAllocationSize == MAX_CONSTANT_POOL_SIZE) {
+			Trc_BCU_j9bcutil_readClassFileBytes_MaxCPCount();
+			return BCT_ERR_OUT_OF_MEMORY;
+		}
+		constantPoolAllocationSize += 1;
+	}
+
+	if (!ALLOC_ARRAY(classfile->constantPool, constantPoolAllocationSize, J9CfrConstantPoolInfo)) {
 		Trc_BCU_j9bcutil_readClassFileBytes_Exit(-2);
 		return -2;
 	}
 
 	/* Read the pool. */
-	if((result = readPool(classfile, data, dataEnd, segment, segmentEnd, &index, &freePointer)) != 0) {
+	if ((result = readPool(classfile, data, dataEnd, segment, segmentEnd, &index, &freePointer)) != 0) {
 		Trc_BCU_j9bcutil_readClassFileBytes_Exit(result);
 		return result;
 	}
 	endOfConstantPool = index;
 	VERBOSE_END(ParseClassFileConstantPool);
 
+	classfile->constantPoolCount = constantPoolAllocationSize;
+
 	CHECK_EOF(8);
-	if (vmVersionShifted >= BCT_Java9MajorVersionShifted) {
-		classfile->accessFlags = NEXT_U16(classfile->accessFlags, index) & CFR_CLASS_ACCESS_MASK_9;
-	} else {
-		classfile->accessFlags = NEXT_U16(classfile->accessFlags, index) & CFR_CLASS_ACCESS_MASK;
-	}
-	classfile->j9Flags = 0;
+	classfile->accessFlags = NEXT_U16(classfile->accessFlags, index);
 
-	/* Certain versions of the Java compiler forget to tag interfaces as abstract. Fix it. */
-	/* See 1GCC5T2: J9VM:ALL - JDK accepts non-abstract interfaces */
-	if( (classfile->accessFlags & (CFR_ACC_INTERFACE | CFR_ACC_ABSTRACT)) == CFR_ACC_INTERFACE ) {
-
-		/* Only enforce the check if -Xfuture is specified */
-		if (flags & CFR_Xfuture) { 
-			errorCode = J9NLS_CFR_ERR_INTERFACE_NOT_ABSTRACT__ID;
-			offset = index - data - 2;
-			goto _errorFound;
-		}
-
-		classfile->accessFlags |= CFR_ACC_ABSTRACT;
-	}
-
-	if ((vmVersionShifted >= BCT_Java9MajorVersionShifted)
-			&& (J9_ARE_ALL_BITS_SET(classfile->accessFlags, CFR_ACC_MODULE))) {
+	/* class files with the ACC_MODULE flag set cannot be loaded */
+	if (((flags & BCT_MajorClassFileVersionMask) >= BCT_Java9MajorVersionShifted)
+		&& J9_ARE_ALL_BITS_SET(classfile->accessFlags, CFR_ACC_MODULE)
+	) {
 		errorCode = J9NLS_CFR_ERR_MODULE_IS_INVALID_CLASS__ID;
 		offset = index - data - 2;
 		goto _errorFound;
 	}
 
-	NEXT_U16(classfile->thisClass, index);
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+	/*
+	 * TODO This behaviour is based on the LW2 spec http://cr.openjdk.java.net/~fparain/L-world/LW2-JVMS-draft-20181009.pdf.
+	 * In the future the CFR_ACC_VALUE_TYPE class access bit will be replaced by a ValObject subtyping relationship. We will
+	 * likely keep the bit in the romClass class, but it will no longer appear in .class files.
+	 *
+	 * The LW10 prototype will likely still be enabled with a -XX:+EnableValhalla flag so a check and error message similar
+	 * to this will be required.
+	 */
 
-	/* if anonClass create an array for the new class name */
-	if (J9_ARE_ANY_BITS_SET(findClassFlags, J9_FINDCLASS_FLAG_ANON)) {
-		/* find the UTF8 thisClass name slot */
-		U_32 cpThisClassUTF8Slot = classfile->constantPool[classfile->thisClass].slot1;
-		U_32 originalStringLength = classfile->constantPool[cpThisClassUTF8Slot].slot1;
-		const char* originalStringBytes = (const char*)classfile->constantPool[cpThisClassUTF8Slot].bytes;
-		U_32 i = 0;
-		/*
-		 * alloc an array for the new name with the following format:
-		 * [className]/[ROMClassAddress]\0
-		 */
-		if (!ALLOC_ARRAY(classfile->constantPool[cpThisClassUTF8Slot].bytes, originalStringLength + 1 + ROM_ADDRESS_LENGTH + 1, U_8)) {
-			Trc_BCU_j9bcutil_readClassFileBytes_Exit(-2);
-			return -2;
-		}
-		
-		/* update the size */
-		classfile->constantPool[cpThisClassUTF8Slot].slot1 += ROM_ADDRESS_LENGTH + 1;
+	/* class files with the ACC_VALUE_TYPE can only be loaded if -XX:+EnableValhalla is set */
+	if (J9_ARE_ALL_BITS_SET(classfile->accessFlags, CFR_ACC_VALUE_TYPE)
+		&& J9_ARE_NO_BITS_SET(flags, BCT_ValueTypesEnabled)
+	) {
+		errorCode = J9NLS_CFR_ERR_VALUE_TYPES_IS_NOT_SUPPORTED__ID;
+		offset = index - data - 2;
+		goto _errorFound;
+	}
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 
-		/* copy the name into the new location and add the special character, fill the rest with zeroes */
-		memcpy (classfile->constantPool[cpThisClassUTF8Slot].bytes, originalStringBytes, originalStringLength);
-		*(U_8*)((UDATA) classfile->constantPool[cpThisClassUTF8Slot].bytes + originalStringLength) = ANON_CLASSNAME_CHARACTER_SEPARATOR;
-		memset(classfile->constantPool[cpThisClassUTF8Slot].bytes + originalStringLength + 1, '0', ROM_ADDRESS_LENGTH);
-		*(U_8*)((UDATA) classfile->constantPool[cpThisClassUTF8Slot].bytes + originalStringLength + 1 + ROM_ADDRESS_LENGTH) = '\0';
+	/* mask access flags to remove unused access bits */
+	classfile->accessFlags &= CFR_CLASS_ACCESS_MASK;
+	classfile->j9Flags = 0;
 
-		/* search constpool for all other identical classRefs TODO untested */
-		for (i = 0; i < classfile->constantPoolCount; i++) {
-			if (CFR_CONSTANT_Class == classfile->constantPool[i].tag) {
-				U_32 classNameSlot = classfile->constantPool[i].slot1;
-				if (classNameSlot != cpThisClassUTF8Slot) {
-					U_32 classNameLength = classfile->constantPool[classNameSlot].slot1;
-					if ((classNameLength == originalStringLength)
-						&& (0 == strncmp(originalStringBytes, (const char*)classfile->constantPool[classNameSlot].bytes, originalStringLength)))
-					{
-						/* if it is the same class, point to original class name slot */
-						classfile->constantPool[i].slot1 = cpThisClassUTF8Slot;
-					}
-				}
-			}
+	if ((classfile->accessFlags & (CFR_ACC_INTERFACE | CFR_ACC_ABSTRACT)) == CFR_ACC_INTERFACE) {
+		if ((flags & BCT_MajorClassFileVersionMask) >= BCT_Java6MajorVersionShifted) {
+			/* error out for Java 6 and newer versions */
+			errorCode = J9NLS_CFR_ERR_INTERFACE_NOT_ABSTRACT__ID;
+			offset = index - data - 2;
+			goto _errorFound;
+		} else {
+			/* Just fix old classfiles */
+			classfile->accessFlags |= CFR_ACC_ABSTRACT;
 		}
 	}
 
+	NEXT_U16(classfile->thisClass, index);
 	NEXT_U16(classfile->superClass, index);
 	NEXT_U16(classfile->interfacesCount, index);
 
@@ -2583,20 +2659,7 @@ j9bcutil_readClassFileBytes(J9PortLibrary *portLib,
 	}
 
 	classfile->classFileSize = (U_32) dataLength;
-	if (J9_ARE_ALL_BITS_SET(findClassFlags, J9_FINDCLASS_FLAG_ANON)) {
-		/* additional bytes added for the unique name */
-		classfile->classFileSize += 1 + ROM_ADDRESS_LENGTH;
-	}
-	/* Ensure that this is a supported class file version. */
-	if(checkClassVersion(classfile, segment, flags)) {
-		Trc_BCU_j9bcutil_readClassFileBytes_Exit(-1);
-		return -1;
-	}
 
-	/* Make sure that following verification uses the class file version number */
-	flags &= ~BCT_MajorClassFileVersionMask;
-	flags |= ((UDATA) classfile->majorVersion) << BCT_MajorClassFileVersionMaskShift;
-	
 	/* Structure verification. This is "Pass 1". */
 	if (0 != (flags & CFR_StaticVerification)) {
 		if(checkClass(portLib, classfile, segment, (U_32) (endOfConstantPool - data), vmVersionShifted, flags)) {
@@ -2614,9 +2677,13 @@ j9bcutil_readClassFileBytes(J9PortLibrary *portLib,
 			return result;
 		}
 	} else {
-		/* special checking to look for jsr's if -noverify - the verifyFunction normally scans and tags 
-			for inlining methods and classes that contain jsr's */
-		hasRET = checkForJsrs(classfile);
+		/* Special checking to look for jsr's if -noverify - the verifyFunction normally scans and tags
+		 * for inlining methods and classes that contain jsr's unless the class file version is 51 or
+		 * greater as jsr / ret are always illegal in that case
+		 */
+		if (classfile->majorVersion < 51) {
+			hasRET = checkForJsrs(classfile);
+		}
 	}
 	VERBOSE_END(ParseClassFileVerifyClass);
 
@@ -3151,7 +3218,7 @@ readAnnotationElement(J9CfrClassFile * classfile, J9CfrAnnotationElement ** pAnn
 		annotation = &((J9CfrAnnotationElementAnnotation *)element)->annotationValue;
 
 		result = readAnnotations(classfile, annotation, 1, data, dataEnd, segment, segmentEnd, &index, &freePointer, flags);
-		if (result != 0) {
+		if (BCT_ERR_NO_ERROR != result) {
 			return result;
 		}
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2015 IBM Corp. and others
+ * Copyright (c) 2001, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.tools.ddrinteractive.commands;
 
@@ -41,7 +41,6 @@ import com.ibm.j9ddr.tools.ddrinteractive.Command;
 import com.ibm.j9ddr.tools.ddrinteractive.CommandUtils;
 import com.ibm.j9ddr.tools.ddrinteractive.Context;
 import com.ibm.j9ddr.tools.ddrinteractive.DDRInteractiveCommandException;
-import com.ibm.j9ddr.vm29.j9.AlgorithmVersion;
 import com.ibm.j9ddr.vm29.j9.DataType;
 import com.ibm.j9ddr.vm29.pointer.*;
 import com.ibm.j9ddr.vm29.pointer.generated.*;
@@ -306,7 +305,7 @@ public class ShrCCommand extends Command
 
 				} else if (args[0].equals("rtflags")) {
 					if (sharedClassConfig.notNull()) {
-						U64 runtimeFlags = sharedClassConfig.runtimeFlags();
+						UDATA runtimeFlags = sharedClassConfig.runtimeFlags();
 						CommandUtils.dbgPrint(out,"Printing the shared classes runtime flags %s\n", runtimeFlags.getHexValue());
 						printShCFlags(out, runtimeFlags, "RUNTIMEFLAG");
 					}
@@ -422,7 +421,7 @@ public class ShrCCommand extends Command
 			}
 			if (cacheName != null) cacheNameString = cacheName; 
 			VoidPointer headerStart = osCache._headerStart();
-			U32 cacheSize = osCache._cacheSize();
+			UDATA cacheSize = osCache._cacheSize();
 			CommandUtils.dbgPrint(out, "Cache start 0x%x size %d\n", headerStart.getAddress(), cacheSize.longValue());
 			File outFile = new File(cacheDir, cacheNameString);
 			CommandUtils.dbgPrint(out, "Writing cache to %s\n", outFile.getAbsolutePath());
@@ -1003,7 +1002,7 @@ public class ShrCCommand extends Command
 			CommandUtils.dbgPrint(out, "CHARARRAY data %d metadata %d\n", chararrayDataLen, chararrayMetaLen);
 			CommandUtils.dbgPrint(out, "BYTEDATA Summary\n");
 			CommandUtils.dbgPrint(out, "\tUNKNOWN %d  HELPER %d  POOL %d  AOTHEADER %d\n", numByteOfType[(int) J9SHR_DATA_TYPE_UNKNOWN], numByteOfType[(int) J9SHR_DATA_TYPE_HELPER], numByteOfType[(int) J9SHR_DATA_TYPE_POOL], numByteOfType[(int) J9SHR_DATA_TYPE_AOTHEADER]);
-			CommandUtils.dbgPrint(out, "\tJCL %d  VM %d  ROMSTRING %d  ZIPCACHE %d\n", numByteOfType[(int) J9SHR_DATA_TYPE_JCL], numByteOfType[(int) J9SHR_DATA_TYPE_VM], numByteOfType[(int) J9SHR_DATA_TYPE_ROMSTRING], numByteOfType[(int) J9SHR_DATA_TYPE_ZIPCACHE]);
+			CommandUtils.dbgPrint(out, "\tJCL %d  VM %d  ROMSTRING %d  ZIPCACHE %d  STARTUPHINTS %d\n", numByteOfType[(int) J9SHR_DATA_TYPE_JCL], numByteOfType[(int) J9SHR_DATA_TYPE_VM], numByteOfType[(int) J9SHR_DATA_TYPE_ROMSTRING], numByteOfType[(int) J9SHR_DATA_TYPE_ZIPCACHE], numByteOfType[(int) J9SHR_DATA_TYPE_STARTUP_HINTS]);
 			CommandUtils.dbgPrint(out, "\tJITHINT %d  AOTCLASSCHAIN %d AOTTHUNK %d\n", numByteOfType[(int) J9SHR_DATA_TYPE_JITHINT], numByteOfType[(int) J9SHR_DATA_TYPE_AOTCLASSCHAIN], numByteOfType[(int) J9SHR_DATA_TYPE_AOTTHUNK]);
 			if (cacheletMetaLen > 0) {
 				CommandUtils.dbgPrint(out, "CACHELET count %d (without segments %d) metadata %d\n", numCachelets, numCacheletsNoSegments, cacheletMetaLen);
@@ -1198,7 +1197,9 @@ public class ShrCCommand extends Command
 		} else if (type == J9SHR_DATA_TYPE_CACHELET) {
 			return "CACHELET";
 		} else if (type == J9SHR_DATA_TYPE_ZIPCACHE) {
-			return "ZIPCACHE";
+			return "ZIPCACHE"; 
+		} else if (type == J9SHR_DATA_TYPE_STARTUP_HINTS) {
+			return "STARTUPHINT";
 		} else if (type == J9SHR_DATA_TYPE_JITHINT) {
 			return "JITHINT";
 		} else if (type == J9SHR_DATA_TYPE_AOTCLASSCHAIN) {
@@ -1339,15 +1340,15 @@ public class ShrCCommand extends Command
 		}
 		
 		public U32 getTotalBytes() throws CorruptDataException {
-			return this.header.totalBytes();
+			return new U32(this.header.totalBytes());
 		}
 		
 		public U32 getSoftMaxBytes() throws CorruptDataException {
-			return this.header.softMaxBytes();
+			return new U32(this.header.softMaxBytes());
 		}
 		
 		public U32 getReadWriteBytes() throws CorruptDataException {
-			return this.header.readWriteBytes();
+			return new U32(this.header.readWriteBytes());
 		}
 		
 		public UDATA getReadWritePtr() throws CorruptDataException {
@@ -1427,11 +1428,11 @@ public class ShrCCommand extends Command
 		}
 		
 		public I32 getMinAOT() throws CorruptDataException {
-			return this.header.minAOT();
+			return new I32(this.header.minAOT());
 		}
 		
 		public I32 getMinJIT() throws CorruptDataException {
-			return this.header.minJIT();
+			return new I32(this.header.minJIT());
 		}
 		
 		public UDATA getAotBytes() throws CorruptDataException {
@@ -1935,7 +1936,7 @@ public class ShrCCommand extends Command
 					if (type.eq(TYPE_CACHELET)) {
 						CacheletWrapperPointer cw = CacheletWrapperPointer.cast(ShcItemHelper.ITEMDATA(walk));
 						J9SharedCacheHeaderPointer header = J9SharedCacheHeaderPointer.cast(CacheletWrapperHelper.CLETDATA(cw));
-						U32 totalBytes = header.totalBytes();
+						UDATA totalBytes = header.totalBytes();
 						UDATA updatePtr = UDATA.cast(header).add(header.updateSRP());
 						UDATA metadataEnd = UDATA.cast(header).add(totalBytes);
 

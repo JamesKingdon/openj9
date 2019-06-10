@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
  
  
@@ -62,7 +61,7 @@ internalAllocateMemorySpaceWithMaximum(J9JavaVM * javaVM, UDATA minimumSpaceSize
 	MM_GCExtensions *extensions = MM_GCExtensions::getExtensions(javaVM);
 	if (extensions->isMetronomeGC()) {
 #if defined(J9VM_GC_REALTIME)
-		MM_EnvironmentRealtime env(javaVM);
+		MM_EnvironmentRealtime env(javaVM->omrVM);
 		result = internalAllocateMemorySpaceWithMaximumWithEnv(&env, javaVM, minimumSpaceSize, minimumNewSpaceSize, initialNewSpaceSize, maximumNewSpaceSize, minimumTenureSpaceSize, initialTenureSpaceSize, maximumTenureSpaceSize, memoryMax, baseAddress, tenureFlags);
 #endif /* J9VM_GC_REALTIME */
 	} else {
@@ -131,29 +130,6 @@ cleanup:
 
 	/* TODO: Cleanup for the memorySpace class (if necessary) */
 	return NULL;
-}
-
-/**
- * Frees all memory spaces.
- * @param memorySpace pointer to the list (pool) of memory spaces
- */
-void
-internalFreeMemorySpace(J9JavaVM * javaVM, void * memorySpace)
-{
-	MM_EnvironmentBase env(javaVM->omrVM);
-
-	MM_MemorySpace *modronMemorySpace = (MM_MemorySpace *)memorySpace;
-	if  (modronMemorySpace) {
-		if (!(javaVM->runtimeFlags & J9_RUNTIME_SHUTDOWN)) {
-			TRIGGER_J9HOOK_MM_PRIVATE_HEAP_DELETE(
-				MM_GCExtensions::getExtensions(javaVM)->privateHookInterface,
-				env.getOmrVMThread(),
-				modronMemorySpace);
-		}
-
-		modronMemorySpace->kill(&env);
-
-	}
 }
 
 } /* extern "C" */

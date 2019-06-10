@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar19-SE]*/
 /*******************************************************************************
- * Copyright (c) 2016, 2017 IBM Corp. and others
+ * Copyright (c) 2016, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package java.lang.invoke;
 
@@ -90,9 +90,10 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 				
 		return populateMHs(operationsClass, lookupTypes, exactTypes);
 	}
-
+	
 	/**
 	 * Constructs a VarHandle to a static field.
+	 * Ensure that the class is initialized to match behaviour of the reference implementation.
 	 * 
 	 * @param lookupClass The class where we start the lookup of the field
 	 * @param fieldName The field name
@@ -101,6 +102,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 	 */
 	StaticFieldVarHandle(Class<?> lookupClass, String fieldName, Class<?> fieldType, Class<?> accessClass) {
 		super(lookupClass, fieldName, fieldType, accessClass, true, COORDINATE_TYPES, populateMHs(fieldType));
+		_unsafe.ensureClassInitialized(lookupClass);
 	}
 	
 	/**
@@ -160,7 +162,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean compareAndSet(Object testValue, Object newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetObject(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapObject(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -169,7 +171,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final Object compareAndExchange(Object testValue, Object newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndExchangeObject(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndExchangeObjectVolatile(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -188,7 +190,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSet(Object testValue, Object newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetObjectPlain(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapObject(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -197,7 +199,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetAcquire(Object testValue, Object newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetObjectAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapObjectAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -206,7 +208,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetRelease(Object testValue, Object newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetObjectRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapObjectRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -215,7 +217,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetPlain(Object testValue, Object newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/
+/*[IF Sidecar19-SE-OpenJ9]*/
 				return _unsafe.weakCompareAndSetObjectPlain(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapObject(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -341,7 +343,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean compareAndSet(byte testValue, byte newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -350,7 +352,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final byte compareAndExchange(byte testValue, byte newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return (byte)_unsafe.compareAndExchangeInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return (byte)_unsafe.compareAndExchangeIntVolatile(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -369,7 +371,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSet(byte testValue, byte newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/
+/*[IF Sidecar19-SE-OpenJ9]*/
 				return _unsafe.weakCompareAndSetIntPlain(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -378,7 +380,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetAcquire(byte testValue, byte newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapIntAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -387,7 +389,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetRelease(byte testValue, byte newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapIntRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -396,7 +398,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetPlain(byte testValue, byte newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -522,7 +524,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean compareAndSet(char testValue, char newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -531,7 +533,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final char compareAndExchange(char testValue, char newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return (char)_unsafe.compareAndExchangeInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return (char)_unsafe.compareAndExchangeIntVolatile(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -550,7 +552,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSet(char testValue, char newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntPlain(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -559,7 +561,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetAcquire(char testValue, char newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapIntAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -568,7 +570,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetRelease(char testValue, char newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapIntRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -577,7 +579,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetPlain(char testValue, char newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -703,7 +705,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean compareAndSet(double testValue, double newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetDouble(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapDouble(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -712,7 +714,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final double compareAndExchange(double testValue, double newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndExchangeDouble(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndExchangeDoubleVolatile(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -731,7 +733,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSet(double testValue, double newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/
+/*[IF Sidecar19-SE-OpenJ9]*/
 				return _unsafe.weakCompareAndSetDoublePlain(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapDouble(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -740,7 +742,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetAcquire(double testValue, double newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetDoubleAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapDoubleAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -749,7 +751,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetRelease(double testValue, double newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetDoubleRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapDoubleRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -758,7 +760,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetPlain(double testValue, double newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetDouble(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapDouble(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -884,7 +886,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean compareAndSet(float testValue, float newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetFloat(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapFloat(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -893,7 +895,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final float compareAndExchange(float testValue, float newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndExchangeFloat(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndExchangeFloatVolatile(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -912,7 +914,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSet(float testValue, float newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetFloatPlain(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapFloat(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -921,7 +923,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetAcquire(float testValue, float newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetFloatAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapFloatAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -930,7 +932,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetRelease(float testValue, float newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetFloatRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapFloatRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -939,7 +941,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetPlain(float testValue, float newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetFloat(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapFloat(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1065,7 +1067,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean compareAndSet(int testValue, int newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1074,7 +1076,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final int compareAndExchange(int testValue, int newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndExchangeInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndExchangeIntVolatile(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1093,7 +1095,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSet(int testValue, int newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntPlain(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1102,7 +1104,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetAcquire(int testValue, int newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapIntAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1111,7 +1113,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetRelease(int testValue, int newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapIntRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1120,7 +1122,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetPlain(int testValue, int newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1246,7 +1248,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean compareAndSet(long testValue, long newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetLong(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapLong(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1255,7 +1257,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final long compareAndExchange(long testValue, long newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/
+/*[IF Sidecar19-SE-OpenJ9]*/
 				return _unsafe.compareAndExchangeLong(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndExchangeLongVolatile(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1274,7 +1276,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSet(long testValue, long newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/
+/*[IF Sidecar19-SE-OpenJ9]*/
 				return _unsafe.weakCompareAndSetLongPlain(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapLong(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1283,7 +1285,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetAcquire(long testValue, long newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetLongAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapLongAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1292,7 +1294,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetRelease(long testValue, long newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetLongRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapLongRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1301,7 +1303,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean weakCompareAndSetPlain(long testValue, long newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetLong(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);	
 /*[ELSE]
 				return _unsafe.compareAndSwapLong(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1427,7 +1429,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean compareAndSet(short testValue, short newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1451,7 +1453,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 
 			private static final boolean weakCompareAndSet(short testValue, short newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntPlain(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1460,7 +1462,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 
 			private static final boolean weakCompareAndSetAcquire(short testValue, short newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapIntAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1469,7 +1471,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 
 			private static final boolean weakCompareAndSetRelease(short testValue, short newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapIntRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1478,7 +1480,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 
 			private static final boolean weakCompareAndSetPlain(short testValue, short newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
 /*[ELSE]
 				return _unsafe.compareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue, newValue);
@@ -1604,7 +1606,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 			
 			private static final boolean compareAndSet(boolean testValue, boolean newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0);
 /*[ELSE]
 				return _unsafe.compareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0);
@@ -1613,7 +1615,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 
 			private static final boolean compareAndExchange(boolean testValue, boolean newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return (0 != _unsafe.compareAndExchangeInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0));
 /*[ELSE]
 				return (0 != _unsafe.compareAndExchangeIntVolatile(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0));
@@ -1632,7 +1634,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 
 			private static final boolean weakCompareAndSet(boolean testValue, boolean newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/
+/*[IF Sidecar19-SE-OpenJ9]*/
 				return _unsafe.weakCompareAndSetIntPlain(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0);
@@ -1641,7 +1643,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 
 			private static final boolean weakCompareAndSetAcquire(boolean testValue, boolean newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapIntAcquire(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0);
@@ -1650,7 +1652,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 
 			private static final boolean weakCompareAndSetRelease(boolean testValue, boolean newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.weakCompareAndSetIntRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0);
 /*[ELSE]
 				return _unsafe.weakCompareAndSwapIntRelease(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0);
@@ -1659,7 +1661,7 @@ final class StaticFieldVarHandle extends FieldVarHandle {
 
 			private static final boolean weakCompareAndSetPlain(boolean testValue, boolean newValue, VarHandle varHandle) {
 				FieldVarHandle fieldVarHandle = (FieldVarHandle)varHandle;
-/*[IF Sidecar19-SE-B174]*/				
+/*[IF Sidecar19-SE-OpenJ9]*/				
 				return _unsafe.compareAndSetInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0);
 /*[ELSE]
 				return _unsafe.compareAndSwapInt(fieldVarHandle.definingClass, fieldVarHandle.vmslot, testValue ? 1 : 0, newValue ? 1 : 0);

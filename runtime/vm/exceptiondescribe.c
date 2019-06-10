@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
@@ -66,7 +66,7 @@ printExceptionInThread(J9VMThread* vmThread)
 /* assumes VM access */
 static void
 printExceptionMessage(J9VMThread* vmThread, j9object_t exception) {
-	char stackBuffer[64];
+	char stackBuffer[256];
 	char* buf = stackBuffer;
 	UDATA length = 0;
 	const char* separator = "";
@@ -76,21 +76,11 @@ printExceptionMessage(J9VMThread* vmThread, j9object_t exception) {
 	J9UTF8* exceptionClassName = J9ROMCLASS_CLASSNAME(J9OBJECT_CLAZZ(vmThread, exception)->romClass);
 	j9object_t detailMessage = J9VMJAVALANGTHROWABLE_DETAILMESSAGE(vmThread, exception);
 
-	if (detailMessage) {
-		/* length is in jchars. 3x is enough for worst case UTF8 encoding */
-		length = J9VMJAVALANGSTRING_LENGTH(vmThread, detailMessage) * 3;
-		if (length > sizeof(stackBuffer)) {
-			buf = j9mem_allocate_memory(length, OMRMEM_CATEGORY_VM);
-		}
-		if (buf) {
-			length = copyStringToUTF8Helper(vmThread, detailMessage, FALSE, J9_STR_NONE, (U_8 *)buf, length);
-			if (UDATA_MAX == length) {
-				length = 0;
-			}
+	if (NULL != detailMessage) {
+		buf = copyStringToUTF8WithMemAlloc(vmThread, detailMessage, J9_STR_NULL_TERMINATE_RESULT, "", 0, stackBuffer, 256, &length);
+
+		if (NULL != buf) {
 			separator = ": ";
-		} else {
-			buf = stackBuffer;
-			length = 0;
 		}
 	}
 
@@ -134,7 +124,7 @@ printStackTraceEntry(J9VMThread * vmThread, void * voidUserData, J9ROMClass *rom
 		BOOLEAN freeModuleVersion = FALSE;
 		UDATA j2seVersion = J2SE_VERSION(vm) & J2SE_VERSION_MASK;
 
-		if (j2seVersion >= J2SE_19) {
+		if (j2seVersion >= J2SE_V11) {
 			moduleNameUTF = JAVA_BASE_MODULE;
 			moduleVersionUTF = JAVA_MODULE_VERSION;
 
@@ -149,13 +139,13 @@ printStackTraceEntry(J9VMThread * vmThread, void * voidUserData, J9ROMClass *rom
 
 				if ((NULL != module) && (module != vm->javaBaseModule)) {
 					moduleNameUTF = copyStringToUTF8WithMemAlloc(
-						vmThread, module->moduleName, J9_STR_NONE, "", nameBuf, J9VM_PACKAGE_NAME_BUFFER_LENGTH);
+						vmThread, module->moduleName, J9_STR_NULL_TERMINATE_RESULT, "", 0, nameBuf, J9VM_PACKAGE_NAME_BUFFER_LENGTH, NULL);
 					if (nameBuf != moduleNameUTF) {
 						freeModuleName = TRUE;
 					}
 					if (NULL != moduleNameUTF) {
 						moduleVersionUTF = copyStringToUTF8WithMemAlloc(
-							vmThread, module->version, J9_STR_NONE, "", versionBuf, J9VM_PACKAGE_NAME_BUFFER_LENGTH);
+							vmThread, module->version, J9_STR_NULL_TERMINATE_RESULT, "", 0, versionBuf, J9VM_PACKAGE_NAME_BUFFER_LENGTH, NULL);
 						if (versionBuf != moduleVersionUTF) {
 							freeModuleVersion = TRUE;
 						}
@@ -290,20 +280,19 @@ iterateStackTrace(J9VMThread * vmThread, j9object_t* exception, callback_func_t 
 			UDATA lineNumber = 0;
 			J9UTF8 * fileName = NULL;
 			J9ClassLoader *classLoader = NULL;
-			UDATA offset = 0;
 #ifdef J9VM_INTERP_NATIVE_SUPPORT
 			J9JITExceptionTable * metaData = NULL;
 			UDATA inlineDepth = 0;
 			void * inlinedCallSite = NULL;
-			void * stackMap = NULL;
+			void * inlineMap = NULL;
 			J9JITConfig * jitConfig = vm->jitConfig;
 
 			if (jitConfig) {
 				metaData = jitConfig->jitGetExceptionTableFromPC(vmThread, methodPC);
 				if (metaData) {
-					stackMap = jitConfig->jitGetInlinerMapFromPC(vm, metaData, methodPC);
-					if (stackMap) {
-						inlinedCallSite = jitConfig->getFirstInlinedCallSite(metaData, stackMap);
+					inlineMap = jitConfig->jitGetInlinerMapFromPC(vm, metaData, methodPC);
+					if (inlineMap) {
+						inlinedCallSite = jitConfig->getFirstInlinedCallSite(metaData, inlineMap);
 						if (inlinedCallSite) {
 							inlineDepth = jitConfig->getJitInlineDepthFromCallSite(metaData, inlinedCallSite);
 							totalEntries += inlineDepth;
@@ -328,15 +317,15 @@ inlinedEntry:
 						goto done;
 					}
 					if (inlineDepth == 0) {
-						if (stackMap == NULL) {
+						if (inlineMap == NULL) {
 							methodPC = -1;
 							isSameReceiver = FALSE;
 						} else {
-							methodPC = jitConfig->getCurrentByteCodeIndexAndIsSameReceiver(metaData, stackMap, NULL, &isSameReceiver);
+							methodPC = jitConfig->getCurrentByteCodeIndexAndIsSameReceiver(metaData, inlineMap, NULL, &isSameReceiver);
 						}
 						ramMethod = metaData->ramMethod;
 					} else {
-						methodPC = jitConfig->getCurrentByteCodeIndexAndIsSameReceiver(metaData, stackMap , inlinedCallSite, &isSameReceiver);
+						methodPC = jitConfig->getCurrentByteCodeIndexAndIsSameReceiver(metaData, inlineMap , inlinedCallSite, &isSameReceiver);
 						ramMethod = jitConfig->getInlinedMethod(inlinedCallSite);
 					}
 					if (pruneConstructors) {
@@ -350,14 +339,12 @@ inlinedEntry:
 					ramClass = J9_CLASS_FROM_CP(J9_CP_FROM_METHOD(ramMethod));
 					romClass = ramClass->romClass;
 					classLoader = ramClass->classLoader;
-
-					offset = getMethodIndexUnchecked(ramMethod);
 				} else {
 					pruneConstructors = FALSE;
 #endif
 					romClass = findROMClassFromPC(vmThread, methodPC, &classLoader);
 					if(romClass) {
-						romMethod = findROMMethodInROMClass(vmThread, romClass, methodPC, &offset);
+						romMethod = findROMMethodInROMClass(vmThread, romClass, methodPC);
 						if (romMethod != NULL) {
 							methodPC -= (UDATA) J9_BYTECODE_START_FROM_ROM_METHOD(romMethod);
 						}
@@ -368,7 +355,7 @@ inlinedEntry:
 
 #ifdef J9VM_OPT_DEBUG_INFO_SERVER
 				if (romMethod != NULL) {
-					lineNumber = getLineNumberForROMClassFromROMMethod(vm, romMethod, romClass, offset, classLoader, methodPC);
+					lineNumber = getLineNumberForROMClassFromROMMethod(vm, romMethod, romClass, classLoader, methodPC);
 					fileName = getSourceFileNameForROMClass(vm, classLoader, romClass);
 				}
 #endif
@@ -467,7 +454,7 @@ internalExceptionDescribe(J9VMThread * vmThread)
 
 		if (vm->runtimeFlags & J9_RUNTIME_INITIALIZED) {
 			PUSH_OBJECT_IN_SPECIAL_FRAME(vmThread, exception);
-			printStackTrace(vmThread, exception, 0, 0, 0);
+			printStackTrace(vmThread, exception);
 			exception = POP_OBJECT_IN_SPECIAL_FRAME(vmThread);
 			if (vmThread->currentException == NULL) {
 				goto done;
@@ -491,7 +478,11 @@ internalExceptionDescribe(J9VMThread * vmThread)
 				vmThread->currentException = NULL;
 			}
 			if (J9OBJECT_CLAZZ(vmThread, exception) == eiieClass) {
+#if JAVA_SPEC_VERSION >= 12
+				exception = J9VMJAVALANGTHROWABLE_CAUSE(vmThread, exception);
+#else
 				exception = J9VMJAVALANGEXCEPTIONININITIALIZERERROR_EXCEPTION(vmThread, exception);
+#endif /* JAVA_SPEC_VERSION */
 			} else {
 				break;
 			}

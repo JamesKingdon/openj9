@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -73,7 +72,7 @@ MM_ProjectedSurvivalCollectionSetDelegate::initialize(MM_EnvironmentVLHGC *env)
 		if(NULL == _setSelectionDataTable) {
 			goto error_no_memory;
 		}
-		memset(_setSelectionDataTable, 0, tableAllocationSizeInBytes);
+		memset((void *)_setSelectionDataTable, 0, tableAllocationSizeInBytes);
 		for(UDATA index = 0; index < setSelectionEntryCount; index++) {
 			_setSelectionDataTable[index]._compactGroup = index;
 		}
@@ -175,7 +174,9 @@ MM_ProjectedSurvivalCollectionSetDelegate::createNurseryCollectionSet(MM_Environ
 		if (region->containsObjects()) {
 			bool regionHasCriticalRegions = (0 != region->_criticalRegionsInUse);
 			bool isSelectionForCopyForward = env->_cycleState->_shouldRunCopyForward;
-			if (region->getRememberedSetCardList()->isAccurate() && (!isSelectionForCopyForward || !regionHasCriticalRegions)) {
+			/* Allow jniCritical Eden regions are part of Nursery collectionSet in CopyForwardHybrid mode */
+			if (region->getRememberedSetCardList()->isAccurate() && (!isSelectionForCopyForward || !regionHasCriticalRegions || (regionHasCriticalRegions && (_extensions->tarokEnableCopyForwardHybrid || (0 != _extensions->fvtest_forceCopyForwardHybridRatio)) && region->isEden()))) {
+
 				if(MM_CompactGroupManager::isRegionInNursery(env, region)) {
 					/* on collection phase, mark all non-overflowed regions and those that RSCL is not being rebuilt */
 					/* sweep/compact flags are set in ReclaimDelegate */
@@ -265,6 +266,7 @@ MM_ProjectedSurvivalCollectionSetDelegate::createRateOfReturnCollectionSet(MM_En
 			if (MM_CompactGroupManager::isRegionDCSSCandidate(env, region)) {
 				bool regionHasCriticalRegions = (0 != region->_criticalRegionsInUse);
 				bool isSelectionForCopyForward = env->_cycleState->_shouldRunCopyForward;
+
 				if (region->getRememberedSetCardList()->isAccurate() && (!isSelectionForCopyForward || !regionHasCriticalRegions)) {
 					_dynamicSelectionRegionList[sortListSize] = region;
 					sortListSize += 1;
@@ -459,6 +461,7 @@ MM_ProjectedSurvivalCollectionSetDelegate::deleteRegionCollectionSetForPartialGC
 		Assert_MM_true(MM_RegionValidator(region).validate(env));
 
 		region->_markData._shouldMark = false;
+		region->_markData._noEvacuation = false;
 		region->_reclaimData._shouldReclaim = false;
 	}
 }

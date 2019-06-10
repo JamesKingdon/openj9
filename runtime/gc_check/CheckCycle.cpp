@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,11 +18,12 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
 
+#include "vendor_version.h"
 #include "CheckCycle.hpp"
 #include "CheckClassHeap.hpp"
 #include "CheckClassLoaders.hpp"
@@ -80,7 +81,7 @@ GC_CheckCycle::printHelp(J9PortLibrary *portLib)
 {
 	PORT_ACCESS_FROM_PORT(portLib);
 
-	j9tty_printf(PORTLIB, "gcchk for J9, Version " EsVersionString "\n");
+	j9tty_printf(PORTLIB, "gcchk for J9, Version " J9JVM_VERSION_STRING "\n");
 	j9tty_printf(PORTLIB, J9_COPYRIGHT_STRING "\n\n");
 	j9tty_printf(PORTLIB, "Usage: -Xcheck:gc[:scanOption,...][:verifyOption,...][:miscOption,...]\n");
 	j9tty_printf(PORTLIB, "scan options (default is all):\n");
@@ -451,8 +452,8 @@ GC_CheckCycle::run(GCCheckInvokedBy invokedBy, UDATA filterFlags)
  * method can identify dead objects by virtue of the fact that their class
  * pointer is unaligned, ie low_tagged.
  * 
- * This is not necessary if the Object Map is avaialable as we can perform the
- * necessary check by calling the memeory manager j9gc_ext_is_liveObject() fucntion
+ * This is not necessary if the Object Map is available as we can perform the
+ * necessary check by calling the memory manager j9gc_ext_is_liveObject() function
  * 
  */
 void

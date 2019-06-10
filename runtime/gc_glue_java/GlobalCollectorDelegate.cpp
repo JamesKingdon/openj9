@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2017, 2017 IBM Corp. and others
+ * Copyright (c) 2017, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -51,6 +51,9 @@
 #include "ObjectModel.hpp"
 #include "ParallelGlobalGC.hpp"
 #include "ParallelHeapWalker.hpp"
+#if defined(OMR_ENV_DATA64) && defined(OMR_GC_FULL_POINTERS)
+#include "ReadBarrierVerifier.hpp"
+#endif /* defined(OMR_ENV_DATA64) && defined(OMR_GC_FULL_POINTERS) */
 #include "ReferenceChainWalkerMarkMap.hpp"
 #include "ReferenceObjectList.hpp"
 #include "ScavengerJavaStats.hpp"
@@ -68,7 +71,7 @@ fixObjectIfClassDying(OMR_VMThread *omrVMThread, MM_HeapRegionDescriptor *region
 {
 	/* Check to see if the object's class is being unloaded. If so, it can't be left as dark matter so abandon it */
 	uintptr_t classFlags = J9CLASS_FLAGS(J9GC_J9OBJECT_CLAZZ(object));
-	if (0 != (classFlags & J9_JAVA_CLASS_DYING)) {
+	if (0 != (classFlags & J9AccClassDying)) {
 		MM_MemorySubSpace *memorySubSpace = region->getSubSpace();
 		uintptr_t deadObjectByteSize = MM_GCExtensions::getExtensions(omrVMThread)->objectModel.getConsumedSizeInBytesWithHeader(object);
 		memorySubSpace->abandonHeapChunk(object, ((U_8*)object) + deadObjectByteSize);
@@ -97,7 +100,16 @@ MM_GlobalCollectorDelegate::initialize(MM_EnvironmentBase *env, MM_GlobalCollect
 
 	/* Balanced and realtime polices will instantiate their own access barrier */
 	if (_extensions->isStandardGC()) {
-		_extensions->accessBarrier = MM_StandardAccessBarrier::newInstance(env);
+
+#if defined(OMR_ENV_DATA64) && defined(OMR_GC_FULL_POINTERS)
+		if (1 == _extensions->fvtest_enableReadBarrierVerification) {
+			_extensions->accessBarrier = MM_ReadBarrierVerifier::newInstance(env);
+		} else
+#endif /* defined(OMR_ENV_DATA64) && defined(OMR_GC_FULL_POINTERS) */
+		{
+			_extensions->accessBarrier = MM_StandardAccessBarrier::newInstance(env);
+		}
+
 		if (NULL == _extensions->accessBarrier) {
 			return false;
 		}
@@ -299,6 +311,20 @@ MM_GlobalCollectorDelegate::prepareHeapForWalk(MM_EnvironmentBase *env)
 #endif /* J9VM_GC_DYNAMIC_CLASS_UNLOADING */
 }
 
+#if defined(OMR_ENV_DATA64) && defined(OMR_GC_FULL_POINTERS)
+void
+MM_GlobalCollectorDelegate::poisonSlots(MM_EnvironmentBase *env)
+{
+	((MM_ReadBarrierVerifier *)_extensions->accessBarrier)->poisonSlots(env);
+}
+
+void
+MM_GlobalCollectorDelegate::healSlots(MM_EnvironmentBase *env)
+{
+	((MM_ReadBarrierVerifier *)_extensions->accessBarrier)->healSlots(env);
+}
+#endif /* defined(OMR_ENV_DATA64) && defined(OMR_GC_FULL_POINTERS) */
+
 bool
 MM_GlobalCollectorDelegate::heapAddRange(MM_EnvironmentBase *env, MM_MemorySubSpace *subspace, UDATA size, void *lowAddress, void *highAddress)
 {
@@ -420,7 +446,7 @@ MM_GlobalCollectorDelegate::unloadDeadClassLoaders(MM_EnvironmentBase *env)
 	/* The list of classLoaders to be unloaded by cleanUpClassLoadersEnd is rooted in unloadLink */
 
 	/* set the vmState whilst we're unloading classes */
-	UDATA vmState = env->pushVMstate(J9VMSTATE_GC_UNLOADING_DEAD_CLASSLOADERS);
+	UDATA vmState = env->pushVMstate(OMRVMSTATE_GC_CLEANING_METADATA);
 
 	/* Count the classes we're unloading and perform class-specific clean up work for each unloading class.
 	 * If we're unloading any classes, perform common class-unloading clean up.

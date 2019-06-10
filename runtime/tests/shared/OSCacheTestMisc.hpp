@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2014 IBM Corp. and others
+ * Copyright (c) 2009, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,13 +17,13 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #if !defined(OSCACHETESTMISC_HPP_INCLUDED)
 #define OSCACHETESTMISC_HPP_INCLUDED
 
 extern "C" {
-#include "j9port.h"
+#include "j9.h"
 #include "exelib_api.h"
 #include "main.h"
 }
@@ -33,11 +33,11 @@ extern "C" {
 class SH_OSCacheTestMisc {
 public:
 	/* Main function to run all the tests */
-	static IDATA runTests(J9PortLibrary *portLibrary, struct j9cmdlineOptions *arg, const char *cmdline);
+	static IDATA runTests(J9JavaVM *vm, struct j9cmdlineOptions *arg, const char *cmdline);
 	
 private:
 	/* Each test is a private function in the class */
-	static IDATA testGetCacheDir(J9PortLibrary *portLibrary);
+	static IDATA testGetCacheDir(J9JavaVM *vm);
 };
 
 #endif /* OSCACHETESTMISC_HPP_INCLUDED */

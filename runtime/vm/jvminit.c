@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if defined(WIN32)
@@ -30,7 +30,7 @@
 #endif
 #endif /* defined(WIN32) */
 
-/* _GNU_SOURCE forces GLIBC_2.0 sscanf/vsscanf/fscanf for RHEL5 compatability */
+/* _GNU_SOURCE forces GLIBC_2.0 sscanf/vsscanf/fscanf for RHEL5 compatibility */
 #if defined(LINUX) && !defined(J9ZTPF)
 #define _GNU_SOURCE
 #endif /* defined(LINUX) && !defined(J9ZTPF) */
@@ -49,9 +49,8 @@
 #define stdout NULL
 #endif
 
-
 #if !defined(WIN32)
-/* Needed for JCL dependancy on JVM to set SIGPIPE to SIG_IGN */
+/* Needed for JCL dependency on JVM to set SIGPIPE to SIG_IGN */
 #include <signal.h>
 #endif
 
@@ -80,7 +79,7 @@
 #include "omrsig.h"
 #include "bcnames.h"
 #include "jimagereader.h"
-#include "openj9_version.h"
+#include "vendor_version.h"
 
 #ifdef J9VM_OPT_ZIP_SUPPORT
 #include "zip_api.h"
@@ -181,7 +180,6 @@ static const struct J9VMIgnoredOption ignoredOptionTable[] = {
 	{ VMOPT_XMXCL, STARTSWITH_MATCH },
 	{ VMOPT_HARMONY_PORT_LIBRARY, EXACT_MATCH },
 	/* extra-extended options start with -XX. Ignore any not explicitly processed. */
-	{ VMOPT_XX, STARTSWITH_MATCH },
 #if defined(J9VM_OPT_SIDECAR)
 	{ VMOPT_XJVM, STARTSWITH_MATCH },
 	{ VMOPT_CLIENT, EXACT_MATCH },
@@ -196,31 +194,13 @@ static const struct J9VMIgnoredOption ignoredOptionTable[] = {
 	{ MAPOPT_XK, EXACT_MEMORY_MATCH },
 	{ MAPOPT_XP, EXACT_MEMORY_MATCH },
 	{ VMOPT_XNORTSJ, EXACT_MATCH },
-	{ MAPOPT_XCOMPRESSEDREFS, EXACT_MATCH },
-	{ MAPOPT_XNOCOMPRESSEDREFS, EXACT_MATCH },
-#endif
+#if !(defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS))
+	{ VMOPT_XCOMPRESSEDREFS, EXACT_MATCH },
+	{ VMOPT_XNOCOMPRESSEDREFS, EXACT_MATCH },
+#endif /* !(defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS)) */
+#endif /* defined(J9VM_OPT_SIDECAR) */
 };
 #define ignoredOptionTableSize (sizeof(ignoredOptionTable) / sizeof(struct J9VMIgnoredOption))
-
-/* RIM atoi hack */
-#ifdef RIM386
-int atoi(char* string)
-{
-	int result = 0, sign = 1;
-	char ch;
-
-	while(ch = *string, (ch == ' ' || ch == '\t')) string++;
-	if(*string == '-') {
-		sign = -1;
-		string++;
-	}
-	while(ch = *string++) {
-		if((ch >= '0') && (ch <= '9')) result = (result * 10) + (ch - '0');
-		else return sign * result;
-	}
-	return sign * result;
-}
-#endif
 
 IDATA VMInitStages (J9JavaVM *vm, IDATA stage, void* reserved);
 IDATA registerCmdLineMapping (J9JavaVM* vm, char* sov_option, char* j9_option, UDATA mapFlags);
@@ -228,13 +208,13 @@ IDATA postInitLoadJ9DLL (J9JavaVM* vm, const char* dllName, void* argData);
 void freeJavaVM (J9JavaVM * vm);
 IDATA threadInitStages (J9JavaVM* vm, IDATA stage, void* reserved);
 IDATA zeroInitStages (J9JavaVM* vm, IDATA stage, void* reserved);
-void OMRNORETURN exitJavaVM (J9VMThread * vmThread, IDATA rc);
 UDATA runJVMOnLoad (J9JavaVM* vm, J9VMDllLoadInfo* loadInfo, char* options);
 
 #if (defined(J9VM_OPT_JVMTI))
 static IDATA updateJavaAgentClasspath (J9JavaVM * vm);
 #endif /* J9VM_OPT_JVMTI */
 static void consumeVMArgs (J9JavaVM* vm, J9VMInitArgs* j9vm_args);
+static BOOLEAN isEmpty (const char * str);
 
 #if (defined(J9VM_OPT_SIDECAR))
 static UDATA initializeJVMExtensionInterface (J9JavaVM* vm);
@@ -250,7 +230,7 @@ void sidecarExit(J9VMThread* shutdownThread);
 #endif /* J9VM_OPT_SIDECAR */
 static jint runLoadStage (J9JavaVM *vm, IDATA flags);
 #if defined(J9VM_GC_DYNAMIC_CLASS_UNLOADING)
-static void jniIDTableClassUnload (J9HookInterface** hook, UDATA eventNum, void* eventData, void* userData);
+static void freeClassNativeMemory (J9HookInterface** hook, UDATA eventNum, void* eventData, void* userData);
 #endif /* GC_DYNAMIC_CLASS_UNLOADING */
 static jint runShutdownStage (J9JavaVM* vm, IDATA stage, void* reserved, UDATA filterFlags);
 static jint modifyDllLoadTable (J9JavaVM * vm, J9Pool* loadTable, J9VMInitArgs* j9vm_args);
@@ -316,19 +296,19 @@ extern void populateRASNetData (J9JavaVM *javaVM, J9RAS *rasStruct);
 const U_8 J9CallInReturnPC[] = { 0xFF, 0x00, 0x00, 0xFF }; /* impdep2, parm, parm, impdep2 */
 const U_8 J9Impdep1PC[] = { 0xFE, 0x00, 0x00, 0xFE }; /* impdep1, parm, parm, impdep1 */
 
-/* used as the default value for the imageHeaders list -- make sure that this is in the text segment on Palm! */
-static const void* const nullPtr = NULL;
-
 static jint (JNICALL * vprintfHookFunction)(FILE *fp, const char *format, va_list args) = NULL;
 static IDATA (* portLibrary_file_write_text) (struct OMRPortLibrary *portLibrary, IDATA fd, const char *buf, IDATA nbytes) = NULL;
 
-#if defined(WIN32)
+#if defined(WIN32) && !defined(OPENJ9_BUILD)
+/* Remove the "shutDownHookWrapper" once IBMJ9 uses the JVM_*Signal native functions
+ * in the sun.misc.Signal class. OpenJ9 does not depend on the "shutDownHookWrapper".
+ */
 static UDATA shutDownHookWrapper(struct J9PortLibrary* portLibrary, U_32 gpType, void* gpInfo, void* userData);
-#endif
+#endif /* defined(WIN32) && !defined(OPENJ9_BUILD) */
 
 #if !defined(WIN32)
 static UDATA sigxfszHandler(struct J9PortLibrary* portLibrary, U_32 gpType, void* gpInfo, void* userData);
-#endif
+#endif /* !defined(WIN32) */
 
 /* SSE2 support on 32 bit linux_x86 and win_x86 */
 #ifdef J9VM_ENV_SSE2_SUPPORT_DETECTION
@@ -340,6 +320,12 @@ static BOOLEAN isSSE2SupportedOnX86();
 #if (defined(AIXPPC) || defined(LINUXPPC)) && !defined(J9OS_I5)
 static BOOLEAN isPPC64bit(void);
 #endif /* (AIXPPC || LINUXPPC) & !J9OS_I5 */
+
+static UDATA predefinedHandlerWrapper(struct J9PortLibrary *portLibrary, U_32 gpType, void *gpInfo, void *userData);
+static void signalDispatch(J9VMThread *vmThread, I_32 sigNum);
+
+J9_DECLARE_CONSTANT_UTF8(j9_int_void, "(I)V");
+J9_DECLARE_CONSTANT_UTF8(j9_dispatch, "dispatch");
 
 #if defined(COUNT_BYTECODE_PAIRS)
 static jint
@@ -503,7 +489,11 @@ void OMRNORETURN exitJavaVM(J9VMThread * vmThread, IDATA rc)
 	if (vm != NULL) {
 		PORT_ACCESS_FROM_JAVAVM(vm);
 
-		releaseVMAccessInJNI(vmThread);
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+		/* exitJavaVM is always called from a JNI context */
+		enterVMFromJNI(vmThread);
+		releaseVMAccess(vmThread);
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 
 		/* we only let the shutdown code run once */
 
@@ -567,7 +557,7 @@ void OMRNORETURN exitJavaVM(J9VMThread * vmThread, IDATA rc)
 		}
 
 #if defined(WIN32)
-		/* Do not attempt to exit while a JNI sharead library open is in progress */
+		/* Do not attempt to exit while a JNI shared library open is in progress */
 		omrthread_monitor_enter(vm->nativeLibraryMonitor);
 		omrthread_monitor_enter(vm->classLoaderBlocksMutex);
 #endif
@@ -603,6 +593,12 @@ cleanCustomSpinOptions(void *element, void *userData)
 }
 #endif /* J9VM_INTERP_CUSTOM_SPIN_OPTIONS */
 
+BOOLEAN
+areValueTypesEnabled(J9JavaVM *vm)
+{
+	return J9_ARE_ALL_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_VALHALLA);
+}
+
 void
 freeJavaVM(J9JavaVM * vm)
 {
@@ -611,7 +607,11 @@ freeJavaVM(J9JavaVM * vm)
 	J9VMThread *currentThread = currentVMThread(vm);
 	IDATA traceDescriptor = 0;
 #if defined(WIN32)
-	/* Install the handler for running the shutdown hooks when the console window is closed
+#if !defined(OPENJ9_BUILD)
+	/* Remove the "shutDownHookWrapper" once IBMJ9 uses the JVM_*Signal native functions
+	 * in the sun.misc.Signal class. OpenJ9 does not depend on the "shutDownHookWrapper".
+	 *
+	 * Install the handler for running the shutdown hooks when the console window is closed
 	 * J2SE/Sidecar builds:
 	 *			This applies to Windows only. Shutdown hooks for all other platforms are handled by the Hursley JCLs
 	 *
@@ -619,13 +619,16 @@ freeJavaVM(J9JavaVM * vm)
 	 * 			This applies to Windows only for now. Since we don't have Hursley JCLs for this, we will need to provide our own support for all other cases/platforms.
 	 */
 	j9sig_set_async_signal_handler(shutDownHookWrapper, vm, 0);
-#else
+#endif /* !defined(OPENJ9_BUILD) */
+#else /* defined(WIN32) */
 	j9sig_set_async_signal_handler(sigxfszHandler, NULL, 0);
-#endif
+#endif /* defined(WIN32) */
+
+	/* Remove the predefinedHandlerWrapper. */
+	j9sig_set_single_async_signal_handler(predefinedHandlerWrapper, vm, 0, NULL);
 
 	/* Unload before trace engine exits */
 	UT_MODULE_UNLOADED(J9_UTINTERFACE_FROM_VM(vm));
-
 
 	if (0 != vm->vmRuntimeStateListener.minIdleWaitTime) {
 		stopVMRuntimeStateListener(vm);
@@ -684,6 +687,10 @@ freeJavaVM(J9JavaVM * vm)
 		vm->zipCachePool = NULL;
 	}
 #endif
+
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI_USES_FLUSH)
+	shutDownExclusiveAccess(vm);
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI_USES_FLUSH */
 
 	freeNativeMethodBindTable(vm);
 	freeHiddenInstanceFieldsList(vm);
@@ -833,7 +840,7 @@ freeJavaVM(J9JavaVM * vm)
 #if !defined(WIN32)
 	/* restore any handler we may have overwritten */
 	if (NULL != vm->originalSIGPIPESignalAction) {
-		OMRSIG_SIGACTION(SIGPIPE,(struct sigaction *)vm->originalSIGPIPESignalAction, NULL);
+		sigaction(SIGPIPE,(struct sigaction *)vm->originalSIGPIPESignalAction, NULL);
 		j9mem_free_memory(vm->originalSIGPIPESignalAction);
 		vm->originalSIGPIPESignalAction = NULL;
 	}
@@ -863,7 +870,7 @@ freeJavaVM(J9JavaVM * vm)
 }
 
 /**
- * Do a runtime check of the processor and operating sytem to determine if
+ * Do a runtime check of the processor and operating system to determine if
  * this is a supported configuration.
  *
  * @param[in] portLibrary - the port library.
@@ -1216,11 +1223,6 @@ initializeDllLoadTable(J9PortLibrary *portLibrary, J9VMInitArgs* j9vm_args, UDAT
 /* This needs to be BEFORE the JCL library as we need to install hooks that are used
  * in the initialization of JCL library */
 
-#if defined(J9VM_OPT_RESOURCE_MANAGED)
-	if (NULL == createLoadInfo(portLibrary, returnVal, J9_RCM_DLL_NAME, 0, NULL, verboseFlags))
-		goto _error;
-#endif
-
 	if (!createLoadInfo(portLibrary, returnVal, J9_DEFAULT_JCL_DLL_NAME, (LOAD_BY_DEFAULT | FATAL_NO_DLL), NULL, verboseFlags))
 		goto _error;
 
@@ -1301,7 +1303,8 @@ initializeClassPath(J9JavaVM *vm, char *classPath, U_8 classPathSeparator, U_16 
 	if (0 == classPathEntryCount) {
 		*classPathEntries = NULL;
 	} else {
-		UDATA classPathSize = (sizeof(J9ClassPathEntry) * classPathEntryCount) + classPathLength + classPathEntryCount; // classPathEntryCount is for number of null characters
+		/* classPathEntryCount is for number of null characters */
+		UDATA classPathSize = (sizeof(J9ClassPathEntry) * classPathEntryCount) + classPathLength + classPathEntryCount;
 		J9ClassPathEntry *cpEntries = j9mem_allocate_memory(classPathSize, OMRMEM_CATEGORY_VM);
 
 	        if (NULL == cpEntries) {
@@ -1353,28 +1356,30 @@ _end:
 IDATA
 initializeClassPathEntry (J9JavaVM * javaVM, J9ClassPathEntry *cpEntry)
 {
-	I_32 rc = 0;
 	PORT_ACCESS_FROM_JAVAVM(javaVM);
+	int32_t attr = 0;
 
 	/* If we know what it is, then go for it */
 	if (CPE_TYPE_UNKNOWN != cpEntry->type) {
-		return (IDATA) cpEntry->type;
+		return (IDATA)cpEntry->type;
 	}
 
 	/* clear the status field first if we have not init the CP entry */
 	cpEntry->status = 0;
 
 	/* Start guessing. Is it a directory? */
-	if( j9file_attr((char *) cpEntry->path)  == EsIsDir) {
+	attr = j9file_attr((char *)cpEntry->path);
+	if (EsIsDir == attr) {
 		cpEntry->type = CPE_TYPE_DIRECTORY;
 		return CPE_TYPE_DIRECTORY;
 	}
 
-	if (J2SE_VERSION(javaVM) >= J2SE_19) {
-		if (NULL != javaVM->jimageIntf) {
+	if ((EsIsFile == attr) && (J2SE_VERSION(javaVM) >= J2SE_V11)) {
+		J9JImageIntf *jimageIntf = javaVM->jimageIntf;
+		if (NULL != jimageIntf) {
 			UDATA jimageHandle = 0;
+			I_32 rc = jimageIntf->jimageOpen(jimageIntf, (char *)cpEntry->path, &jimageHandle);
 
-			rc = javaVM->jimageIntf->jimageOpen(javaVM->jimageIntf, (char*)cpEntry->path, &jimageHandle);
 			if (J9JIMAGE_NO_ERROR == rc) {
 				cpEntry->type = CPE_TYPE_JIMAGE;
 				cpEntry->extraInfo = (void *)jimageHandle;
@@ -1386,16 +1391,18 @@ initializeClassPathEntry (J9JavaVM * javaVM, J9ClassPathEntry *cpEntry)
 	}
 
 #ifdef J9VM_OPT_ZIP_SUPPORT
-	{
-		VMI_ACCESS_FROM_JAVAVM((JavaVM*)javaVM);
-		VMIZipFunctionTable* zipFunctions = (*VMI)->GetZipFunctions(VMI);
+	if (EsIsFile == attr) {
+		VMI_ACCESS_FROM_JAVAVM((JavaVM *)javaVM);
+		VMIZipFunctionTable *zipFunctions = (*VMI)->GetZipFunctions(VMI);
 		VMIZipFile *zipFile = NULL;
 
 		cpEntry->extraInfo = NULL;
 		zipFile = j9mem_allocate_memory((UDATA) sizeof(*zipFile), J9MEM_CATEGORY_CLASSES);
 		if (NULL != zipFile) {
+			I_32 rc = 0;
+
 			memset(zipFile, 0, sizeof(*zipFile));
-			rc = zipFunctions->zip_openZipFile(VMI, (char *) cpEntry->path, zipFile, ZIP_FLAG_OPEN_CACHE | ZIP_FLAG_BOOTSTRAP);
+			rc = zipFunctions->zip_openZipFile(VMI, (char *)cpEntry->path, zipFile, ZIP_FLAG_OPEN_CACHE | ZIP_FLAG_BOOTSTRAP);
 
 			if (0 == rc) {
 				/* Save the zipFile */
@@ -1421,7 +1428,7 @@ initializeClassPathEntry (J9JavaVM * javaVM, J9ClassPathEntry *cpEntry)
  * Create and initialize modules path entries.
  * Currently JVM searches system modules at following locations:
  * 	<JAVA_HOME>/lib/modules - should be a jimage file
- * 	<JAVA-HOME>/modules - should be a directory containining modules in exploded form
+ * 	<JAVA-HOME>/modules - should be a directory containing modules in exploded form
  */
 IDATA
 initializeModulesPath(J9JavaVM *vm) {
@@ -1540,8 +1547,7 @@ processMemoryInterleaveOptions(J9JavaVM * vm) {
 			enabled = TRUE;
 		}
 	}
-	j9port_control(J9PORT_CTLDATA_VMEM_NUMA_ENABLE, enabled? 1 : 0);
-	omrthread_numa_set_enabled(enabled);
+	j9port_control(J9PORT_CTLDATA_VMEM_NUMA_INTERLEAVE_MEM, enabled? 1 : 0);
 }
 
 static VMINLINE  void
@@ -1579,6 +1585,26 @@ dumpLoadedClassList(J9HookInterface **hookInterface, uintptr_t eventNum, void *e
 
 }
 
+/* Print out the internal version information for openj9 */
+static void
+j9print_internal_version(J9PortLibrary *portLib) {
+	PORT_ACCESS_FROM_PORT(portLib);
+
+#if defined(OPENJ9_BUILD)
+#if defined(J9JDK_EXT_VERSION) && defined(J9JDK_EXT_NAME)
+	j9tty_err_printf(PORTLIB, "Eclipse OpenJ9 %s %s-bit Server VM (%s) from %s-%s JRE with %s %s, built on %s %s by %s with %s\n",
+		J9PRODUCT_NAME, J9TARGET_CPU_BITS, J9VERSION_STRING, J9TARGET_OS, J9TARGET_CPU_OSARCH,
+		J9JDK_EXT_NAME, J9JDK_EXT_VERSION,__DATE__, __TIME__, J9USERNAME, J9COMPILER_VERSION_STRING);
+#else
+        j9tty_err_printf(PORTLIB, "Eclipse OpenJ9 %s %s-bit Server VM (%s) from %s-%s JRE, built on %s %s by %s with %s\n",
+                J9PRODUCT_NAME, J9TARGET_CPU_BITS, J9VERSION_STRING, J9TARGET_OS, J9TARGET_CPU_OSARCH,
+                __DATE__, __TIME__, J9USERNAME, J9COMPILER_VERSION_STRING);
+#endif /* J9JDK_EXT_VERSION && J9JDK_EXT_NAME */
+#else /* OPENJ9_BUILD */
+	j9tty_err_printf(PORTLIB, "internal version not supported\n");
+#endif /* OPENJ9_BUILD */
+}
+
 /* The equivalent of a J9VMDllMain for the VM init module */
 
 IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
@@ -1593,6 +1619,7 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 	BOOLEAN lockwordWhat = FALSE;
 	UDATA rc = 0;
 	PORT_ACCESS_FROM_JAVAVM(vm);
+	OMRPORT_ACCESS_FROM_J9PORT(PORTLIB);
 
 	switch(stage) {
 		case PORT_LIBRARY_GUARANTEED :
@@ -1602,27 +1629,20 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 				goto _memParseError;
 			}
 
-			/* Set entitled CPUs as early as possible, i.e. as soon as PORT_LIBRARY_GUARANTEED */
-			do {
+			/* Set user-specified CPUs as early as possible, i.e. as soon as PORT_LIBRARY_GUARANTEED */
+			argIndex = FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XXACTIVEPROCESSORCOUNT_EQUALS, NULL);
+			if (argIndex >= 0) {
 				UDATA value = 0;
+				char *optname = VMOPT_XXACTIVEPROCESSORCOUNT_EQUALS;
 
-				/* Check for presence of -Xentitledcpus command line argument */
-				argIndex = FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XENTITLEDCPUS, NULL);
-				if (argIndex >= 0) {
-
-					/* Get value -Xentitledcpus */
-					char* optName = VMOPT_XENTITLEDCPUS;
-					parseError = GET_INTEGER_VALUE(argIndex, optName, value);
-					if (OPTION_OK != parseError) {
-						parseErrorOption = VMOPT_XENTITLEDCPUS;
-						goto _memParseError;
-					}
+				parseError = GET_INTEGER_VALUE(argIndex, optname, value);
+				if (OPTION_OK != parseError) {
+					parseErrorOption = VMOPT_XXACTIVEPROCESSORCOUNT_EQUALS;
+					goto _memParseError;
 				}
 
-				/* Set Port library entitled CPUs to current value (0 or from command line argument) */
-				j9sysinfo_set_number_entitled_CPUs(value);
-			} while(0);
-
+				j9sysinfo_set_number_user_specified_CPUs(value);
+			}
 
 			/* -Xits option is not being used anymore. We find and consume it for backward compatibility. */
 			/* Otherwise, usage of this option would not be recognised and warning would be printed.  */
@@ -1658,7 +1678,9 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 				argIndex8 = FIND_AND_CONSUME_ARG(EXACT_MEMORY_MATCH, VMOPT_XSCMAXJITDATA, NULL);
 				argIndex9 = FIND_AND_CONSUME_ARG(EXACT_MEMORY_MATCH, VMOPT_XXSHARED_CACHE_HARD_LIMIT_EQUALS, NULL);
 
-				if (argIndex < 0) {
+				if ((!J9_SHARED_CACHE_DEFAULT_BOOT_SHARING(vm))
+					&& (argIndex < 0)
+				) {
 					if (argIndex2>=0) {
 						/* If -Xscmx used without -Xshareclasses, don't bomb out with "unrecognised option" */
 						j9nls_printf(PORTLIB, J9NLS_INFO, J9NLS_VM_XSCMX_IGNORED);
@@ -1721,13 +1743,13 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 							parseErrorOption = VMOPT_XSCMX;
 							goto _memParseError;
 						}
-						if (OPTION_OK != (parseError = setMemoryOptionToOptElse(vm, &(piConfig->sharedClassCacheSize), VMOPT_XXSHARED_CACHE_HARD_LIMIT_EQUALS, J9_SHARED_CLASS_CACHE_DEFAULT_SIZE, FALSE))) {
+						if (OPTION_OK != (parseError = setMemoryOptionToOptElse(vm, &(piConfig->sharedClassCacheSize), VMOPT_XXSHARED_CACHE_HARD_LIMIT_EQUALS, 0, FALSE))) {
 							parseErrorOption = VMOPT_XXSHARED_CACHE_HARD_LIMIT_EQUALS;
 							goto _memParseError;
 						}
 					} else {
 						piConfig->sharedClassSoftMaxBytes = -1;
-						if (OPTION_OK != (parseError = setMemoryOptionToOptElse(vm, &(piConfig->sharedClassCacheSize), VMOPT_XSCMX, J9_SHARED_CLASS_CACHE_DEFAULT_SIZE, FALSE))) {
+						if (OPTION_OK != (parseError = setMemoryOptionToOptElse(vm, &(piConfig->sharedClassCacheSize), VMOPT_XSCMX, 0, FALSE))) {
 							parseErrorOption = VMOPT_XSCMX;
 							goto _memParseError;
 						}
@@ -1793,6 +1815,12 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 				}
 			}
 
+			argIndex = FIND_ARG_IN_VMARGS(EXACT_MATCH, VMOPT_XXNLSMESSAGES, NULL);
+			argIndex2 = FIND_ARG_IN_VMARGS(EXACT_MATCH, VMOPT_XXNONLSMESSAGES, NULL);
+			if (argIndex2 > argIndex) {
+				j9port_control(OMRPORT_CTLDATA_NLS_DISABLE, 1);
+			} 
+
 			if (J9_ARE_ANY_BITS_SET(vm->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_PAGE_ALIGN_DIRECT_MEMORY)) {
 				J9VMSystemProperty* prop = NULL;
 
@@ -1805,10 +1833,18 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 				}
 			}
 
-			/* Consume and issue warning for -Xdiagnosticscollector */
-			if (FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XDIAGNOSTICSCOLLECTOR, NULL) >= 0) {
-				j9nls_printf(PORTLIB, J9NLS_WARNING, J9NLS_VM_DIAGNOSTIC_COLLECTOR_NOT_SUPPORTED);
+#if !defined(WIN32) && !defined(J9ZTPF)
+			/* Override the soft limit on the number of open file descriptors for
+			 * compatibility with reference implementation.
+			 */
+			{
+				uint64_t limit = 0;
+				uint32_t rc = omrsysinfo_get_limit(OMRPORT_RESOURCE_FILE_DESCRIPTORS | J9PORT_LIMIT_HARD, &limit);
+				if (OMRPORT_LIMIT_UNKNOWN != rc ) {
+					omrsysinfo_set_limit(OMRPORT_RESOURCE_FILE_DESCRIPTORS | OMRPORT_LIMIT_SOFT, limit);
+				}
 			}
+#endif /* !defined(WIN32) && !defined(J9ZTPF) */
 
 			/* Parse options related to idle tuning */
 			{
@@ -1818,22 +1854,43 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 				IDATA argIndexCompactOnIdleDisable = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXIDLETUNINGCOMPACTONIDLEDISABLE, NULL);
 				IDATA argIndexIgnoreUnrecognizedOptionsEnable = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXIDLETUNINGIGNOREUNRECOGNIZEDOPTIONSENABLE, NULL);
 				IDATA argIndexIgnoreUnrecognizedOptionsDisable = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXIDLETUNINGIGNOREUNRECOGNIZEDOPTIONSDISABLE, NULL);
+				BOOLEAN enableGcOnIdle = FALSE;
+				BOOLEAN inContainer = omrsysinfo_is_running_in_container();
 
 				/* 
-				 * idle heap tuning is enabled only if -XX:+IdleTuningGcOnIdle is set 
-				 * or if java version is 9 or above and -Xtune:virtualized is set as VM option
+				 * GcOnIdle is enabled only if:
+				 * 1. -XX:+IdleTuningGcOnIdle is set, or
+				 * 2. running in container, or
+				 * 3. if java version is 9 or above and -Xtune:virtualized is set as VM option
 				 */
-				if ((argIndexGcOnIdleEnable > argIndexGcOnIdleDisable) 
-				|| ((J2SE_VERSION(vm) >= J2SE_19) && (argIndexGcOnIdleDisable == -1) && J9_ARE_ANY_BITS_SET(vm->runtimeFlags, J9_RUNTIME_TUNE_VIRTUALIZED))
-				) {
+				if (argIndexGcOnIdleEnable > argIndexGcOnIdleDisable) {
+					enableGcOnIdle = TRUE;
+				} else if (-1 == argIndexGcOnIdleDisable) {
+					if (inContainer
+						|| ((J2SE_VERSION(vm) >= J2SE_V11) && J9_ARE_ANY_BITS_SET(vm->runtimeFlags, J9_RUNTIME_TUNE_VIRTUALIZED))
+					) {
+						enableGcOnIdle = TRUE;
+					}
+				}
+				if (TRUE == enableGcOnIdle) {
 					vm->vmRuntimeStateListener.idleTuningFlags |= (UDATA)J9_IDLE_TUNING_GC_ON_IDLE;
+					/*
+ 					 * 
+				  	 * CompactOnIdle is enabled only if XX:+IdleTuningGcOnIdle is set and:
+				  	 * 1. -XX:+IdleTuningCompactOnIdle is set, or
+				  	 * 2. running in container
+				  	 *
+				  	 * Setting Xtune:virtualized on java versions 9 or above does not enable CompactOnIdle.
+				  	 */
+					if ((argIndexCompactOnIdleEnable > argIndexCompactOnIdleDisable)
+					|| ((-1 == argIndexCompactOnIdleDisable) && inContainer)
+					) {
+						vm->vmRuntimeStateListener.idleTuningFlags |= (UDATA)J9_IDLE_TUNING_COMPACT_ON_IDLE;
+					} else {
+						vm->vmRuntimeStateListener.idleTuningFlags &= ~(UDATA)J9_IDLE_TUNING_COMPACT_ON_IDLE;
+					}
 				} else {
 					vm->vmRuntimeStateListener.idleTuningFlags &= ~(UDATA)J9_IDLE_TUNING_GC_ON_IDLE;
-				}
-				if (argIndexCompactOnIdleEnable > argIndexCompactOnIdleDisable) {
-					vm->vmRuntimeStateListener.idleTuningFlags |= (UDATA)J9_IDLE_TUNING_COMPACT_ON_IDLE;
-				} else {
-					vm->vmRuntimeStateListener.idleTuningFlags &= ~(UDATA)J9_IDLE_TUNING_COMPACT_ON_IDLE;
 				}
 				/* default ignore if idle tuning options not supported */
 				vm->vmRuntimeStateListener.idleTuningFlags |= (UDATA)J9_IDLE_TUNING_IGNORE_UNRECOGNIZED_OPTIONS;
@@ -1842,7 +1899,7 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 				}
 
 				if (J9_ARE_ANY_BITS_SET(vm->vmRuntimeStateListener.idleTuningFlags, J9_IDLE_TUNING_GC_ON_IDLE | J9_IDLE_TUNING_COMPACT_ON_IDLE)) {
-					vm->vmRuntimeStateListener.minIdleWaitTime = 180000; // in msecs
+					vm->vmRuntimeStateListener.minIdleWaitTime = 180000; /* in msecs */
 					vm->vmRuntimeStateListener.idleMinFreeHeap = 0;
 				}
 
@@ -1862,7 +1919,7 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 						goto _memParseError;
 					}
 
-					vm->vmRuntimeStateListener.minIdleWaitTime = (U_32)value * 1000; // convert to msecs
+					vm->vmRuntimeStateListener.minIdleWaitTime = (U_32)value * 1000; /* convert to msecs */
 				}
 
 				if ((argIndex = FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XXIDLETUNINGMINFREEHEAPONIDLE_EQUALS, NULL)) >= 0) {
@@ -1886,6 +1943,25 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 			}
 			vm->vmRuntimeStateListener.runtimeStateListenerState = J9VM_RUNTIME_STATE_LISTENER_UNINITIALIZED;
 			vm->vmRuntimeStateListener.vmRuntimeState = J9VM_RUNTIME_STATE_ACTIVE;
+
+			argIndex = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXUSECONTAINERSUPPORT, NULL);
+			argIndex2 = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOUSECONTAINERSUPPORT, NULL);
+
+			/* Enable -XX:+UseContainerSupport by default */
+			if (argIndex >= argIndex2) {
+				uint64_t subsystemsEnabled = omrsysinfo_cgroup_enable_subsystems(OMR_CGROUP_SUBSYSTEM_ALL);
+
+				if (OMR_CGROUP_SUBSYSTEM_ALL != subsystemsEnabled) {
+					uint64_t subsystemsAvailable = omrsysinfo_cgroup_get_available_subsystems();
+					Trc_VM_CgroupSubsystemsNotEnabled(vm->mainThread, subsystemsAvailable, subsystemsEnabled);
+				}
+			}
+			parseError = setMemoryOptionToOptElse(vm, &(vm->directByteBufferMemoryMax),
+					VMOPT_XXMAXDIRECTMEMORYSIZEEQUALS, (UDATA) -1, TRUE);
+			if (OPTION_OK != parseError) {
+				parseErrorOption = VMOPT_XXMAXDIRECTMEMORYSIZEEQUALS;
+				goto _memParseError;
+			}
 
 			break;
 
@@ -1943,7 +2019,7 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 			 */
 			if (J9_ARE_ANY_BITS_SET(vm->vmRuntimeStateListener.idleTuningFlags, J9_IDLE_TUNING_GC_ON_IDLE | J9_IDLE_TUNING_COMPACT_ON_IDLE)) {
 				BOOLEAN idleGCTuningSupported = FALSE;
-#if defined(LINUX) && (defined(J9HAMMER) || defined(J9X86))
+#if (defined(LINUX) && (defined(J9HAMMER) || defined(J9X86) || defined(S39064) || defined(PPC64))) || defined(J9ZOS39064)
 				/* & only for gencon GC policy */
 				if (J9_GC_POLICY_GENCON == ((OMR_VM *)vm->omrVM)->gcPolicy) {
 					idleGCTuningSupported = TRUE;
@@ -1986,7 +2062,7 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 
 			if (NULL == (vm->classLoaderBlocks = pool_new(sizeof(J9ClassLoader),  0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_CLASSES, POOL_FOR_PORT(vm->portLibrary))))
 				goto _error;
-			if (J2SE_VERSION(vm) >= J2SE_19) {
+			if (J2SE_VERSION(vm) >= J2SE_V11) {
 				vm->modularityPool = pool_new(OMR_MAX(sizeof(J9Package),sizeof(J9Module)),  0, 0, 0, J9_GET_CALLSITE(), J9MEM_CATEGORY_MODULES, POOL_FOR_PORT(vm->portLibrary));
 				if (NULL == vm->modularityPool) {
 					goto _error;
@@ -1998,10 +2074,17 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 		case ALL_VM_ARGS_CONSUMED :
 #if defined(J9VM_RAS_EYECATCHERS)
 			/*
-			 * defer initialization of network data until after heap allocated, since the intialization
+			 * defer initialization of network data until after heap allocated, since the initialization
 			 * can initiate DLL loads which prevent allocation of large heaps.
 			 */
-			populateRASNetData(vm, vm->j9ras);
+			argIndex = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXREADIPINFOFORRAS, NULL);
+			argIndex2 = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOREADIPINFOFORRAS, NULL);
+			if (argIndex >= argIndex2) {
+				JVMINIT_VERBOSE_INIT_VM_TRACE(vm, "\t\tenabled network query to determine host name and IP address for RAS.\n");
+				populateRASNetData(vm, vm->j9ras);
+			} else {
+				JVMINIT_VERBOSE_INIT_VM_TRACE(vm, "\t\tdisabled network query to determine host name and IP address for RAS.\n");
+			}
 #endif
 			consumeVMArgs(vm, vm->vmArgsArray);
 			if (FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXALLOWVMSHUTDOWN, NULL) >= 0) {
@@ -2015,6 +2098,11 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 				 * Runtimeflag XFUTURE can also be set in bcverify.c if -Xverify:all is seen
 				 */
 				vm->runtimeFlags |= J9_RUNTIME_XFUTURE;
+			}
+			if ((J2SE_VERSION(vm) & J2SE_VERSION_MASK) >= J2SE_V11) {
+				if (FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_ENABLE_PREVIEW, NULL) >= 0) {
+					vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_ENABLE_PREVIEW;
+				}
 			}
 			if ((argIndex = FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XSIGQUITTOFILE, NULL)) >= 0) {
 				GET_OPTION_VALUE(argIndex, ':', &optionValue);
@@ -2052,6 +2140,17 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 					vm->romMethodSortThreshold = threshold;
 				}
 			}
+
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+			/* TODO pick a reasonable default */
+			vm->valueFlatteningThreshold = UDATA_MAX;
+			if ((argIndex = FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_VALUEFLATTENINGTHRESHOLD_EQUALS, NULL)) >= 0) {
+				UDATA threshold = 0;
+				char *optname = VMOPT_VALUEFLATTENINGTHRESHOLD_EQUALS;
+				GET_INTEGER_VALUE(argIndex, optname, threshold);
+				vm->valueFlatteningThreshold = threshold;
+			}
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 
 			if ((argIndex = FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XXDUMPLOADEDCLASSLIST, NULL)) >= 0) {
 				J9HookInterface **vmHooks = vm->internalVMFunctions->getVMHookInterface(vm);
@@ -2098,7 +2197,7 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 			break;
 
 		case BYTECODE_TABLE_SET:
-			if (J2SE_VERSION(vm) >= J2SE_19) {
+			if (J2SE_VERSION(vm) >= J2SE_V11) {
 				rc = initializeModulesPath(vm);
 				if (0 != rc) {
 					loadInfo = FIND_DLL_TABLE_ENTRY( FUNCTION_VM_INIT );
@@ -2117,7 +2216,7 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 				goto _error;
 			}
 
-			if (J2SE_VERSION(vm) >= J2SE_19) {
+			if (J2SE_VERSION(vm) >= J2SE_V11) {
 				BOOLEAN patchPathResult = FALSE;
 
 				vm->javaBaseModule = pool_newElement(vm->modularityPool);
@@ -2246,6 +2345,11 @@ IDATA VMInitStages(J9JavaVM *vm, IDATA stage, void* reserved) {
 			break;
 
 		case ABOUT_TO_BOOTSTRAP :
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI_USES_FLUSH)
+			if (0 != initializeExclusiveAccess(vm)) {
+				goto _error;
+			}
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI_USES_FLUSH */
 			TRIGGER_J9HOOK_VM_ABOUT_TO_BOOTSTRAP(vm->hookInterface, vm->mainThread);
 			/* At this point, the decision about which interpreter to use has been made */
 			vm->bytecodeLoop = J9_ARE_ANY_BITS_SET(vm->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_DEBUG_MODE)
@@ -2284,8 +2388,11 @@ static UDATA checkArgsConsumed(J9PortLibrary* portLibrary, J9VMInitArgs* j9vm_ar
 	PORT_ACCESS_FROM_PORT(portLibrary);
 	jboolean ignoreUnrecognized = j9vm_args->actualVMArgs->ignoreUnrecognized;
 	jboolean ignoreUnrecongizedTopLevelOption = JNI_FALSE;
+	jboolean ignoreUnrecongizedXXColonOptions = JNI_TRUE;
 	IDATA xxIgnoreUnrecognizedVMOptionsEnableIndex = -1;
 	IDATA xxIgnoreUnrecognizedVMOptionsDisableIndex = -1;
+	IDATA xxIgnoreUnrecognizedXXColonOptionsEnableIndex = -1;
+	IDATA xxIgnoreUnrecognizedXXColonOptionsDisableIndex = -1;
 
 	if (findArgInVMArgs( PORTLIB, j9vm_args, EXACT_MATCH, VMOPT_XXVM_IGNOREUNRECOGNIZED, NULL, TRUE) >= 0) {
 		ignoreUnrecognized = JNI_TRUE;
@@ -2299,13 +2406,22 @@ static UDATA checkArgsConsumed(J9PortLibrary* portLibrary, J9VMInitArgs* j9vm_ar
 		}
 	}
 
+	xxIgnoreUnrecognizedXXColonOptionsDisableIndex = findArgInVMArgs( PORTLIB, j9vm_args, EXACT_MATCH, VMOPT_XXIGNOREUNRECOGNIZEDXXCOLONOPTIONSDISABLE, NULL, TRUE);
+	if (xxIgnoreUnrecognizedXXColonOptionsDisableIndex >= 0) {
+		xxIgnoreUnrecognizedXXColonOptionsEnableIndex = findArgInVMArgs( PORTLIB, j9vm_args, EXACT_MATCH, VMOPT_XXIGNOREUNRECOGNIZEDXXCOLONOPTIONSENABLE, NULL, TRUE);
+		if (xxIgnoreUnrecognizedXXColonOptionsDisableIndex > xxIgnoreUnrecognizedXXColonOptionsEnableIndex) {
+			ignoreUnrecongizedXXColonOptions = JNI_FALSE;
+		}
+	}
+
 	for (i=0; i<j9vm_args->nOptions; i++) {
 		if (IS_CONSUMABLE( j9vm_args, i ) && !IS_CONSUMED( j9vm_args, i )) {
 			char* optString = j9vm_args->actualVMArgs->options[i].optionString;
 			char* envVar = j9vm_args->j9Options[i].fromEnvVar;
-
-			/* If ignoreUnrecognized is set to JNI_TRUE, we should not reject any unrecognized options beginning with -X or _ */
-			if (ignoreUnrecognized && optString && (!strncmp(optString, "-X", 2) || *optString=='_')) {
+			
+			/* If ignoreUnrecognized is set to JNI_TRUE, we should not reject any options that are: 
+				empty or contain only whitespace, or unrecognized options beginning with -X or _ */
+			if (ignoreUnrecognized && (NULL != optString) && (isEmpty(optString) || !strncmp(optString, "-X", 2) || *optString=='_')) {
 				continue;
 			}
 			if (REQUIRES_LIBRARY( j9vm_args, i )) {
@@ -2315,6 +2431,10 @@ static UDATA checkArgsConsumed(J9PortLibrary* portLibrary, J9VMInitArgs* j9vm_ar
 			} else if (HAS_MAPPING( j9vm_args, i) && (MAPPING_FLAGS( j9vm_args, i ) & INVALID_OPTION)) {
 				j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_VM_INVALID_CMD_LINE_OPT, optString);
 			} else {
+				/* If ignoreUnrecognizedXXOptions is set to JNI_TRUE, we should ignore any options that start with -XX: */
+				if (ignoreUnrecongizedXXColonOptions && (0 == strncmp(optString, VMOPT_XX, (sizeof(VMOPT_XX) - 1)))) {
+					continue;
+				}
 				/* If ignoreUnrecongizedTopLevelOption is set to JNI_TRUE, we should ignore any unrecognized top-level option */
 				if (ignoreUnrecongizedTopLevelOption) {
 					continue;
@@ -2328,6 +2448,18 @@ static UDATA checkArgsConsumed(J9PortLibrary* portLibrary, J9VMInitArgs* j9vm_ar
 	return TRUE;
 }
 
+/* Returns TRUE if a string is empty or if it contains only whitespace characters. */
+static BOOLEAN isEmpty(const char * str) {
+	BOOLEAN isEmpty = TRUE;
+	while('\0' != *str) {
+		if (0 == isspace((unsigned char) *str)) {
+			isEmpty = FALSE;
+			break;
+		}
+		str++;
+	}
+	return isEmpty;
+}
 
 /* Run using a pool_do after each initialization stage. If any errors were reported by libraries,
 	a flag is set to FALSE and the error is printed. See checkPostStage. */
@@ -2403,7 +2535,7 @@ static void consumeVMArgs(J9JavaVM* vm, J9VMInitArgs* j9vm_args) {
 	findArgInVMArgs( PORTLIB, j9vm_args, EXACT_MATCH, VMOPT_XNOJIT, NULL, TRUE);
 	findArgInVMArgs( PORTLIB, j9vm_args, STARTSWITH_MATCH, VMOPT_XRUN, NULL, TRUE);
 
-	if ((J2SE_VERSION(vm) & J2SE_VERSION_MASK) < J2SE_19) {
+	if (J2SE_VERSION(vm) < J2SE_V11) {
 		findArgInVMArgs( PORTLIB, j9vm_args, STARTSWITH_MATCH, VMOPT_XBOOTCLASSPATH_COLON, NULL, TRUE);
 		findArgInVMArgs( PORTLIB, j9vm_args, STARTSWITH_MATCH, VMOPT_XBOOTCLASSPATH_P_COLON, NULL, TRUE);
 	}
@@ -2474,15 +2606,6 @@ modifyDllLoadTable(J9JavaVM * vm, J9Pool* loadTable, J9VMInitArgs* j9vm_args)
 	IDATA xxnoverboseverificationIndex = -1;
 	IDATA xxverifyerrordetailsIndex = -1;
 	IDATA xxnoverifyerrordetailsIndex = -1;
-#ifdef J9VM_OPT_JVMTI
-	UDATA jvmti = FALSE;
-#endif
-
-#if defined(J9VM_OPT_RESOURCE_MANAGED)
-	/* RCM is the package name for JSR-284 resource management. */
-	IDATA xrcmIndex;
-	UDATA xrcm = FALSE;
-#endif
 
 	IDATA xxjitdirectoryIndex = 0;
 	PORT_ACCESS_FROM_JAVAVM(vm);
@@ -2506,14 +2629,6 @@ modifyDllLoadTable(J9JavaVM * vm, J9Pool* loadTable, J9VMInitArgs* j9vm_args)
 	xnolinenumbers = (findArgInVMArgs( PORTLIB, j9vm_args, EXACT_MATCH, VMOPT_XNOLINENUMBERS, NULL, FALSE) >= 0);
 	xshareclasses = ((xshareclassesIndex = findArgInVMArgs( PORTLIB, j9vm_args, OPTIONAL_LIST_MATCH, VMOPT_XSHARECLASSES, NULL, FALSE))>=0);
 
-
-#if defined(J9VM_OPT_RESOURCE_MANAGED)
-	xrcm = ((xrcmIndex = findArgInVMArgs( PORTLIB, j9vm_args, OPTIONAL_LIST_MATCH, VMOPT_XRCM, NULL, FALSE))>=0);
-	if (0 != xrcm) {
-		/* Resource management depends on tenant support, enable it for free */
-		xtenant = 1;
-	}
-#endif
 
 	xdumpIndex = findArgInVMArgs( PORTLIB, j9vm_args, OPTIONAL_LIST_MATCH, VMOPT_XDUMP, NULL, FALSE);
 	xdumpnoneIndex = findArgInVMArgs( PORTLIB, j9vm_args, EXACT_MATCH, VMOPT_XDUMP_NONE, NULL, FALSE);
@@ -2546,13 +2661,7 @@ modifyDllLoadTable(J9JavaVM * vm, J9Pool* loadTable, J9VMInitArgs* j9vm_args)
 #if defined(J9VM_OPT_JVMTI)
 		if ((strstr(testString, VMOPT_AGENTLIB_COLON)==testString) || (strstr(testString, VMOPT_AGENTPATH_COLON)==testString)) {
 			ADD_FLAG_AT_INDEX( ARG_REQUIRES_LIBRARY, i );
-			jvmti = TRUE;
-		} else
-#if defined(J9VM_OPT_SIDECAR)
-		if ((J2SE_VERSION(vm) & J2SE_VERSION_MASK) >= J2SE_16) {
-			jvmti = TRUE;
 		}
-#endif
 #endif
 
 		if (strcmp(testString, VMOPT_XINT)==0) {
@@ -2608,11 +2717,9 @@ modifyDllLoadTable(J9JavaVM * vm, J9Pool* loadTable, J9VMInitArgs* j9vm_args)
 	}
 
 #if defined(J9VM_OPT_JVMTI)
-	if (jvmti) {
-		entry = findDllLoadInfo(loadTable, J9_JVMTI_DLL_NAME);
-		entry->loadFlags |= LOAD_BY_DEFAULT;
-		JVMINIT_VERBOSE_INIT_VM_TRACE(vm, "JVMTI required... whacking table\n");
-	}
+	entry = findDllLoadInfo(loadTable, J9_JVMTI_DLL_NAME);
+	entry->loadFlags |= LOAD_BY_DEFAULT;
+	JVMINIT_VERBOSE_INIT_VM_TRACE(vm, "JVMTI required... whacking table\n");
 #endif
 
 /**
@@ -2715,11 +2822,9 @@ modifyDllLoadTable(J9JavaVM * vm, J9Pool* loadTable, J9VMInitArgs* j9vm_args)
 	}
 
 #if defined( J9VM_OPT_SIDECAR )
-	if ((J2SE_VERSION(vm) & J2SE_VERSION_MASK) >= J2SE_16) {
-		entry = findDllLoadInfo(loadTable, J9_VERBOSE_DLL_NAME);
-		entry->loadFlags |= LOAD_BY_DEFAULT;
-		JVMINIT_VERBOSE_INIT_VM_TRACE(vm, "verbose support required in j2se... whacking table\n");
-	}
+	entry = findDllLoadInfo(loadTable, J9_VERBOSE_DLL_NAME);
+	entry->loadFlags |= LOAD_BY_DEFAULT;
+	JVMINIT_VERBOSE_INIT_VM_TRACE(vm, "verbose support required in j2se... whacking table\n");
 #endif
 
 	if ( xverbosegclog ) {
@@ -2828,15 +2933,6 @@ modifyDllLoadTable(J9JavaVM * vm, J9Pool* loadTable, J9VMInitArgs* j9vm_args)
 	JVMINIT_VERBOSE_INIT_VM_TRACE(vm, "IFA support required... whacking table\n");
 #endif
 
-#if defined(J9VM_OPT_RESOURCE_MANAGED)
-	if ( xrcm ) {
-		ADD_FLAG_AT_INDEX( ARG_REQUIRES_LIBRARY, xrcmIndex );
-		entry = findDllLoadInfo(loadTable, J9_RCM_DLL_NAME);
-		entry->loadFlags |= LOAD_BY_DEFAULT;
-		JVMINIT_VERBOSE_INIT_VM_TRACE(vm, "Resource management (-Xrcm) requested... whacking table\n");
-	}
-#endif
-
 	rc = processXCheckOptions(vm, loadTable, j9vm_args);
 	JVMINIT_VERBOSE_INIT_TRACE_WORKING_SET(vm);
 	return rc;
@@ -2847,78 +2943,140 @@ modifyDllLoadTable(J9JavaVM * vm, J9Pool* loadTable, J9VMInitArgs* j9vm_args)
 static jint
 processVMArgsFromFirstToLast(J9JavaVM * vm)
 {
-	jint i;
-	J9VMInitArgs * j9vm_args = vm->vmArgsArray;
-	JavaVMInitArgs* vm_args = j9vm_args->actualVMArgs;
-	const jint comSunManagementLen = sizeof(SYSPROP_COM_SUN_MANAGEMENT) - 1;
-
 	vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_CLASSLOADER_LOCKING_ENABLED | J9_EXTENDED_RUNTIME_REDUCE_CPU_MONITOR_OVERHEAD; /* enabled by default */
 	vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_ENABLE_CPU_MONITOR; /* Cpu monitoring is enabled by default */
 	vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_ALLOW_CONTENDED_FIELDS; /* Allow contended fields on bootstrap classes */
-	if (J2SE_VERSION(vm) >= J2SE_19) {
+	if (J2SE_VERSION(vm) >= J2SE_V11) {
 		vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_RESTRICT_IFA; /* Enable zAAP switching for Registered Natives and JVMTI callbacks by default in Java 9 and later. */
 	}
 	vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_OSR_SAFE_POINT; /* Enable OSR safe point by default */
 	vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_ENABLE_HCR; /* Enable HCR by default */
-
-	for (i = 0; i < vm_args->nOptions; ++i) {
-		char * testString = getOptionString(j9vm_args, i);	/* may return mapped value */
-
-		/* Since these two options are -XX, we don't need to consume them as they will be ignored */
-
-		if (strcmp(testString, VMOPT_XXNOSTACKTRACEINTHROWABLE) == 0) {
+#if defined(J9VM_ARCH_X86)
+	/* Enabled field watch by default on x86 platforms */
+	vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_JIT_INLINE_WATCHES;
+#endif /* J9VM_ARCH_X86 */
+	{
+		IDATA noStackTraceInThrowable = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOSTACKTRACEINTHROWABLE, NULL);
+		IDATA stackTraceInThrowable = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXSTACKTRACEINTHROWABLE, NULL);
+		if (noStackTraceInThrowable > stackTraceInThrowable) {
 			vm->runtimeFlags |= J9_RUNTIME_OMIT_STACK_TRACES;
-		} else if (strcmp(testString, VMOPT_XXSTACKTRACEINTHROWABLE) == 0) {
+		} else if (noStackTraceInThrowable < stackTraceInThrowable) {
 			vm->runtimeFlags &= ~(UDATA)J9_RUNTIME_OMIT_STACK_TRACES;
-		} else if (strcmp(testString, VMOPT_XXALWAYSCOPYJNICRITICAL) == 0) {
-			vm->runtimeFlags |= J9_RUNTIME_ALWAYS_COPY_JNI_CRITICAL;
-		} else if (strcmp(testString, VMOPT_XXNOALWAYSCOPYJNICRITICAL) == 0) {
+		}
+	}
+
+	{
+		IDATA alwaysCopyJNICritical = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXALWAYSCOPYJNICRITICAL, NULL);
+		IDATA noAlwaysCopyJNICritical = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOALWAYSCOPYJNICRITICAL, NULL);
+		if (alwaysCopyJNICritical > noAlwaysCopyJNICritical) {
+			vm->runtimeFlags |= J9_RUNTIME_ALWAYS_COPY_JNI_CRITICAL;	
+		} else if (alwaysCopyJNICritical < noAlwaysCopyJNICritical) {
 			vm->runtimeFlags &= ~(UDATA)J9_RUNTIME_ALWAYS_COPY_JNI_CRITICAL;
-		} else if (strcmp(testString, VMOPT_XXALWAYSUSEJNICRITICAL) == 0) {
-			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_ALWAYS_USE_JNI_CRITICAL;
-		} else if (strcmp(testString, VMOPT_XXNOALWAYSUSEJNICRITICAL) == 0) {
+		}
+	}
+
+	{
+		IDATA alwaysUseJNICritical = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXALWAYSUSEJNICRITICAL, NULL);
+		IDATA noAlwaysUseJNICritical = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOALWAYSUSEJNICRITICAL, NULL);
+		if (alwaysUseJNICritical > noAlwaysUseJNICritical) {
+			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_ALWAYS_USE_JNI_CRITICAL;	
+		} else if (alwaysUseJNICritical < noAlwaysUseJNICritical) {
 			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ALWAYS_USE_JNI_CRITICAL;
-		} else if (strcmp(testString, VMOPT_XXDEBUGVMACCESS) == 0) {
-			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_DEBUG_VM_ACCESS;
-		} else if (strcmp(testString, VMOPT_XXNODEBUGVMACCESS) == 0) {
+		}
+	}
+
+	{
+		IDATA debugVmAccess = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXDEBUGVMACCESS, NULL);
+		IDATA noDebugVmAccess = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNODEBUGVMACCESS, NULL);
+		if (debugVmAccess > noDebugVmAccess) {
+			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_DEBUG_VM_ACCESS;	
+		} else if (debugVmAccess < noDebugVmAccess) {
 			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_DEBUG_VM_ACCESS;
+		}
+	}
 #ifdef J9VM_OPT_METHOD_HANDLE
-		} else if(strcmp(testString, VMOPT_XXMHALLOWI2J) == 0) {
-			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_I2J_MH_TRANSITION_ENABLED;
-		} else if(strcmp(testString, VMOPT_XXNOMHALLOWI2J) == 0) {
+	{
+		IDATA mhAllowI2J = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXMHALLOWI2J, NULL);
+		IDATA nomhAllowI2J = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOMHALLOWI2J, NULL);
+		if (mhAllowI2J > nomhAllowI2J) {
+			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_I2J_MH_TRANSITION_ENABLED;	
+		} else if (mhAllowI2J < nomhAllowI2J) {
 			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_I2J_MH_TRANSITION_ENABLED;
+		}
+	}
 #endif
-		} else if (strcmp(testString, VMOPT_XXLAZYSYMBOLRESOLUTION) == 0) {
-			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_LAZY_SYMBOL_RESOLUTION;
-		} else if (strcmp(testString, VMOPT_XXNOLAZYSYMBOLRESOLUTION) == 0) {
+	{
+		IDATA lazySymbolResolution = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXLAZYSYMBOLRESOLUTION, NULL);
+		IDATA nolazySymbolResolution = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOLAZYSYMBOLRESOLUTION, NULL);
+		if (lazySymbolResolution > nolazySymbolResolution) {
+			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_LAZY_SYMBOL_RESOLUTION;	
+		} else if (lazySymbolResolution < nolazySymbolResolution) {
 			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_LAZY_SYMBOL_RESOLUTION;
-		} else if (strcmp(testString, VMOPT_XXVMLOCKCLASSLOADERENABLE) == 0) {
-			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_CLASSLOADER_LOCKING_ENABLED;
-		} else if (strcmp(testString, VMOPT_XXVMLOCKCLASSLOADERDISABLE) == 0) {
+		}
+	}
+
+	{
+		IDATA vmLockClassLoaderEnable = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXVMLOCKCLASSLOADERENABLE, NULL);
+		IDATA vmLockClassLoaderDisable = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXVMLOCKCLASSLOADERDISABLE, NULL);
+		if (vmLockClassLoaderEnable > vmLockClassLoaderDisable) {
+			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_CLASSLOADER_LOCKING_ENABLED;	
+		} else if (vmLockClassLoaderEnable < vmLockClassLoaderDisable) {
 			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_CLASSLOADER_LOCKING_ENABLED;
-		} else if (strcmp(testString, VMOPT_XXPAGEALIGNDIRECTMEMORY) == 0) {
+		}
+	}
+
+	{
+		IDATA pageAlignDirectMemory = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXPAGEALIGNDIRECTMEMORY, NULL);
+		IDATA noPageAlignDirectMemory = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOPAGEALIGNDIRECTMEMORY, NULL);
+		if (pageAlignDirectMemory > noPageAlignDirectMemory) {
 			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_PAGE_ALIGN_DIRECT_MEMORY;
-		} else if (strcmp(testString, VMOPT_XXNOPAGEALIGNDIRECTMEMORY) == 0) {
+		} else if (pageAlignDirectMemory < noPageAlignDirectMemory) {
 			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_PAGE_ALIGN_DIRECT_MEMORY;
-		} else if (strcmp(testString, VMOPT_XXFASTCLASSHASHTABLE) == 0) {
+		}
+	}
+
+	{
+		IDATA fastClassHashTable = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXFASTCLASSHASHTABLE, NULL);
+		IDATA noFastClassHashTable = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOFASTCLASSHASHTABLE, NULL);
+		if (fastClassHashTable > noFastClassHashTable) {
 			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_DISABLE_FAST_CLASS_HASH_TABLE;
-		} else if (strcmp(testString, VMOPT_XXNOFASTCLASSHASHTABLE) == 0) {
+		} else if (fastClassHashTable < noFastClassHashTable) {
 			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_DISABLE_FAST_CLASS_HASH_TABLE;
-		} else if (0 == strcmp(testString, VMOPT_XXALLOWNONVIRTUALCALLS)) {
+		}
+	}
+
+	{
+		IDATA allowNonVirtualCalls = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXALLOWNONVIRTUALCALLS, NULL);
+		IDATA noAllowNonVirtualCalls = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXDONTALLOWNONVIRTUALCALLS, NULL);
+		if (allowNonVirtualCalls > noAllowNonVirtualCalls) {
 			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_ALLOW_NON_VIRTUAL_CALLS;
-		} else if (0 == strcmp(testString, VMOPT_XXDONTALLOWNONVIRTUALCALLS)) {
+		} else if (allowNonVirtualCalls < noAllowNonVirtualCalls) {
 			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ALLOW_NON_VIRTUAL_CALLS;
-		} else if (0 == strcmp(testString, VMOPT_XXDEBUGINTERPRETER)) {
+		}
+	}
+
+	{
+		IDATA debugInterpreter = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXDEBUGINTERPRETER, NULL);
+		IDATA noDebugInterpreter = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNODEBUGINTERPRETER, NULL);
+		if (debugInterpreter > noDebugInterpreter) {
 			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_DEBUG_MODE;
-		} else if (0 == strcmp(testString, VMOPT_XXNODEBUGINTERPRETER)) {
+		} else if (debugInterpreter < noDebugInterpreter) {
 			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_DEBUG_MODE;
-		} else if (0 == strncmp(testString, SYSPROP_COM_SUN_MANAGEMENT, comSunManagementLen)) {
-			vm->jclFlags |= J9_JCL_FLAG_COM_SUN_MANAGEMENT_PROP;
-		} else if (0 == strcmp(testString, VMOPT_XXFORCECLASSFILEASINTERMEDIATEDATA)) {
-			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_FORCE_CLASSFILE_AS_INTERMEDIATE_DATA;
-		} else if (0 == strcmp(testString, VMOPT_XXRECREATECLASSFILEONLOAD)) {
-			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_RECREATE_CLASSFILE_ONLOAD;
-		} else if (0 == strcmp(testString, VMOPT_XXNOREDUCECPUMONITOROVERHEAD)) {
+		}
+	}
+
+	if (FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, SYSPROP_COM_SUN_MANAGEMENT, NULL) != -1) {
+		vm->jclFlags |= J9_JCL_FLAG_COM_SUN_MANAGEMENT_PROP;
+	} else if (FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXFORCECLASSFILEASINTERMEDIATEDATA, NULL) != -1) {
+		vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_FORCE_CLASSFILE_AS_INTERMEDIATE_DATA;
+	} else if (FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXRECREATECLASSFILEONLOAD, NULL) != -1) {
+		vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_RECREATE_CLASSFILE_ONLOAD;
+	}
+
+	{
+		IDATA noReduceCPUMonitorOverhead = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOREDUCECPUMONITOROVERHEAD, NULL);
+		IDATA reduceCPUMonitorOverhead = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXREDUCECPUMONITOROVERHEAD, NULL);
+		if (noReduceCPUMonitorOverhead > reduceCPUMonitorOverhead) {
 #if defined(J9ZOS390)
 			PORT_ACCESS_FROM_JAVAVM(vm);
 			/* Disabling this option on z/OS as this introduces a 50% startup regression and smaller throughput regresssions */
@@ -2927,55 +3085,148 @@ processVMArgsFromFirstToLast(J9JavaVM * vm)
 #else
 			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_REDUCE_CPU_MONITOR_OVERHEAD;
 #endif
-		} else if (0 == strcmp(testString, VMOPT_XXREDUCECPUMONITOROVERHEAD)) {
+		} else if (noReduceCPUMonitorOverhead < reduceCPUMonitorOverhead) {
 			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_REDUCE_CPU_MONITOR_OVERHEAD;
-		} else if (0 == strcmp(testString, VMOPT_XXENABLECPUMONITOR)) {
-			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_ENABLE_CPU_MONITOR;
-		} else if (0 == strcmp(testString, VMOPT_XXDISABLECPUMONITOR)) {
-			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ENABLE_CPU_MONITOR;
-		} else if (0 == strcmp(testString, VMOPT_XXRESTRICTCONTENDED)) {
-			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ALLOW_APPLICATION_CONTENDED_FIELDS;
-		} else if (0 == strcmp(testString, VMOPT_XXNORESTRICTCONTENDED)) { /* enabling application contended fields implicitly turns on bootstrap contended fields */
-			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_ALLOW_APPLICATION_CONTENDED_FIELDS;
-			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_ALLOW_CONTENDED_FIELDS;
-		} else if (0 == strcmp(testString, VMOPT_XXNOCONTENDEDFIELDS)) { /* disabling bootstrap contended fields implicitly turns off application contended fields  */
-			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ALLOW_CONTENDED_FIELDS;
-			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ALLOW_APPLICATION_CONTENDED_FIELDS;
-		} else if (0 == strcmp(testString, VMOPT_XXCONTENDEDFIELDS)) {
-			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_ALLOW_CONTENDED_FIELDS;
-		} else if (0 == strcmp(testString, VMOPT_XXRESTRICTIFA)) { /* Enable zAAP switching on zOS */
-			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_RESTRICT_IFA;
-		} else if (0 == strcmp(testString, VMOPT_XXNORESTRICTIFA)) {
-			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_RESTRICT_IFA;
-		} else if (0 == strcmp(testString, VMOPT_XXENABLEHCR)) {
-			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_ENABLE_HCR;
-		} else if (0 == strcmp(testString, VMOPT_XXNOENABLEHCR)) {
-			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ENABLE_HCR;
-		} else if (0 == strcmp(testString, VMOPT_XXENABLEOSRSAFEPOINT)) {
-			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_OSR_SAFE_POINT;
-		} else if (0 == strcmp(testString, VMOPT_XXDISABLEOSRSAFEPOINT)) {
-			vm->extendedRuntimeFlags &= ~(UDATA)(J9_EXTENDED_RUNTIME_OSR_SAFE_POINT| J9_EXTENDED_RUNTIME_OSR_SAFE_POINT_FV);
-		} else if (0 == strcmp(testString, VMOPT_XXENABLEOSRSAFEPOINTFV)) {
-			vm->extendedRuntimeFlags |= (J9_EXTENDED_RUNTIME_OSR_SAFE_POINT| J9_EXTENDED_RUNTIME_OSR_SAFE_POINT_FV);
-		} else if (0 == strcmp(testString, VMOPT_XXDISABLEOSRSAFEPOINTFV)) {
-			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_OSR_SAFE_POINT_FV;
-		}
-		/* -Xbootclasspath and -Xbootclasspath/p are not supported from Java 9 onwards */
-		if (J2SE_VERSION(vm) >= J2SE_19) {
-			const I_32 xbootClasspathLen = sizeof(VMOPT_XBOOTCLASSPATH_COLON) - 1;
-			const I_32 xbootClasspathPLen = sizeof(VMOPT_XBOOTCLASSPATH_P_COLON) - 1;
-			PORT_ACCESS_FROM_JAVAVM(vm);
-
-			if (0 == strncmp(testString, VMOPT_XBOOTCLASSPATH_COLON, xbootClasspathLen)) {
-				j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_VM_UNRECOGNISED_CMD_LINE_OPT, "-Xbootclasspath");
-				return JNI_ERR;
-			}
-			if (0 == strncmp(testString, VMOPT_XBOOTCLASSPATH_P_COLON, xbootClasspathPLen)) {
-				j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_VM_UNRECOGNISED_CMD_LINE_OPT, "-Xbootclasspath/p");
-				return JNI_ERR;
-			}
 		}
 	}
+
+	{
+		IDATA enableCPUMonitor = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXENABLECPUMONITOR, NULL);
+		IDATA disableCPUMonitor = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXDISABLECPUMONITOR, NULL);
+		if (enableCPUMonitor > disableCPUMonitor) {
+			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_ENABLE_CPU_MONITOR;
+		} else if (enableCPUMonitor < disableCPUMonitor) {
+			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ENABLE_CPU_MONITOR;
+		}
+	}
+
+	{
+		IDATA restrictContended = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXRESTRICTCONTENDED, NULL);
+		IDATA noRestrictContended = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNORESTRICTCONTENDED, NULL);
+		if (restrictContended > noRestrictContended) {
+			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ALLOW_APPLICATION_CONTENDED_FIELDS;
+		} else if (restrictContended < noRestrictContended) { /* enabling application contended fields implicitly turns on bootstrap contended fields */
+			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_ALLOW_APPLICATION_CONTENDED_FIELDS;
+			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_ALLOW_CONTENDED_FIELDS;
+		}
+	}
+
+	{
+		IDATA noContendedFields = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOCONTENDEDFIELDS, NULL);
+		IDATA contendedFields = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXCONTENDEDFIELDS, NULL);
+		if (noContendedFields > contendedFields) {
+			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ALLOW_CONTENDED_FIELDS;
+			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ALLOW_APPLICATION_CONTENDED_FIELDS;
+		} else if (noContendedFields < contendedFields) {
+			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_ALLOW_CONTENDED_FIELDS;
+		}
+	}
+
+	{
+		IDATA restrictIFA = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXRESTRICTIFA, NULL);
+		IDATA noRestrictIFA = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNORESTRICTIFA, NULL);
+		if (restrictIFA > noRestrictIFA) {
+			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_RESTRICT_IFA;
+		} else if (restrictIFA < noRestrictIFA) {
+			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_RESTRICT_IFA;
+		}
+	}
+
+	{
+		IDATA enableHCR = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXENABLEHCR, NULL);
+		IDATA noEnableHCR = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOENABLEHCR, NULL);
+		if (enableHCR > noEnableHCR) {
+			vm->extendedRuntimeFlags |= (UDATA)J9_EXTENDED_RUNTIME_ENABLE_HCR;
+		} else if (enableHCR < noEnableHCR) {
+			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_ENABLE_HCR;
+		}
+	}
+
+	{
+		IDATA enableOSRSafePoint = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXENABLEOSRSAFEPOINT, NULL);
+		IDATA disableOSRSafePoint = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXDISABLEOSRSAFEPOINT, NULL);
+		if (enableOSRSafePoint > disableOSRSafePoint) {
+			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_OSR_SAFE_POINT;
+		} else if (enableOSRSafePoint < disableOSRSafePoint) {
+			vm->extendedRuntimeFlags &= ~(UDATA)(J9_EXTENDED_RUNTIME_OSR_SAFE_POINT| J9_EXTENDED_RUNTIME_OSR_SAFE_POINT_FV);
+		}
+	}
+	
+	{
+		IDATA enableOSRSafePointFV = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXENABLEOSRSAFEPOINTFV, NULL);
+		IDATA disableOSRSafePointFV = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXDISABLEOSRSAFEPOINTFV, NULL);
+		if (enableOSRSafePointFV > disableOSRSafePointFV) {
+			vm->extendedRuntimeFlags |= (J9_EXTENDED_RUNTIME_OSR_SAFE_POINT| J9_EXTENDED_RUNTIME_OSR_SAFE_POINT_FV);
+		} else if (enableOSRSafePointFV < disableOSRSafePointFV) {
+			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_OSR_SAFE_POINT_FV;
+		}
+	}
+	
+	{
+		IDATA enableJITWatch = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXENABLEJITWATCH, NULL);
+		IDATA disableJITWatch = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXDISABLEJITWATCH, NULL);
+		if (enableJITWatch > disableJITWatch) {
+			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_JIT_INLINE_WATCHES;
+		} else if (enableJITWatch < disableJITWatch) {
+			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_JIT_INLINE_WATCHES;
+		}
+	}
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+	{
+		IDATA enableValueTypes = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXENABLEVALHALLA, NULL);
+		IDATA disableValueTypes = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXDISABLEVALHALLA, NULL);
+		if (enableValueTypes > disableValueTypes) {
+			vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_ENABLE_VALHALLA;
+		} else if (enableValueTypes < disableValueTypes) {
+			vm->extendedRuntimeFlags2 &= ~J9_EXTENDED_RUNTIME2_ENABLE_VALHALLA;
+		}
+	}
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
+
+	{
+		IDATA enableAlwaysSplitByCodes = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXENABLEALWAYSSPLITBYTECODES, NULL);
+		IDATA disableAlwaysSplitByCodes = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXDISABLEALWAYSSPLITBYTECODES, NULL);
+		if (enableAlwaysSplitByCodes > disableAlwaysSplitByCodes) {
+			vm->runtimeFlags |= J9_RUNTIME_ALWAYS_SPLIT_BYTECODES;
+		} else if (enableAlwaysSplitByCodes < disableAlwaysSplitByCodes) {
+			vm->runtimeFlags &= ~(UDATA)J9_RUNTIME_ALWAYS_SPLIT_BYTECODES;
+		}
+	}
+	
+	{
+		IDATA enablePositiveHashCode = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXENABLEPOSITIVEHASHCODE, NULL);
+		IDATA disablePositiveHashCode = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXDISABLEPOSITIVEHASHCODE, NULL);
+		if (enablePositiveHashCode > disablePositiveHashCode) {
+			vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_POSITIVE_HASHCODE;
+		} else if (enablePositiveHashCode < disablePositiveHashCode) {
+			vm->extendedRuntimeFlags &= ~(UDATA)J9_EXTENDED_RUNTIME_POSITIVE_HASHCODE;
+		}
+	}
+
+	/* -Xbootclasspath and -Xbootclasspath/p are not supported from Java 9 onwards */
+	if (J2SE_VERSION(vm) >= J2SE_V11) {
+		PORT_ACCESS_FROM_JAVAVM(vm);
+		if (FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XBOOTCLASSPATH_COLON, NULL) != -1) {
+			j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_VM_UNRECOGNISED_CMD_LINE_OPT, "-Xbootclasspath");
+			return JNI_ERR;
+		}
+		if (FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XBOOTCLASSPATH_P_COLON, NULL) != -1) {
+			j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_VM_UNRECOGNISED_CMD_LINE_OPT, "-Xbootclasspath/p");
+			return JNI_ERR;
+		}
+	}
+
+#if defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS)
+	{
+		IDATA compressed = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XCOMPRESSEDREFS, NULL);
+		IDATA nocompressed = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XNOCOMPRESSEDREFS, NULL);
+		if (compressed > nocompressed) {
+			vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_COMPRESS_OBJECT_REFERENCES;
+		} else if (compressed < nocompressed) {
+			vm->extendedRuntimeFlags2 &= ~(UDATA)J9_EXTENDED_RUNTIME2_COMPRESS_OBJECT_REFERENCES;
+		}
+	}
+#endif /* defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS) */
 
 	return JNI_OK;
 }
@@ -2985,6 +3236,22 @@ processVMArgsFromFirstToLast(J9JavaVM * vm)
 
 static jint runInitializationStage(J9JavaVM* vm, IDATA stage) {
 	RunDllMainData userData;
+	J9VMThread *mainThread = vm->mainThread;
+
+	/* Once the main J9VMThread has been created, each init stage expects the thread
+	 * to have entered the VM and released VM access.
+	 */
+	if (NULL != mainThread) {
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+		if (mainThread->inNative) {
+			enterVMFromJNI(mainThread);
+			releaseVMAccess(mainThread);
+		} else
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
+		if (J9_ARE_ANY_BITS_SET(mainThread->publicFlags, J9_PUBLIC_FLAGS_VM_ACCESS)) {
+			releaseVMAccess(mainThread);
+		}
+	}
 
 	userData.vm = vm;
 	userData.stage = stage;
@@ -3345,15 +3612,6 @@ threadInitStages(J9JavaVM* vm, IDATA stage, void* reserved)
 				loadInfo->fatalErrorStr = "cannot parse -Xjni:";
 				return returnVal;
 			}
-
-#if defined(J9VM_THR_ASYNC_NAME_UPDATE)
-			vm->threadNameHandlerKey = J9RegisterAsyncEvent(vm, setThreadNameAsyncHandler, vm);
-			if (vm->threadNameHandlerKey < 0) {
-				loadInfo->fatalErrorStr = "cannot initialize threadNameHandlerKey";
-				goto _error;
-			}
-#endif /* J9VM_THR_ASYNC_NAME_UPDATE */
-
 			break;
 		case HEAP_STRUCTURES_INITIALIZED :
 			break;
@@ -3368,6 +3626,14 @@ threadInitStages(J9JavaVM* vm, IDATA stage, void* reserved)
 		case JIT_INITIALIZED :
 			break;
 		case ABOUT_TO_BOOTSTRAP :
+#if defined(J9VM_THR_ASYNC_NAME_UPDATE)
+			vm->threadNameHandlerKey = J9RegisterAsyncEvent(vm, setThreadNameAsyncHandler, vm);
+			if (vm->threadNameHandlerKey < 0) {
+				loadInfo = FIND_DLL_TABLE_ENTRY( FUNCTION_THREAD_INIT );
+				loadInfo->fatalErrorStr = "cannot initialize threadNameHandlerKey";
+				goto _error;
+			}
+#endif /* J9VM_THR_ASYNC_NAME_UPDATE */
 			break;
 		case JCL_INITIALIZED :
 			break;
@@ -3394,7 +3660,7 @@ zeroInitStages(J9JavaVM* vm, IDATA stage, void* reserved)
 	switch(stage) {
 		case PORT_LIBRARY_GUARANTEED :
 			/* -Xzero option is removed from Java 9 */
-			if (J2SE_VERSION(vm) >= J2SE_19) {
+			if (J2SE_VERSION(vm) >= J2SE_V11) {
 				vm->zeroOptions = 0;
 			} else {
 				vm->zeroOptions = J9VM_ZERO_SHAREBOOTZIPCACHE;
@@ -3711,10 +3977,8 @@ registerVMCmdLineMappings(J9JavaVM* vm)
 	changeCursor = &jitOpt[strlen(jitOpt)];
 
 #ifdef J9VM_OPT_JVMTI
-	if ((J2SE_VERSION(vm) & J2SE_VERSION_MASK) >= J2SE_16) {
-		if (registerCmdLineMapping(vm, MAPOPT_JAVAAGENT_COLON, MAPOPT_AGENTLIB_INSTRUMENT_EQUALS, MAP_WITH_INCLUSIVE_OPTIONS) == RC_FAILED) {
-			return RC_FAILED;
-		}
+	if (registerCmdLineMapping(vm, MAPOPT_JAVAAGENT_COLON, MAPOPT_AGENTLIB_INSTRUMENT_EQUALS, MAP_WITH_INCLUSIVE_OPTIONS) == RC_FAILED) {
+		return RC_FAILED;
 	}
 #endif
 
@@ -3771,11 +4035,29 @@ registerVMCmdLineMappings(J9JavaVM* vm)
 	if (registerCmdLineMapping(vm, MAPOPT_XSHARE_AUTO, MAPOPT_XSHARECLASSES_NONFATAL, EXACT_MAP_NO_OPTIONS) == RC_FAILED) {
 		return RC_FAILED;
 	}
-	/* Map the old-style -Xdbg: to -agentlib:jdwp= in releases before Java 7 */
-	if ((J2SE_VERSION(vm) & J2SE_VERSION_MASK) < J2SE_17) {
-		if (RC_FAILED == registerCmdLineMapping(vm, VMOPT_XDBG_COLON, MAPOPT_AGENTLIB_JDWP_EQUALS, MAP_WITH_INCLUSIVE_OPTIONS)) {
-			return RC_FAILED;
-		}
+	/* Map -XX:+DisableExplicitGC to -Xdisableexplicitgc */
+	if (registerCmdLineMapping(vm, MAPOPT_XXDISABLEEXPLICITGC, "-Xdisableexplicitgc", EXACT_MAP_NO_OPTIONS) == RC_FAILED) {
+		return RC_FAILED;
+	}
+	/* Map -XX:+EnableExplicitGC to -Xenableexplicitgc */
+	if (registerCmdLineMapping(vm, MAPOPT_XXENABLEEXPLICITGC, "-Xenableexplicitgc", EXACT_MAP_NO_OPTIONS) == RC_FAILED) {
+		return RC_FAILED;
+	}
+	/* Map -XX:HeapDumpPath= to -Xdump:directory= */
+	if (registerCmdLineMapping(vm, MAPOPT_XXHEAPDUMPPATH_EQUALS, VMOPT_XDUMP_DIRECTORY_EQUALS, EXACT_MAP_WITH_OPTIONS) == RC_FAILED) {
+		return RC_FAILED;
+	}
+	/* Map -XX:MaxHeapSize= to -Xmx */
+	if (registerCmdLineMapping(vm, MAPOPT_XXMAXHEAPSIZE_EQUALS, VMOPT_XMX, EXACT_MAP_WITH_OPTIONS) == RC_FAILED) {
+		return RC_FAILED;
+	}
+	/* Map -XX:InitialHeapSize= to -Xms */
+	if (registerCmdLineMapping(vm, MAPOPT_XXINITIALHEAPSIZE_EQUALS, VMOPT_XMS, EXACT_MAP_WITH_OPTIONS) == RC_FAILED) {
+		return RC_FAILED;
+	}
+	/* Map -XX:OnOutOfMemoryError= to -Xdump:tool:events=systhrow,filter=java/lang/OutOfMemoryError,exec= */ 
+	if (registerCmdLineMapping(vm, MAPOPT_XXONOUTOFMEMORYERROR_EQUALS, VMOPT_XDUMP_TOOL_OUTOFMEMORYERROR_EXEC_EQUALS, EXACT_MAP_WITH_OPTIONS) == RC_FAILED) {
+		return RC_FAILED;
 	}
 
 	return 0;
@@ -3833,7 +4115,7 @@ static void testFindArgs(J9JavaVM* vm) {
 	intResult = FIND_ARG_IN_VMARGS(EXACT_MATCH, "-Xfoo2sdf", NULL);
 	TEST_INT(intResult, -1);
 
-	SET_TO(1, "-Xfoo3:arse");
+	SET_TO(1, "-Xfoo3:parse");
 	intResult = FIND_ARG_IN_VMARGS(EXACT_MATCH, "-Xfoo3", NULL);
 	TEST_INT(intResult, -1);
 
@@ -3853,7 +4135,7 @@ static void testFindArgs(J9JavaVM* vm) {
 	intResult = FIND_ARG_IN_VMARGS(STARTSWITH_MATCH, "-Xfoo2", NULL);
 	TEST_INT(intResult, 1);
 
-	SET_TO(1, "-Xfoo3:arse");
+	SET_TO(1, "-Xfoo3:parse");
 	intResult = FIND_ARG_IN_VMARGS(STARTSWITH_MATCH, "-Xfoo3", NULL);
 	TEST_INT(intResult, 1);
 
@@ -3983,7 +4265,7 @@ static void testFindArgs(J9JavaVM* vm) {
 	intResult = FIND_ARG_IN_VMARGS(OPTIONAL_LIST_MATCH, "-Xfoo2", NULL);
 	TEST_INT(intResult, -1);
 
-	SET_TO(1, "-Xfoo3:arse");
+	SET_TO(1, "-Xfoo3:parse");
 	intResult = FIND_ARG_IN_VMARGS(OPTIONAL_LIST_MATCH, "-Xfoo3", NULL);
 	TEST_INT(intResult, 1);
 
@@ -4420,12 +4702,12 @@ static void testOptionValueOps(J9JavaVM* vm) {
 	IS_0(*optionsBufferPtr);
 
 	optionsBufferPtr = optionsBuffer;
-	SET_TO(1, "-Xfoo4:bar3,bar4=arse");
+	SET_TO(1, "-Xfoo4:bar3,bar4=parse");
 	returnVal = GET_OPTION_VALUES(1, ':', ',', &optionsBufferPtr, SMALL_STRING_BUF_SIZE);
 	TEST_INT(returnVal, OPTION_OK);
 	COMPARE(optionsBufferPtr, "bar3");
 	NEXT_ELEMENT(optionsBufferPtr);
-	COMPARE(optionsBufferPtr, "bar4=arse");
+	COMPARE(optionsBufferPtr, "bar4=parse");
 	NEXT_ELEMENT(optionsBufferPtr);
 	IS_0(*optionsBufferPtr);
 
@@ -4636,7 +4918,7 @@ static void testOptionValueOps(J9JavaVM* vm) {
 	REMOVE_MAPPING(1);
 
 	SET_TO(1, "-Xfoosov2:bar3");
-	SET_MAP_TO(1, "-Xfooj92:arse:", "-Xfoosov2:", MAP_ONE_COLON_TO_TWO);
+	SET_MAP_TO(1, "-Xfooj92:parse:", "-Xfoosov2:", MAP_ONE_COLON_TO_TWO);
 	returnVal = GET_OPTION_VALUE(1, ':', &result);
 	TEST_INT(returnVal, OPTION_OK);
 	COMPARE(result, "bar3");
@@ -5126,7 +5408,7 @@ runExitStages(J9JavaVM* vm, J9VMThread* vmThread)
 
 
 /**
- * PostInit load is used to load or intialize a library after initialization has completed.
+ * PostInit load is used to load or initialize a library after initialization has completed.
  * It is not currently protected by a mutex.
  * The library must be tagged with ALLOW_POST_INIT_LOAD in initializeDllLoadTable to allow this.
  * postInitLoadJ9DLL can be called on a library even if it is already loaded.
@@ -5267,7 +5549,7 @@ preloadUser32Dll(J9JavaVM *vm)
 		}
 		LoadLibrary(USER32_DLL);
 		if (0 != contiguousRegionStart) {
-			VirtualFree((LPVOID)contiguousRegionStart, contiguousRegionSize, MEM_RELEASE);
+			VirtualFree((LPVOID)contiguousRegionStart, 0, MEM_RELEASE);
 		}
 	}
 
@@ -5286,8 +5568,8 @@ processCompressionOptions(J9JavaVM *vm){
 	IDATA argIndex2;
 
 	/* The last (right-most) argument gets precedence */
-	argIndex1 = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXSTRINGCOMPRESSION, NULL);
-	argIndex2 = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOSTRINGCOMPRESSION, NULL);
+	argIndex1 = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXCOMPACTSTRINGS, NULL);
+	argIndex2 = FIND_AND_CONSUME_ARG(EXACT_MATCH, VMOPT_XXNOCOMPACTSTRINGS, NULL);
 
 	/* Default setting */
 	vm->strCompEnabled = FALSE;
@@ -5321,7 +5603,7 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 #endif
 
 #if !defined(WIN32)
-	/* Needed for JCL dependancy on JVM to set SIGPIPE to SIG_IGN */
+	/* Needed for JCL dependency on JVM to set SIGPIPE to SIG_IGN */
 	struct sigaction newSignalAction;
 #endif
 
@@ -5339,7 +5621,7 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 		goto error;
 	}
 	
-	/* Needed for JCL dependancy on JVM to set SIGPIPE to SIG_IGN */
+	/* Needed for JCL dependency on JVM to set SIGPIPE to SIG_IGN */
 	sigemptyset(&newSignalAction.sa_mask);
 #ifndef J9ZTPF
 	newSignalAction.sa_flags = SA_RESTART;
@@ -5347,9 +5629,8 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 	newSignalAction.sa_flags = 0;
 #endif /* defined(J9ZTPF) */
 	newSignalAction.sa_handler = SIG_IGN;
-	OMRSIG_SIGACTION(SIGPIPE,&newSignalAction,(struct sigaction *)vm->originalSIGPIPESignalAction);
+	sigaction(SIGPIPE,&newSignalAction,(struct sigaction *)vm->originalSIGPIPESignalAction);
 #endif
-
 
 #ifdef J9VM_OPT_SIDECAR
 	vm->j2seVersion = initArgs->j2seVersion;
@@ -5462,8 +5743,11 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 		goto error;
 	}
 
-#if defined(WIN32)
-	/* Install the handler for running the shutdown hooks when the console window is closed
+#if defined(WIN32) && !defined(OPENJ9_BUILD)
+	/* Remove the "shutDownHookWrapper" once IBMJ9 uses the JVM_*Signal native functions
+	 * in the sun.misc.Signal class. OpenJ9 does not depend on the "shutDownHookWrapper".
+	 *
+	 * Install the handler for running the shutdown hooks when the console window is closed
 	 * J2SE/Sidecar builds:
 	 *			This applies to Windows only. Shutdown hooks for all other platforms are handled by the Hursley JCLs
 	 *
@@ -5471,12 +5755,16 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 	 * 			This applies to Windows only for now. Since we don't have Hursley JCLs for this, we will need to provide our own support for all other cases/platforms.
 	 */
 	if (J9_ARE_NO_BITS_SET(vm->sigFlags, J9_SIG_XRS_ASYNC)) {
-		/* only register the handler if -Xrs is not present */
-		if (0 != j9sig_set_async_signal_handler(shutDownHookWrapper, vm, J9PORT_SIG_FLAG_SIGTERM)) {
+		/* Only register the handler if -Xrs is not present. This is a temporary hack,
+		 * which will be removed once the required OMR signal API has been implemented.
+		 * The following OMR issue needs to be closed before removing this hack:
+		 * https://github.com/eclipse/omr/issues/2332.
+		 */
+		if (0 != j9sig_set_async_signal_handler(shutDownHookWrapper, vm, J9PORT_SIG_FLAG_SIGTERM | J9PORT_SIG_FLAG_SIGINT)) {
 			goto error;
 		}
 	}
-#endif
+#endif /* defined(WIN32) && !defined(OPENJ9_BUILD) */
 
 #ifndef J9VM_SIZE_SMALL_CODE
 	if (NULL == fieldIndexTableNew(vm, portLibrary)) {
@@ -5508,7 +5796,7 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 
 
 #ifdef J9VM_OPT_SIDECAR
-	/* Whinge about -Djava.compiler after extra VM options are added, but before mappings are set */
+	/* Whine about -Djava.compiler after extra VM options are added, but before mappings are set */
 	if (RC_FAILED == checkDjavacompiler(portLibrary, vm->vmArgsArray)) {
 		goto error;
 	}
@@ -5563,8 +5851,6 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 	}
 
 	registerIgnoredOptions(PORTLIB, vm->vmArgsArray);				/* Tags -D java options and options in ignoredOptionTable as not consumable */
-
-	TOC_STORE_TOC(vm->vmTOC, &initializeJavaVM);
 
 #if !defined(J9VM_INTERP_MINIMAL_JNI)
 	vm->EsJNIFunctions = GLOBAL_TABLE(EsJNIFunctions);
@@ -5653,7 +5939,7 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 
 #if defined(J9VM_GC_DYNAMIC_CLASS_UNLOADING)
 	vmHooks = getVMHookInterface(vm);
-	if(0 != (*vmHooks)->J9HookRegisterWithCallSite(vmHooks, J9HOOK_VM_CLASS_UNLOAD, jniIDTableClassUnload, OMR_GET_CALLSITE(), NULL)) {
+	if(0 != (*vmHooks)->J9HookRegisterWithCallSite(vmHooks, J9HOOK_VM_CLASS_UNLOAD, freeClassNativeMemory, OMR_GET_CALLSITE(), NULL)) {
 		goto error;
 	}
 #endif
@@ -5762,12 +6048,15 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 	}
 
 	sidecarInit(env);
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+	/* sidecarInit leaves the thread in a JNI context */
+	enterVMFromJNI(env);
+	releaseVMAccess(env);
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 
 	if (0 != vm->memoryManagerFunctions->gcStartupHeapManagement(vm)) {
 		goto error;
 	}
-
-	releaseVMAccessInJNI(env);
 
 	TRIGGER_J9HOOK_VM_STARTED(vm->hookInterface, env);
 
@@ -5805,8 +6094,10 @@ void sidecarInit(J9VMThread *mainThread) {
 	 * This prevents memory allocations that will occur after an OutOfMemoryError or
 	 * a StackOverflowError has occurred.
 	 */
-	mainThread->functions->FindClass((JNIEnv *) mainThread, "java/lang/Shutdown");
-	/* if the class load fails, we simply move on.  This is not a reason to halt startup. */
+	if (NULL == mainThread->functions->FindClass((JNIEnv *) mainThread, "java/lang/Shutdown")) {
+		/* if the class load fails, we simply move on.  This is not a reason to halt startup. */
+		mainThread->functions->ExceptionClear((JNIEnv *) mainThread);
+	}
 }
 #endif /* J9VM_OPT_SIDECAR (autogen) */
 
@@ -5934,10 +6225,10 @@ setSignalOptions(J9JavaVM* vm)
 
 		GET_OPTION_VALUE(argIndex, ':', &optionValue);
 
-		if (optionValue && 0 == strcmp(optionValue, "sync")) {
+		if ((NULL != optionValue) && (0 == strcmp(optionValue, "sync"))) {
 			vm->sigFlags |= J9_SIG_XRS_SYNC;
 			sigOptions |= J9PORT_SIG_OPTIONS_REDUCED_SIGNALS_SYNCHRONOUS;
-		} else if (optionValue && 0 == strcmp(optionValue, "async")) {
+		} else if ((NULL != optionValue) && (0 == strcmp(optionValue, "async"))) {
 			vm->sigFlags |= (J9_SIG_XRS_ASYNC | J9_SIG_NO_SIG_QUIT);
 			sigOptions |= J9PORT_SIG_OPTIONS_REDUCED_SIGNALS_ASYNCHRONOUS;
 		} else {
@@ -6177,7 +6468,7 @@ detectAgentXruns(J9JavaVM* vm)
 #if defined(J9VM_GC_DYNAMIC_CLASS_UNLOADING)
 
 static void
-jniIDTableClassUnload(J9HookInterface** hook, UDATA eventNum, void* eventData, void* userData)
+freeClassNativeMemory(J9HookInterface** hook, UDATA eventNum, void* eventData, void* userData)
 {
 	J9VMClassUnloadEvent * data = eventData;
 	J9Class * clazz = data->clazz;
@@ -6189,11 +6480,20 @@ jniIDTableClassUnload(J9HookInterface** hook, UDATA eventNum, void* eventData, v
 
 	j9mem_free_memory(clazz->jniIDs);
 	clazz->jniIDs = NULL;
+
+	/* If the class is an interface, free the HCR method ordering table */
+	if (J9ROMCLASS_IS_INTERFACE(clazz->romClass)) {
+		j9mem_free_memory(J9INTERFACECLASS_METHODORDERING(clazz));
+		J9INTERFACECLASS_SET_METHODORDERING(clazz, NULL);
+	}
 }
 
 #endif /* GC_DYNAMIC_CLASS_UNLOADING */
 
-#if defined(WIN32)
+#if defined(WIN32) && !defined(OPENJ9_BUILD)
+/* Remove the "shutDownHookWrapper" once IBMJ9 uses the JVM_*Signal native functions
+ * in the sun.misc.Signal class. OpenJ9 does not depend on the "shutDownHookWrapper".
+ */
 static UDATA
 shutDownHookWrapper(struct J9PortLibrary* portLibrary, U_32 gpType, void* gpInfo, void* userData)
 {
@@ -6219,7 +6519,140 @@ shutDownHookWrapper(struct J9PortLibrary* portLibrary, U_32 gpType, void* gpInfo
 	return 0;
 
 }
-#endif
+#endif /* defined(WIN32) && !defined(OPENJ9_BUILD) */
+
+/**
+ * Invoke jdk.internal.misc.Signal.dispatch(int number) in Java 9 and
+ * onwards. Invoke sun.misc.Signal.dispatch(int number) in Java 8.
+ *
+ * @param[in] vmThread pointer to a J9VMThread
+ * @param[in] signal integer value of the signal
+ *
+ * @return void
+ */
+static void
+signalDispatch(J9VMThread *vmThread, I_32 signal)
+{
+	J9JavaVM *vm = vmThread->javaVM;
+	J9NameAndSignature nas = {0};
+	I_32 args[] = {signal};
+
+	Trc_VM_signalDispatch_signalValue(vmThread, signal);
+
+	nas.name = (J9UTF8 *)&j9_dispatch;
+	nas.signature = (J9UTF8 *)&j9_int_void;
+
+	enterVMFromJNI(vmThread);
+
+	if (J2SE_VERSION(vm) >= J2SE_V11) {
+		runStaticMethod(vmThread, (U_8 *)"jdk/internal/misc/Signal", &nas, 1, (UDATA *)args);
+	} else {
+		runStaticMethod(vmThread, (U_8 *)"sun/misc/Signal", &nas, 1, (UDATA *)args);
+	}
+
+	/* An exception shouldn't happen over here. */
+	Assert_VM_true(NULL == vmThread->currentException);
+
+	releaseVMAccess(vmThread);
+}
+
+/* @brief This handler will be invoked by the asynchSignalReporterThread
+ * in omrsignal.c once registered using j9sig_set_*async_signal_handler
+ * for a specific signal.
+ *
+ * @param[in] portLibrary the port library
+ * @param[in] gpType port library signal flag
+ * @param[in] gpInfo GPF information (will be NULL in this case)
+ * @param[in] userData user data (will be a pointer to J9JavaVM in this case)
+ *
+ * @return 0 on success and non-zero on failure
+ *
+ */
+static UDATA
+predefinedHandlerWrapper(struct J9PortLibrary *portLibrary, U_32 gpType, void *gpInfo, void *userData)
+{
+	J9JavaVM *vm = (J9JavaVM *)userData;
+	J9JavaVMAttachArgs attachArgs = {0};
+	J9VMThread *vmThread = NULL;
+	IDATA result = JNI_ERR;
+	BOOLEAN shutdownStarted = FALSE;
+	I_32 signal = 0;
+	PORT_ACCESS_FROM_JAVAVM(vm);
+
+	signal = j9sig_map_portlib_signal_to_os_signal(gpType);
+	/* Don't invoke handler if signal is 0 or negative, or if -Xrs or -Xrs:async is specified */
+	if ((signal <= 0) || J9_ARE_ANY_BITS_SET(vm->sigFlags, J9_SIG_XRS_ASYNC)) {
+		return 1;
+	}
+
+	/* Don't invoke handler if JVM exit has started. */
+	omrthread_monitor_enter(vm->runtimeFlagsMutex);
+	if (J9_ARE_ANY_BITS_SET(vm->runtimeFlags, J9_RUNTIME_EXIT_STARTED)) {
+		shutdownStarted = TRUE;
+	}
+	omrthread_monitor_exit(vm->runtimeFlagsMutex);
+
+	if (shutdownStarted) {
+		return 1;
+	}
+
+	attachArgs.version = JNI_VERSION_1_8;
+	attachArgs.name = "JVM Signal Thread";
+	attachArgs.group = vm->systemThreadGroupRef;
+
+	/* Attach current thread as a daemon thread */
+	result = internalAttachCurrentThread(vm, &vmThread, &attachArgs,
+				J9_PRIVATE_FLAGS_DAEMON_THREAD | J9_PRIVATE_FLAGS_SYSTEM_THREAD | J9_PRIVATE_FLAGS_ATTACHED_THREAD,
+				omrthread_self());
+
+	if (JNI_OK != result) {
+		/* Thread couldn't be attached. So, we can't run Java code. */
+		return 1;
+	}
+
+	/* Run handler (Java code). */
+	signalDispatch(vmThread, signal);
+
+	DetachCurrentThread((JavaVM *)vm);
+
+	return 0;
+}
+
+IDATA
+registerPredefinedHandler(J9JavaVM *vm, U_32 signal, void **oldOSHandler)
+{
+	IDATA rc = 0;
+	U_32 portlibSignalFlag = 0;
+
+	PORT_ACCESS_FROM_JAVAVM(vm);
+
+	portlibSignalFlag = j9sig_map_os_signal_to_portlib_signal(signal);
+	if (0 != portlibSignalFlag) {
+		rc = j9sig_set_single_async_signal_handler(predefinedHandlerWrapper, vm, portlibSignalFlag, oldOSHandler);
+	} else {
+		Trc_VM_registerPredefinedHandler_invalidPortlibSignalFlag(portlibSignalFlag);
+	}
+
+	return rc;
+}
+
+IDATA
+registerOSHandler(J9JavaVM *vm, U_32 signal, void *newOSHandler, void **oldOSHandler)
+{
+	IDATA rc = 0;
+	U_32 portlibSignalFlag = 0;
+
+	PORT_ACCESS_FROM_JAVAVM(vm);
+
+	portlibSignalFlag = j9sig_map_os_signal_to_portlib_signal(signal);
+	if (0 != portlibSignalFlag) {
+		rc = j9sig_register_os_handler(portlibSignalFlag, newOSHandler, oldOSHandler);
+	} else {
+		Trc_VM_registerOSHandler_invalidPortlibSignalFlag(portlibSignalFlag);
+	}
+
+	return rc;
+}
 
 static jint
 initializeDDR(J9JavaVM * vm)
@@ -6232,7 +6665,7 @@ initializeDDR(J9JavaVM * vm)
 
 #if defined(J9VM_OPT_SIDECAR)
 	/* Append the VM path to the filename if it's available */
-	if (J2SE_VERSION(vm) >= J2SE_19) {
+	if (J2SE_VERSION(vm) >= J2SE_V11) {
 		j9ddrDatDir = vm->j9libvmDirectory;
 	} else {
 		j9ddrDatDir = vm->j2seRootDirectory;
@@ -6331,11 +6764,11 @@ isSSE2SupportedOnX86() {
 		 */
 		U_32 mxcsr = 0;
 		struct sigaction oldHandler;
-		OMRSIG_SIGACTION(SIGILL, NULL, &oldHandler);
-		OMRSIG_SIGNAL(SIGILL, (void (*)(int)) handleSIGILLForSSE);
+		sigaction(SIGILL, NULL, &oldHandler);
+		signal(SIGILL, (void (*)(int))handleSIGILLForSSE);
 		osSupportsSSE = TRUE;
 		asm("stmxcsr %0"::"m"(mxcsr) : );
-		OMRSIG_SIGACTION(SIGILL, &oldHandler, NULL);
+		sigaction(SIGILL, &oldHandler, NULL);
 		result = osSupportsSSE;
 #endif
 	}
@@ -6350,56 +6783,46 @@ isPPC64bit() {
 	if (J9_ADDRMODE_64 != sysconf(_SC_AIX_KERNEL_BITMODE)) {
 		return FALSE;
 	}
-#endif /* AIXPPC */
-
-#if defined(LINUXPPC)
-#define CPU_NAME_SIZE 120
-	FILE * fp ;
-	char buffer[CPU_NAME_SIZE];
-	char *line_p;
+#else /* AIXPPC */
 	char *cpu_name = NULL;
-	char *position_l, *position_r;
-
-	fp = fopen("/proc/cpuinfo","r");
+	FILE *fp = fopen("/proc/cpuinfo", "r");
 
 	if (NULL == fp) {
 		return TRUE;
 	}
 
-	line_p = buffer;
-
 	while (!feof(fp)) {
-		fgets(line_p, CPU_NAME_SIZE, fp);
-		position_l = strstr(line_p, "cpu");
-		if (position_l) {
+#define CPU_NAME_SIZE 120
+		char buffer[CPU_NAME_SIZE];
+		char *position_l = NULL;
+		char *position_r = NULL;
+		if (NULL == fgets(buffer, CPU_NAME_SIZE, fp)) {
+			break;
+		}
+#undef CPU_NAME_SIZE
+		position_l = strstr(buffer, "cpu");
+		if (NULL != position_l) {
 			position_l = strchr(position_l, ':');
-			if (position_l == NULL) {
-				cpu_name = NULL; //setting cpu_name to null to denote default case
+			if (NULL == position_l) {
+				/* leave cpu_name NULL to denote default case */
 				break;
 			}
-			position_l++;
-			while (*(position_l) == ' ') {
-				position_l++;
-			}
+			do {
+				++position_l;
+			} while (' ' == *position_l);
 
-			position_r = strchr(line_p, '\n');
-			if (position_r == NULL) {
-				cpu_name = NULL; //setting cpu_name to null to denote default case
+			position_r = strchr(position_l, '\n');
+			if (NULL == position_r) {
+				/* leave cpu_name NULL to denote default case */
 				break;
 			}
-			while (*(position_r-1) == ' ') {
-				position_r--;
-			}
-
-			if (position_l >= position_r) {
-				cpu_name = NULL; //setting cpu_name to null to denote default case
-				break;
+			while (' ' == *(position_r - 1)) {
+				--position_r;
 			}
 
 			/* localize the cpu name */
 			cpu_name = position_l;
 			*position_r = '\000';
-
 			break;
 		}
 	}
@@ -6415,18 +6838,11 @@ isPPC64bit() {
 	if (0 == j9_cmdla_strnicmp(cpu_name, "82xx", 4))             return FALSE;
 	if (0 == j9_cmdla_strnicmp(cpu_name, "750FX", 5))            return FALSE;
 	if (0 == j9_cmdla_strnicmp(cpu_name, "604", 3))              return FALSE;
-#undef CPU_NAME_SIZE
-#endif /* LINUXPPC */
+#endif /* AIXPPC */
 
 	return TRUE;
 }
 #endif /* (AIXPPC || LINUXPPC) && !J9OS_I5 */
-
-void
-installJitBytecodes(J9JavaVM *javaVM)
-{
-}
-
 
 void
 initializeExecutionModel(J9VMThread *currentThread)

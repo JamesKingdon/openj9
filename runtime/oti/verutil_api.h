@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2015 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef verutil_api_h
@@ -54,7 +54,7 @@ IDATA verifyFieldSignatureUtf8(U_8* signatureBytes, UDATA signatureLength, UDATA
 /**
  * Check if a string is a well-formed identifier per JVMS java 8 version, section 4.2.
  * String is well-formed if it comprises one or more Unicode characters, with the following exceptions:
- * '/', ';' , '[' and '.' (semicolon, open square backet, and period) are not allowed
+ * '/', ';' , '[' and '.' (semicolon, open square bracket, and period) are not allowed
  * 	@param identifierStart pointer to first character of the signature
  * 	@param identifierLength Length of the signature in bytes
  *	@return TRUE if the string is well formed
@@ -65,7 +65,7 @@ BOOLEAN verifyIdentifierUtf8(U_8* identifierStart, UDATA identifierLength);
 /**
  * Check if a string is a well-formed fully qualified class or interface name per JVMS java 8 version, section 4.2.
  * String is well-formed if it comprises one or more Unicode characters, with the following exceptions:
- * ';' , '[' and '.' (semicolon, open square backet, and period) are not allowed
+ * ';' , '[' and '.' (semicolon, open square bracket, and period) are not allowed
  * '/' is allowed but may not be contiguous with another '/'
  * 	@param identifierStart pointer to first character of the signature
  * 	@param identifierLength Length of the signature in bytes
@@ -157,6 +157,19 @@ void
 buildError(J9CfrError * errorStruct, UDATA code, UDATA action, UDATA offset);
 
 /**
+ * Set up bootstrap method errors if the verification error occurs.
+ * @param[in] errorStruct - pointer to J9CfrError
+ * @param[in] code - the error code
+ * @param[in] action - the errorAction
+ * @param[in] offset - the errorOffset
+ * @param[in] bsmIndex - the index of the bootstrap method array
+ * @param[in] bsmArgsIndex - the constant pool index stored in the bootstrap method arguments.
+ * @param[in] cpType - the constant pool type value
+ */
+void
+buildBootstrapMethodError(J9CfrError * errorStruct, UDATA code, UDATA action, UDATA offset, I_32 bsmIndex, U_32 bsmArgsIndex, U_32 cpType);
+
+/**
  * Set up method errors if the verification error occurs.
  * @param[in] errorStruct - pointer to J9CfrError
  * @param[in] code - the error code
@@ -179,7 +192,7 @@ buildMethodError(J9CfrError * errorStruct, UDATA code, UDATA action, I_32 method
  * @param[in] pc - the pc value
  * @param[in] method - pointer to J9CfrMethod
  * @param[in] constantPoolPointer - pointer to the constant pool
- * @param[in] errorDataIndex - the index value when verification error occurs (e.g. constant pool index, local varible index, etc)
+ * @param[in] errorDataIndex - the index value when verification error occurs (e.g. constant pool index, local variable index, etc)
  * @param[in] stackmapFrameIndex - index to stack frame when error occurs
  * @param[in] stackmapFrameBCI - the bci value of the stackmap frame when error occurs
  */

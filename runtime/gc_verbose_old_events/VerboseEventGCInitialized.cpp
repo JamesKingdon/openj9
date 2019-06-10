@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2015 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
  
 #include "VerboseEventGCInitialized.hpp"
@@ -74,13 +73,16 @@ MM_VerboseEventGCInitialized::formattedOutput(MM_VerboseOutputAgent *agent)
 	agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"gcPolicy\" value=\"%s\" />", _event.gcPolicy);
 	agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"maxHeapSize\" value=\"0x%zx\" />", _event.maxHeapSize);
 	agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"initialHeapSize\" value=\"0x%zx\" />", _event.initialHeapSize);
-#if defined(J9VM_GC_COMPRESSED_POINTERS)
-	agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"compressedRefs\" value=\"true\" />");
-	agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"compressedRefsDisplacement\" value=\"0x%zx\" />", 0);
-	agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"compressedRefsShift\" value=\"0x%zx\" />", _event.compressedPointersShift);
-#else /* defined(J9VM_GC_COMPRESSED_POINTERS) */
-	agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"compressedRefs\" value=\"false\" />");
-#endif /* defined(J9VM_GC_COMPRESSED_POINTERS) */
+#if defined(OMR_GC_COMPRESSED_POINTERS)
+	if (OMRVMTHREAD_COMPRESS_OBJECT_REFERENCES(_omrThread)) {
+		agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"compressedRefs\" value=\"true\" />");
+		agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"compressedRefsDisplacement\" value=\"0x%zx\" />", 0);
+		agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"compressedRefsShift\" value=\"0x%zx\" />", _event.compressedPointersShift);
+	} else
+#endif /* defined(OMR_GC_COMPRESSED_POINTERS) */
+	{
+		agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"compressedRefs\" value=\"false\" />");
+	}
 	agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"pageSize\" value=\"0x%zx\" />", _event.heapPageSize);
 	agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"pageType\" value=\"%s\" />", _event.heapPageType);
 	agent->formatAndOutput(static_cast<J9VMThread*>(_omrThread->_language_vmthread), indentLevel + 1, "<attribute name=\"requestedPageSize\" value=\"0x%zx\" />", _event.heapRequestedPageSize);

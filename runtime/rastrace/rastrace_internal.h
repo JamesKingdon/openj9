@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2017 IBM Corp. and others
+ * Copyright (c) 1998, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef RASTRACE_INTERNAL_H
@@ -315,9 +315,9 @@ typedef struct UtComponentList{
 	UtDeferredConfigInfo  *deferredConfigInfoHead;
 } UtComponentList;
 
-omr_error_t initialiseComponentData(UtComponentData **componentDataPtr, UtModuleInfo *moduleInfo, const char *componentName);
+omr_error_t initializeComponentData(UtComponentData **componentDataPtr, UtModuleInfo *moduleInfo, const char *componentName);
 void freeComponentData(UtComponentData *componentDataPtr);
-omr_error_t initialiseComponentList(UtComponentList **componentListPtr);
+omr_error_t initializeComponentList(UtComponentList **componentListPtr);
 omr_error_t freeComponentList(UtComponentList *componentList);
 omr_error_t addComponentToList(UtComponentData *componentData, UtComponentList *componentList);
 omr_error_t removeModuleFromList(UtModuleInfo* module, UtComponentList *componentList);

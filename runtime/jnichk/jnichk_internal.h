@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef jnichk_internal_h
@@ -99,7 +99,49 @@ typedef struct JNICHK_GREF_HASHENTRY {
 	BOOLEAN alive;
 } JNICHK_GREF_HASHENTRY;		
 
-#define HAS_VM_ACCESS(vmThread) ((vmThread)->publicFlags & J9_PUBLIC_FLAGS_VM_ACCESS)
+
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+
+#define enterVM(currentThread) \
+	BOOLEAN hasNoVMAccess = J9_ARE_NO_BITS_SET((currentThread)->publicFlags, J9_PUBLIC_FLAGS_VM_ACCESS); \
+	UDATA inNative = (currentThread)->inNative; \
+	do { \
+		if (inNative) { \
+			enterVMFromJNI(currentThread); \
+		} else { \
+			if (hasNoVMAccess) { \
+				acquireVMAccess(currentThread); \
+			} \
+		} \
+	} while(0)
+		
+#define exitVM(currentThread) \
+	do { \
+		if (inNative) { \
+			exitVMToJNI(currentThread); \
+		} else if (hasNoVMAccess) { \
+			releaseVMAccess(currentThread); \
+		} \
+	} while(0)
+
+#else /* J9VM_INTERP_ATOMIC_FREE_JNI */
+
+#define enterVM(currentThread) \
+	BOOLEAN hasNoVMAccess = J9_ARE_NO_BITS_SET((currentThread)->publicFlags, J9_PUBLIC_FLAGS_VM_ACCESS); \
+	do { \
+		if (hasNoVMAccess) { \
+			acquireVMAccess(currentThread); \
+		} \
+	} while(0)
+
+#define exitVM(currentThread) \
+	do { \
+		if (hasNoVMAccess) { \
+			releaseVMAccess(currentThread); \
+		} \
+	} while(0)
+
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 
 #ifdef __cplusplus
 extern "C" {

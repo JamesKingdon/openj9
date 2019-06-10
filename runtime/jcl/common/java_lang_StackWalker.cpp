@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 2017, 2017 IBM Corp. and others
+ * Copyright (c) 2017, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "jni.h"
@@ -171,7 +171,7 @@ Java_java_lang_StackWalker_getImpl(JNIEnv *env, jobject clazz, jlong walkStateP)
 
 			result = vmFuncs->j9jni_createLocalRef(env, frame);
 			UDATA bytecodeOffset = walkState->bytecodePCOffset;  /* need this for StackFrame */
-			UDATA lineNumber = getLineNumberForROMClassFromROMMethod(vm, romMethod, romClass, 0, classLoader, bytecodeOffset);
+			UDATA lineNumber = getLineNumberForROMClassFromROMMethod(vm, romMethod, romClass, classLoader, bytecodeOffset);
 			PUSH_OBJECT_IN_SPECIAL_FRAME(vmThread, frame);
 
 			/* set the class object if requested */
@@ -197,8 +197,8 @@ Java_java_lang_StackWalker_getImpl(JNIEnv *env, jobject clazz, jlong walkStateP)
 				flags |= J9_STR_ANON_CLASS_NAME;
 			}
 
-			j9object_t nameString = J9VMJAVALANGCLASSLOADER_CLASSLOADERNAME(vmThread, classLoader->classLoaderObject);
-			J9VMJAVALANGSTACKWALKERSTACKFRAMEIMPL_SET_CLASSLOADERNAME(vmThread, frame, nameString);
+			j9object_t stringObject = J9VMJAVALANGCLASSLOADER_CLASSLOADERNAME(vmThread, classLoader->classLoaderObject);
+			J9VMJAVALANGSTACKWALKERSTACKFRAMEIMPL_SET_CLASSLOADERNAME(vmThread, frame, stringObject);
 
 			J9UTF8 *nameUTF =  J9ROMCLASS_CLASSNAME(romClass);
 			J9Module *module = ramClass->module;
@@ -206,23 +206,29 @@ Java_java_lang_StackWalker_getImpl(JNIEnv *env, jobject clazz, jlong walkStateP)
 				J9VMJAVALANGSTACKWALKERSTACKFRAMEIMPL_SET_FRAMEMODULE(vmThread, frame, module->moduleObject);
 			}
 
-			nameString = utfToStringObject(env, nameUTF, flags);
+			stringObject = utfToStringObject(env, nameUTF, flags);
 			if (VM_VMHelpers::exceptionPending(vmThread)) {
 				goto _pop_frame;
 			}
-			J9VMJAVALANGSTACKWALKERSTACKFRAMEIMPL_SET_CLASSNAME(vmThread, PEEK_OBJECT_IN_SPECIAL_FRAME(vmThread, 0), nameString);
+			J9VMJAVALANGSTACKWALKERSTACKFRAMEIMPL_SET_CLASSNAME(vmThread, PEEK_OBJECT_IN_SPECIAL_FRAME(vmThread, 0), stringObject);
 
-			nameString = utfToStringObject(env, J9ROMMETHOD_GET_NAME(romClass, romMethod), J9_STR_INTERN);
+			stringObject = utfToStringObject(env, J9ROMMETHOD_GET_NAME(romClass, romMethod), J9_STR_INTERN);
 			if (VM_VMHelpers::exceptionPending(vmThread)) {
 				goto _pop_frame;
 			}
-			J9VMJAVALANGSTACKWALKERSTACKFRAMEIMPL_SET_METHODNAME(vmThread, PEEK_OBJECT_IN_SPECIAL_FRAME(vmThread, 0), nameString);
+			J9VMJAVALANGSTACKWALKERSTACKFRAMEIMPL_SET_METHODNAME(vmThread, PEEK_OBJECT_IN_SPECIAL_FRAME(vmThread, 0), stringObject);
 
-			nameString = utfToStringObject(env, getSourceFileNameForROMClass(vm, classLoader, romClass), J9_STR_INTERN);
+			stringObject = utfToStringObject(env, J9ROMMETHOD_GET_SIGNATURE(romClass, romMethod), J9_STR_INTERN);
 			if (VM_VMHelpers::exceptionPending(vmThread)) {
 				goto _pop_frame;
 			}
-			J9VMJAVALANGSTACKWALKERSTACKFRAMEIMPL_SET_FILENAME(vmThread, PEEK_OBJECT_IN_SPECIAL_FRAME(vmThread, 0), nameString);
+			J9VMJAVALANGSTACKWALKERSTACKFRAMEIMPL_SET_METHODSIGNATURE(vmThread, PEEK_OBJECT_IN_SPECIAL_FRAME(vmThread, 0), stringObject);
+
+			stringObject = utfToStringObject(env, getSourceFileNameForROMClass(vm, classLoader, romClass), J9_STR_INTERN);
+			if (VM_VMHelpers::exceptionPending(vmThread)) {
+				goto _pop_frame;
+			}
+			J9VMJAVALANGSTACKWALKERSTACKFRAMEIMPL_SET_FILENAME(vmThread, PEEK_OBJECT_IN_SPECIAL_FRAME(vmThread, 0), stringObject);
 
 			if (J9ROMMETHOD_IS_CALLER_SENSITIVE(romMethod)) {
 				J9VMJAVALANGSTACKWALKERSTACKFRAMEIMPL_SET_CALLERSENSITIVE(vmThread, PEEK_OBJECT_IN_SPECIAL_FRAME(vmThread, 0), TRUE);

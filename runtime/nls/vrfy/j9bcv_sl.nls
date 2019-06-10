@@ -17,7 +17,7 @@
 # [1] https://www.gnu.org/software/classpath/license.html
 # [2] http://openjdk.java.net/legal/assembly-exception.html
 #
-# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 #
 
 # Externalised messages for the Bytecode Verification errors.
@@ -247,7 +247,7 @@ J9NLS_BCV_ERR_NOT_THROWABLE.user_response=Contact the provider of the classfile 
 
 # END NON-TRANSLATABLE
 
-J9NLS_BCV_ERR_UNEXPECTED_SUBROUTINE_NOT_WALKED=pomo\u017ene programe je potrebno znova zagnati za vsak jsr
+J9NLS_BCV_ERR_UNEXPECTED_SUBROUTINE_NOT_WALKED=pomo\u017ene programe je treba znova zagnati za vsak jsr
 # START NON-TRANSLATABLE
 J9NLS_BCV_ERR_UNEXPECTED_SUBROUTINE_NOT_WALKED.explanation=None
 J9NLS_BCV_ERR_UNEXPECTED_SUBROUTINE_NOT_WALKED.system_action=THIS MESSAGE IS RESERVED FOR FUTURE USE

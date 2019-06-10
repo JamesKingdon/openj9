@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
@@ -74,13 +74,13 @@ createConstant(OMRPortLibrary *OMRPORTLIB, char const *name, UDATA value)
 	}
 #if defined(J9VM_ARCH_POWER) || defined(J9VM_ARCH_ARM)
 	return omrstr_printf(line, sizeof(line), "#define %s %zu\n", name, value);
-#elif defined(LINUX) || defined(OSX) /* J9VM_ARCH_POWER || J9VM_ARCH_ARM */
+#elif defined(J9VM_ARCH_X86) /* J9VM_ARCH_POWER || J9VM_ARCH_ARM */
+	return omrstr_printf(line, sizeof(line), "%%define %s %zu\n", name, value);
+#elif defined(LINUX) /* J9VM_ARCH_X86 */
 	return omrstr_printf(line, sizeof(line), "%s = %zu\n", name, value);
-#elif defined(WIN32) /* LINUX  || OSX */
-	return omrstr_printf(line, sizeof(line), "%s equ %zu\n", name, value);
-#elif defined(J9ZOS390) /* WIN32 */
+#elif defined(J9ZOS390) /* LINUX */
 	return omrstr_printf(line, sizeof(line), "%s EQU %zu\n", name, value);
-#else /* J9ZOS390 */
+#else
 #error "Unknown constant format"
 #endif /* J9VM_ARCH_POWER || J9VM_ARCH_ARM */
 }
@@ -90,227 +90,170 @@ createConstant(OMRPortLibrary *OMRPORTLIB, char const *name, UDATA value)
 #if defined(LINUX)
 #if defined(J9VM_ENV_DATA64)
 static char const *macroString = "\n\
-MoveHelper MACRO register,helperName\n\
-		lea &register,[rip + &helperName]\n\
-ENDM\n\
+%macro MoveHelper 2 ; register, helperName\n\
+		lea %1, [rel %2]\n\
+%endmacro\n\
 \n\
-CompareHelperUseReg MACRO source,helperName,register\n\
-	   	lea &register,[rip + &helperName]\n\
-	   	cmp &source,&register\n\
-ENDM\n\
+%macro CallHelper 1 ; helperName\n\
+	   	call %1\n\
+%endmacro\n\
 \n\
-CallHelper MACRO helperName\n\
-	   	call &helperName\n\
-ENDM\n\
+%macro CallHelperUseReg 2 ; helperName, register\n\
+	   	call %1\n\
+%endmacro\n\
 \n\
-CallHelperUseReg MACRO helperName,register\n\
-	   	call &helperName\n\
-ENDM\n\
+%macro DECLARE_EXTERN 1 ; helperName\n\
+	extern %1\n\
+%endmacro\n\
 \n\
-JumpTableHelper MACRO temp,index,table\n\
-		lea &temp,[rip + &table]\n\
-		jmp qword ptr[&temp& + &index&*8]\n\
-ENDM\n\
+%macro DECLARE_GLOBAL 1 ; helperName\n\
+	global %1\n\
+%endmacro\n\
 \n\
-JumpTableStart MACRO table\n\
-		_CONST32 SEGMENT PARA USE32 PUBLIC 'CONST'\n\
-	   	align   16\n\
-table&:\n\
-ENDM\n\
-\n\
-JumpTableEnd MACRO table\n\
-	   	_CONST32 ends\n\
-ENDM\n\
-\n\
-ExternHelper MACRO helperName\n\
-	   	extrn &helperName&:near\n\
-ENDM\n\
-\n\
-GlueHelper MACRO helperName\n\
-		test    byte ptr[rdi+J9TR_MethodPCStartOffset], J9TR_MethodNotCompiledBit\n\
-	   	jnz      &helperName\n\
-	   	jmp     mergedStaticGlueCallFixer\n\
-ENDM\n";
+%define _rax rax\n\
+%define _rbx rbx\n\
+%define _rcx rcx\n\
+%define _rdx rdx\n\
+%define _rsi rsi\n\
+%define _rdi rdi\n\
+%define _rsp rsp\n\
+%define _rbp rbp\n\
+%define _rel rel\n\
+\n";
 #else /* J9VM_ENV_DATA64 */
 static char const *macroString = "\n\
-ASM_J9VM_USE_GOT = 1\n\
+%macro MoveHelper 2 ; MACRO register,helperName\n\
+	lea %1, [%2]\n\
+%endmacro\n\
 \n\
-LoadGOTInto MACRO register\n\
-.att_syntax\n\
-  call    1f\n\
-  1:\n\
-  pop     %&register\n\
-  add     $_GLOBAL_OFFSET_TABLE_+[.-1b], %&register\n\
-.intel_syntax noprefix\n\
-ENDM\n\
+%macro CallHelper 1 ; MACRO helperName\n\
+	call %1\n\
+%endmacro\n\
 \n\
-MoveHelper MACRO register,helperName\n\
-		LoadGOTInto &register\n\
-		lea &register, &helperName&@GOTOFF[&register]\n\
-ENDM\n\
+%macro CallHelperUseReg 2 ; MACRO helperName,register\n\
+	call %1\n\
+%endmacro\n\
 \n\
-CompareHelper MACRO source,helperName\n\
-	   	push esi\n\
-		LoadGOTInto esi\n\
-		lea esi, &helperName&@GOTOFF[&esi]\n\
-	  	cmp &source, esi\n\
-	   	pop esi\n\
-ENDM\n\
+%macro DECLARE_EXTERN 1 ; helperName\n\
+	extern %1\n\
+%endmacro\n\
 \n\
-CompareHelperUseReg MACRO source,helperName,register\n\
-		LoadGOTInto &register\n\
-		lea &register, &helperName&@GOTOFF[&register]\n\
-		cmp &source, &register\n\
-ENDM\n\
+%macro DECLARE_GLOBAL 1 ; helperName\n\
+	global %1\n\
+%endmacro\n\
 \n\
-CallHelper MACRO helperName\n\
-		 call &helperName&@PLT\n\
-ENDM\n\
-\n\
-CallHelperUseReg MACRO helperName,register\n\
-		 call &helperName&@PLT\n\
-ENDM\n\
-\n\
-JumpTableHelper MACRO temp,index,table\n\
-			push &temp\n\
-			MoveHelper &temp,&table\n\
-			mov &temp,[&temp&+&index&*4]\n\
-			xchg &temp,[esp]\n\
-			ret\n\
-ENDM\n\
-\n\
-JumpTableStart MACRO table\n\
-			              	public &table&\n\
-			              	.data\n\
-			              	align   04h\n\
-table&:\n\
-ENDM\n\
-\n\
-JumpTableEnd MACRO table\n\
-			.text\n\
-ENDM\n\
-\n\
-JumpHelper MACRO helperName\n\
-				jmp       &helperName&@PLT\n\
-ENDM\n\
-\n\
-ExternHelper MACRO helperName\n\
-ENDM\n\
-\n\
-GlueHelper MACRO        	helperName\n\
-	   	       	test      byte ptr[edi+J9TR_MethodPCStartOffset], J9TR_MethodNotCompiledBit\n\
-	   	       	jz       mergedStaticGlueCallFixer\n\
-	   	       	JumpHelper &helperName\n\
-ENDM\n";
+%define _rax eax\n\
+%define _rbx ebx\n\
+%define _rcx ecx\n\
+%define _rdx edx\n\
+%define _rsi esi\n\
+%define _rdi edi\n\
+%define _rsp esp\n\
+%define _rbp ebp\n\
+%define _rel\n\
+\n";
 #endif /* J9VM_ENV_DATA64 */
+#elif defined(OSX) /* LINUX */
+static char const *macroString = "\n\
+%macro MoveHelper 2 ; register, helperName\n\
+		lea %1, [rel %2]\n\
+%endmacro\n\
+\n\
+%macro CallHelper 1 ; helperName\n\
+	   	call %1\n\
+%endmacro\n\
+\n\
+%macro CallHelperUseReg 2 ; helperName, register\n\
+	   	call %1\n\
+%endmacro\n\
+\n\
+%macro DECLARE_EXTERN 1 ; helperName\n\
+	extern _%1\n\
+	%define %1 _%1\n\
+%endmacro\n\
+\n\
+%macro DECLARE_GLOBAL 1 ; helperName\n\
+	global _%1\n\
+	%define %1 _%1\n\
+%endmacro\n\
+\n\
+%define _rax rax\n\
+%define _rbx rbx\n\
+%define _rcx rcx\n\
+%define _rdx rdx\n\
+%define _rsi rsi\n\
+%define _rdi rdi\n\
+%define _rsp rsp\n\
+%define _rbp rbp\n\
+%define _rel rel\n\
+\n";
 #else /* LINUX */
 #if defined(J9VM_ENV_DATA64)
 static char const *macroString = "\n\
-MoveHelper MACRO register,helperName\n\
-	   	mov &register,offset &helperName\n\
-ENDM\n\
+%macro MoveHelper 2 ; register, helperName\n\
+		lea %1, [rel %2]\n\
+%endmacro\n\
 \n\
-MoveUnderscoreHelper MACRO register,helperName\n\
-	   	mov &register,offset _&helperName\n\
-ENDM\n\
+%macro CallHelper 1 ; helperName\n\
+	   	call %1\n\
+%endmacro\n\
 \n\
-CompareHelper MACRO source,helperName\n\
-	   	cmp &source,offset _&helperName\n\
-ENDM\n\
+%macro CallHelperUseReg 2 ; helperName, register\n\
+	   	call %1\n\
+%endmacro\n\
 \n\
-CompareHelperUseReg MACRO source,helperName,register\n\
-	   	cmp &source,offset _&helperName\n\
-ENDM\n\
+%macro DECLARE_EXTERN 1 ; helperName\n\
+	extern %1\n\
+%endmacro\n\
 \n\
-CallHelper MACRO helperName\n\
-	   	call &helperName\n\
-ENDM\n\
+%macro DECLARE_GLOBAL 1 ; helperName\n\
+	global %1\n\
+%endmacro\n\
 \n\
-CallHelperUseReg MACRO helperName,register\n\
-	   	call &helperName\n\
-ENDM\n\
-\n\
-JumpTableHelper MACRO temp,index,table\n\
-		lea &temp,[&table]\n\
-		jmp qword ptr[&temp& + &index&*8]\n\
-ENDM\n\
-\n\
-JumpTableStart MACRO table\n\
-	   	       	_CONST32 SEGMENT PARA 'CONST'\n\
-	   	       	_CONST32 ends\n\
-	   	       	_CONST32 SEGMENT PARA 'CONST'\n\
-	   	       	align   04h\n\
-table&:\n\
-ENDM\n\
-\n\
-JumpTableEnd MACRO table\n\
-	   	_CONST32 ends\n\
-ENDM\n\
-\n\
-JumpHelper MACRO helperName\n\
-	   	       	jmp       _&helperName\n\
-ENDM\n\
-\n\
-ExternHelper MACRO helperName\n\
-	   	extrn &helperName&:near\n\
-ENDM\n\
-\n\
-GlueHelper MACRO       	helperName\n\
-	   	       	test      byte ptr[rdi+J9TR_MethodPCStartOffset], J9TR_MethodNotCompiledBit\n\
-	   	       	jnz         &helperName\n\
-	   	       	jmp      mergedStaticGlueCallFixer\n\
-ENDM\n";
+%define _rax rax\n\
+%define _rbx rbx\n\
+%define _rcx rcx\n\
+%define _rdx rdx\n\
+%define _rsi rsi\n\
+%define _rdi rdi\n\
+%define _rsp rsp\n\
+%define _rbp rbp\n\
+%define _rel rel\n\
+\n";
 #else /* J9VM_ENV_DATA64 */
 static char const *macroString = "\n\
-MoveHelper MACRO register,helperName\n\
-	mov &register,offset flat:&helperName\n\
-ENDM\n\
+%macro MoveHelper 2 ; MACRO register,helperName\n\
+	lea %1, [%2]\n\
+%endmacro\n\
 \n\
-CompareHelper MACRO source,helperName\n\
-	cmp &source,offset flat:&helperName\n\
-ENDM\n\
+%macro CallHelper 1 ; MACRO helperName\n\
+	call %1\n\
+%endmacro\n\
 \n\
-CompareHelperUseReg MACRO source,helperName,register\n\
-	cmp &source,offset flat:&helperName\n\
-ENDM\n\
+%macro CallHelperUseReg 2 ; MACRO helperName,register\n\
+	call %1\n\
+%endmacro\n\
 \n\
-CallHelper MACRO helperName\n\
-	call &helperName\n\
-ENDM\n\
+%macro DECLARE_EXTERN 1 ; helperName\n\
+	extern _%1\n\
+	%define %1 _%1\n\
+%endmacro\n\
 \n\
-CallHelperUseReg MACRO helperName,register\n\
-	call &helperName\n\
-ENDM\n\
+%macro DECLARE_GLOBAL 1 ; helperName\n\
+	global _%1\n\
+	%define %1 _%1\n\
+%endmacro\n\
 \n\
-JumpTableHelper MACRO temp,index,table\n\
-	jmp dword ptr [&index&*4 + &table&]\n\
-ENDM\n\
-\n\
-JumpTableStart MACRO table\n\
-		_CONST32 SEGMENT PARA USE32 PUBLIC 'CONST'\n\
-		_CONST32 ends\n\
-		_CONST32 SEGMENT PARA USE32 PUBLIC 'CONST'\n\
-		align   04h\n\
-table&:\n\
-ENDM\n\
-\n\
-JumpTableEnd MACRO table\n\
-	_CONST32 ends\n\
-ENDM\n\
-\n\
-JumpHelper MACRO helperName\n\
-		jmp       &helperName\n\
-ENDM\n\
-\n\
-ExternHelper MACRO helperName\n\
-	extrn &helperName&:near\n\
-ENDM\n\
-\n\
-GlueHelper MACRO	helperName\n\
-		test      byte ptr[edi+J9TR_MethodPCStartOffset], J9TR_MethodNotCompiledBit\n\
-		jnz         &helperName\n\
-		jmp      mergedStaticGlueCallFixer\n\
-ENDM\n";
+%define _rax eax\n\
+%define _rbx ebx\n\
+%define _rcx ecx\n\
+%define _rdx edx\n\
+%define _rsi esi\n\
+%define _rdi edi\n\
+%define _rsp esp\n\
+%define _rbp ebp\n\
+%define _rel\n\
+\n";
 #endif /* J9VM_ENV_DATA64 */
 #endif /* LINUX */
 
@@ -333,6 +276,9 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 	jint rc = JNI_OK;
 	UDATA err =
 			/* Build flags */
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+			writeConstant(OMRPORTLIB, fd, "ASM_J9VM_INTERP_ATOMIC_FREE_JNI", 1) |
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 #if defined(J9VM_JIT_NEW_DUAL_HELPERS)
 			writeConstant(OMRPORTLIB, fd, "ASM_J9VM_JIT_NEW_DUAL_HELPERS", 1) |
 #endif /* J9VM_JIT_NEW_DUAL_HELPERS */
@@ -351,6 +297,12 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 #if defined(J9VM_INTERP_SMALL_MONITOR_SLOT)
 			writeConstant(OMRPORTLIB, fd, "ASM_J9VM_INTERP_SMALL_MONITOR_SLOT", 1) |
 #endif /* J9VM_INTERP_SMALL_MONITOR_SLOT */
+#if defined(OMR_GC_COMPRESSED_POINTERS)
+			writeConstant(OMRPORTLIB, fd, "ASM_OMR_GC_COMPRESSED_POINTERS", 1) |
+#endif /* OMR_GC_COMPRESSED_POINTERS */
+#if defined(OMR_GC_FULL_POINTERS)
+			writeConstant(OMRPORTLIB, fd, "ASM_OMR_GC_FULL_POINTERS", 1) |
+#endif /* OMR_GC_FULL_POINTERS */
 #if defined(J9VM_GC_TLH_PREFETCH_FTA)
 			writeConstant(OMRPORTLIB, fd, "ASM_J9VM_GC_TLH_PREFETCH_FTA", 1) |
 #endif /* J9VM_GC_TLH_PREFETCH_FTA */
@@ -416,7 +368,13 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 			writeConstant(OMRPORTLIB, fd, "J9TR_cframe_preservedFPRs", offsetof(J9CInterpreterStackFrame, preservedFPRs)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_cframe_jitGPRs", offsetof(J9CInterpreterStackFrame, jitGPRs)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_cframe_jitFPRs", offsetof(J9CInterpreterStackFrame, jitFPRs)) |
-#elif defined(J9VM_ARCH_X86) /* J9VM_ARCH_ARM */
+#elif defined(J9VM_ARCH_AARCH64) /* J9VM_ARCH_ARM */
+			/* AARCH64 */
+			writeConstant(OMRPORTLIB, fd, "J9TR_cframe_preservedGPRs", offsetof(J9CInterpreterStackFrame, preservedGPRs)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_cframe_preservedFPRs", offsetof(J9CInterpreterStackFrame, preservedFPRs)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_cframe_jitGPRs", offsetof(J9CInterpreterStackFrame, jitGPRs)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_cframe_jitFPRs", offsetof(J9CInterpreterStackFrame, jitFPRs)) |
+#elif defined(J9VM_ARCH_X86) /* J9VM_ARCH_AARCH64 */
 			/* x86 */
 			writeConstant(OMRPORTLIB, fd, "J9TR_cframe_vmStruct", offsetof(J9CInterpreterStackFrame, vmStruct)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_cframe_machineBP", offsetof(J9CInterpreterStackFrame, machineBP)) |
@@ -461,6 +419,9 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 #endif /* J9ZOS390 */
 
 			/* J9VMThread */
+#if defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS)
+			writeConstant(OMRPORTLIB, fd, "J9TR_VMThreadCompressObjectReferences", offsetof(J9VMThread, compressObjectReferences)) |
+#endif /* defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS) */
 			writeConstant(OMRPORTLIB, fd, "J9TR_VMThreadCurrentException", offsetof(J9VMThread, currentException)) |
 #if defined(J9VM_ENV_SHARED_LIBS_USE_GLOBAL_TABLE)
 			writeConstant(OMRPORTLIB, fd, "J9TR_VMThreadRTOCOffset", offsetof(J9VMThread, jitTOC)) |
@@ -504,6 +465,9 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 			writeConstant(OMRPORTLIB, fd, "J9TR_VMThread_entryLocalStorage", offsetof(J9VMThread, entryLocalStorage)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_VMThread_stackWalkState", offsetof(J9VMThread, stackWalkState)) |
 #if defined(OMR_GC_CONCURRENT_SCAVENGER) && defined(J9VM_ARCH_S390)
+			writeConstant(OMRPORTLIB, fd, "J9TR_VMThread_gsParameters_GSECI", offsetof(J9VMThread, gsParameters) + 2) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_VMThread_gsParameters_instructionAddr", offsetof(J9VMThread, gsParameters.instructionAddr)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_VMThread_gsParameters_operandAddr", offsetof(J9VMThread, gsParameters.operandAddr)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_VMThread_gsParameters_returnAddr", offsetof(J9VMThread, gsParameters.returnAddr)) |
 #endif /* OMR_GC_CONCURRENT_SCAVENGER */
 
@@ -516,14 +480,20 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 			writeConstant(OMRPORTLIB, fd, "J9TR_JavaVM_cInterpreter", offsetof(J9JavaVM, cInterpreter)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JavaVM_bytecodeLoop", offsetof(J9JavaVM, bytecodeLoop)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JavaVM_extendedRuntimeFlags", offsetof(J9JavaVM, extendedRuntimeFlags)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JavaVM_extendedRuntimeFlags2", offsetof(J9JavaVM, extendedRuntimeFlags2)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JavaVMInternalFunctionTable", offsetof(J9JavaVM, internalVMFunctions)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JavaVM_memoryManagerFunctions", offsetof(J9JavaVM, memoryManagerFunctions)) |
 #if defined(OMR_GC_CONCURRENT_SCAVENGER) && defined(J9VM_ARCH_S390)
 			writeConstant(OMRPORTLIB, fd, "J9TR_JavaVM_invokeJ9ReadBarrier", offsetof(J9JavaVM, invokeJ9ReadBarrier)) |
 #endif
 #if defined(J9VM_ENV_SHARED_LIBS_USE_GLOBAL_TABLE)
 			writeConstant(OMRPORTLIB, fd, "J9TR_JavaVM_jitTOC", offsetof(J9JavaVM, jitTOC)) |
-			writeConstant(OMRPORTLIB, fd, "J9TR_JavaVM_vmTOC", offsetof(J9JavaVM, vmTOC)) |
 #endif /* J9VM_ENV_SHARED_LIBS_USE_GLOBAL_TABLE */
+#if defined(OMR_GC_COMPRESSED_POINTERS)
+			writeConstant(OMRPORTLIB, fd, "J9TR_JavaVM_compressedPointersShift", offsetof(J9JavaVM, compressedPointersShift)) |
+#endif /* OMR_GC_COMPRESSED_POINTERS */
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9MemoryManagerFunctions_J9ReadBarrier", offsetof(J9MemoryManagerFunctions, J9ReadBarrier)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9MemoryManagerFunctions_referenceArrayCopy", offsetof(J9MemoryManagerFunctions, referenceArrayCopy)) |
 			/* J9VMEntryLocalStorage */
 			writeConstant(OMRPORTLIB, fd, "J9TR_ELS_jitGlobalStorageBase", offsetof(J9VMEntryLocalStorage, jitGlobalStorageBase)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_ELS_jitFPRegisterStorageBase", offsetof(J9VMEntryLocalStorage, jitFPRegisterStorageBase)) |
@@ -609,8 +579,12 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_fast_jitResolvedFieldIsVolatile", offsetof(J9JITConfig, old_fast_jitResolvedFieldIsVolatile)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveField", offsetof(J9JITConfig, old_slow_jitResolveField)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveFieldSetter", offsetof(J9JITConfig, old_slow_jitResolveFieldSetter)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveFieldDirect", offsetof(J9JITConfig, old_slow_jitResolveFieldDirect)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveFieldSetterDirect", offsetof(J9JITConfig, old_slow_jitResolveFieldSetterDirect)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveStaticField", offsetof(J9JITConfig, old_slow_jitResolveStaticField)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveStaticFieldSetter", offsetof(J9JITConfig, old_slow_jitResolveStaticFieldSetter)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveStaticFieldDirect", offsetof(J9JITConfig, old_slow_jitResolveStaticFieldDirect)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveStaticFieldSetterDirect", offsetof(J9JITConfig, old_slow_jitResolveStaticFieldSetterDirect)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveInterfaceMethod", offsetof(J9JITConfig, old_slow_jitResolveInterfaceMethod)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveSpecialMethod", offsetof(J9JITConfig, old_slow_jitResolveSpecialMethod)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveStaticMethod", offsetof(J9JITConfig, old_slow_jitResolveStaticMethod)) |
@@ -618,6 +592,7 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveMethodType", offsetof(J9JITConfig, old_slow_jitResolveMethodType)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveMethodHandle", offsetof(J9JITConfig, old_slow_jitResolveMethodHandle)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveInvokeDynamic", offsetof(J9JITConfig, old_slow_jitResolveInvokeDynamic)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveConstantDynamic", offsetof(J9JITConfig, old_slow_jitResolveConstantDynamic)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitResolveHandleMethod", offsetof(J9JITConfig, old_slow_jitResolveHandleMethod)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitRetranslateCaller", offsetof(J9JITConfig, old_slow_jitRetranslateCaller)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitRetranslateCallerWithPreparation", offsetof(J9JITConfig, old_slow_jitRetranslateCallerWithPreparation)) |
@@ -654,9 +629,15 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_fast_jitPostJNICallOffloadCheck", offsetof(J9JITConfig, fast_jitPostJNICallOffloadCheck)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_fast_jitObjectHashCode", offsetof(J9JITConfig, old_fast_jitObjectHashCode)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitInduceOSRAtCurrentPC", offsetof(J9JITConfig, old_slow_jitInduceOSRAtCurrentPC)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitInduceOSRAtCurrentPCAndRecompile", offsetof(J9JITConfig, old_slow_jitInduceOSRAtCurrentPCAndRecompile)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitInterpretNewInstanceMethod", offsetof(J9JITConfig, old_slow_jitInterpretNewInstanceMethod)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitNewInstanceImplAccessCheck", offsetof(J9JITConfig, old_slow_jitNewInstanceImplAccessCheck)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitTranslateNewInstanceMethod", offsetof(J9JITConfig, old_slow_jitTranslateNewInstanceMethod)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitReportFinalFieldModified", offsetof(J9JITConfig, old_slow_jitReportFinalFieldModified)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitReportInstanceFieldRead", offsetof(J9JITConfig, old_slow_jitReportInstanceFieldRead)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitReportInstanceFieldWrite", offsetof(J9JITConfig, old_slow_jitReportInstanceFieldWrite)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitReportStaticFieldRead", offsetof(J9JITConfig, old_slow_jitReportStaticFieldRead)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_old_slow_jitReportStaticFieldWrite", offsetof(J9JITConfig, old_slow_jitReportStaticFieldWrite)) |
 
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_fast_jitNewObject", offsetof(J9JITConfig, fast_jitNewObject)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_JitConfig_fast_jitNewObjectNoZeroInit", offsetof(J9JITConfig, fast_jitNewObjectNoZeroInit)) |
@@ -690,6 +671,9 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 	err |=
 			/* J9InternalVMFunctions */
 			writeConstant(OMRPORTLIB, fd, "J9TR_InternalFunctionTableReleaseVMAccess", offsetof(J9InternalVMFunctions, internalReleaseVMAccess)) |
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+			writeConstant(OMRPORTLIB, fd, "J9TR_InternalFunctionTableExitVMToJNI", offsetof(J9InternalVMFunctions, internalExitVMToJNI)) |
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 
 			/* Object headers */
 			writeConstant(OMRPORTLIB, fd, "J9TR_J9Object_class", offsetof(J9Object, clazz)) |
@@ -698,6 +682,17 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 
 			/* J9SFJNICallInFrame */
 			writeConstant(OMRPORTLIB, fd, "J9TR_J9SFJNICallInFrame_exitAddress", offsetof(J9SFJNICallInFrame, exitAddress)) |
+
+			/* J9JITWatchedInstanceFieldData */
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9JITWatchedInstanceFieldData_method", offsetof(J9JITWatchedInstanceFieldData, method)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9JITWatchedInstanceFieldData_location", offsetof(J9JITWatchedInstanceFieldData, location)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9JITWatchedInstanceFieldData_offset", offsetof(J9JITWatchedInstanceFieldData, offset)) |
+
+			/* J9JITWatchedStaticFieldData */
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9JITWatchedStaticFieldData_method", offsetof(J9JITWatchedStaticFieldData, method)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9JITWatchedStaticFieldData_location", offsetof(J9JITWatchedStaticFieldData, location)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9JITWatchedStaticFieldData_fieldAddress", offsetof(J9JITWatchedStaticFieldData, fieldAddress)) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9JITWatchedStaticFieldData_fieldClass", offsetof(J9JITWatchedStaticFieldData, fieldClass)) |
 
 			/* General constants */
 			writeConstant(OMRPORTLIB, fd, "J9TR_bcloop_execute_bytecode", J9_BCLOOP_EXECUTE_BYTECODE) |
@@ -730,7 +725,16 @@ writeConstants(OMRPortLibrary *OMRPORTLIB, IDATA fd)
 			writeConstant(OMRPORTLIB, fd, "J9TR_ELSSize", sizeof(J9VMEntryLocalStorage)) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_J9_EXTENDED_RUNTIME_DEBUG_MODE", J9_EXTENDED_RUNTIME_DEBUG_MODE) |
 			writeConstant(OMRPORTLIB, fd, "J9TR_J9_EXTENDED_RUNTIME_USE_VECTOR_REGISTERS", J9_EXTENDED_RUNTIME_USE_VECTOR_REGISTERS) |
-			writeConstant(OMRPORTLIB, fd, "J9TR_J9_INLINE_JNI_MAX_ARG_COUNT", J9_INLINE_JNI_MAX_ARG_COUNT);
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9_EXTENDED_RUNTIME2_COMPRESS_OBJECT_REFERENCES", J9_EXTENDED_RUNTIME2_COMPRESS_OBJECT_REFERENCES) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9_INLINE_JNI_MAX_ARG_COUNT", J9_INLINE_JNI_MAX_ARG_COUNT) |
+
+			/* Flags for iTable offset in resolved interface snippet data */
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9_ITABLE_OFFSET_DIRECT", J9_ITABLE_OFFSET_DIRECT) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9_ITABLE_OFFSET_VIRTUAL", J9_ITABLE_OFFSET_VIRTUAL) |
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9_ITABLE_OFFSET_TAG_BITS", J9_ITABLE_OFFSET_TAG_BITS) |
+
+			/* Flag for Nestmates invokeVirtual on private methods */
+			writeConstant(OMRPORTLIB, fd, "J9TR_J9_VTABLE_INDEX_DIRECT_METHOD_FLAG", J9_VTABLE_INDEX_DIRECT_METHOD_FLAG);
 
 	if (0 != err) {
 		rc = JNI_ERR;

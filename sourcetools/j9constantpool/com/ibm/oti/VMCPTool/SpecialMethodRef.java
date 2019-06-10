@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2017 IBM Corp. and others
+ * Copyright (c) 2004, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.oti.VMCPTool;
 
@@ -29,9 +29,9 @@ import org.w3c.dom.Element;
 public class SpecialMethodRef extends PrimaryItem implements Constants {
 	private static class Alias extends PrimaryItem.AliasWithClass {
 		final NameAndSignature nas;
-		
-		Alias(String[] jcl, String[] flags, ClassRef classRef, NameAndSignature nas) {
-			super(jcl, flags, classRef);
+
+		Alias(VersionRange[] versions, String[] flags, ClassRef classRef, NameAndSignature nas) {
+			super(versions, flags, classRef);
 			this.nas = nas;
 		}
 
@@ -63,7 +63,7 @@ public class SpecialMethodRef extends PrimaryItem implements Constants {
 		public PrimaryItem.Alias alias(Element e, PrimaryItem.Alias proto) {
 			Alias p = (Alias) proto;
 			return new Alias(
-				jcl(e, p),
+				versions(e, p),
 				flags(e, p),
 				classRef(e),
 				new NameAndSignature(

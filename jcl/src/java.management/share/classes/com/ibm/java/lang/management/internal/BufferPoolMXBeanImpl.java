@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar17]*/
 /*******************************************************************************
- * Copyright (c) 2005, 2016 IBM Corp. and others
+ * Copyright (c) 2005, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.java.lang.management.internal;
 
@@ -28,12 +28,17 @@ import java.util.List;
 
 import javax.management.ObjectName;
 
-/*[IF Sidecar19-SE]*/
+/*[IF Java12]*/
+import jdk.internal.access.JavaNioAccess.BufferPool;
+import jdk.internal.access.SharedSecrets;
+/*[ELSE]
+/*[IF Sidecar19-SE]
 import jdk.internal.misc.JavaNioAccess.BufferPool;
 import jdk.internal.misc.SharedSecrets;
 /*[ELSE]
 import sun.misc.JavaNioAccess.BufferPool;
 import sun.misc.SharedSecrets;
+/*[ENDIF]*/
 /*[ENDIF]*/
 
 /**

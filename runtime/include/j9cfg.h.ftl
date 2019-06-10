@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2017 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef J9CFG_H
@@ -36,14 +36,12 @@ extern "C" {
 
 #define J9_COPYRIGHT_STRING "(c) Copyright 1991, ${uma.year} IBM Corp. and others."
 
-/* undef these flags temporarily so they do not conflict with the version defined in omrcfg.h */
-#undef EsVersionMajor
 #define EsVersionMajor ${uma.buildinfo.version.major}
-#undef EsVersionMinor
 #define EsVersionMinor ${uma.buildinfo.version.minor}0
 
-#define EsVersionString "${uma.buildinfo.version.major}.${uma.buildinfo.version.minor}"
 #define EsExtraVersionString ""
+
+#define JAVA_SPEC_VERSION ${uma.spec.properties.JAVA_SPEC_VERSION.value}
 
 /*  Note: The following defines record flags used to build VM.  */
 /*  Changing them here does not remove the feature and may cause linking problems. */
@@ -60,6 +58,12 @@ extern "C" {
 #undef ${flag.cname}
 </#if>
 </#list>
+
+#undef J9VM_OPT_VALHALLA_VALUE_TYPES
+
+#if JAVA_SPEC_VERSION >= 11
+#define J9VM_OPT_VALHALLA_NESTMATES
+#endif
 
 #ifdef __cplusplus
 }

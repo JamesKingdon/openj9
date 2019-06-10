@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2000, 2017 IBM Corp. and others
+# Copyright (c) 2000, 2018 IBM Corp. and others
 #
 # This program and the accompanying materials are made available under
 # the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,8 +17,9 @@
 # [1] https://www.gnu.org/software/classpath/license.html
 # [2] http://openjdk.java.net/legal/assembly-exception.html
 #
-# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 #
+
 
 # Externalised messages for the VM components of the JCL module.
 # New messages MUST be added at the end of this file.
@@ -122,7 +123,7 @@ J9NLS_JCL_NO_PREVERIFY_DATA_FOR_OBJECT=java/lang/Object\uc5d0 \ub300\ud574 \uc0a
 # START NON-TRANSLATABLE
 J9NLS_JCL_NO_PREVERIFY_DATA_FOR_OBJECT.explanation=The JXEed class library contains no preverification information.
 J9NLS_JCL_NO_PREVERIFY_DATA_FOR_OBJECT.system_action=The JVM will fail to start.
-J9NLS_JCL_NO_PREVERIFY_DATA_FOR_OBJECT.user_response=Contact IBM Service.
+J9NLS_JCL_NO_PREVERIFY_DATA_FOR_OBJECT.user_response=Contact your service representative.
 
 # END NON-TRANSLATABLE
 
@@ -329,7 +330,7 @@ J9NLS_JCL_WARNING_DBGWRAPPER_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB=dbgwrap
 # START NON-TRANSLATABLE
 J9NLS_JCL_WARNING_DBGWRAPPER_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB.explanation=An attempt to load dbgwrapper.dll was unsuccessful, the internal error code is shown.
 J9NLS_JCL_WARNING_DBGWRAPPER_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB.system_action=The JVM will proceed but may fail to start.
-J9NLS_JCL_WARNING_DBGWRAPPER_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB.user_response=Contact IBM Service.
+J9NLS_JCL_WARNING_DBGWRAPPER_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB.user_response=Contact your service representative.
 J9NLS_JCL_WARNING_DBGWRAPPER_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB.sample_input_1=5
 # END NON-TRANSLATABLE
 
@@ -346,7 +347,7 @@ J9NLS_JCL_WARNING_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB=%s\uc744(\ub97c) \
 # START NON-TRANSLATABLE
 J9NLS_JCL_WARNING_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB.explanation=An attempt to load a dll was unsuccessful, the dll name and internal error code are shown.
 J9NLS_JCL_WARNING_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB.system_action=The JVM will proceed but may fail to start.
-J9NLS_JCL_WARNING_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB.user_response=Contact IBM Service.
+J9NLS_JCL_WARNING_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB.user_response=Contact your service representative.
 J9NLS_JCL_WARNING_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB.sample_input_1=dbgwrapper.dll
 J9NLS_JCL_WARNING_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB.sample_input_2=5
 # END NON-TRANSLATABLE
@@ -390,14 +391,14 @@ J9NLS_JCL_JVM_CPU_USAGE_RETRIEVAL_ERROR=JVM CPU \uc0ac\uc6a9 \uc815\ubcf4\ub97c 
 # START NON-TRANSLATABLE
 J9NLS_JCL_JVM_CPU_USAGE_RETRIEVAL_ERROR.explanation=Internal error occured when retrieving JVM CPU usage information.
 J9NLS_JCL_JVM_CPU_USAGE_RETRIEVAL_ERROR.system_action=The JVM will continue, but no JVM CPU usage related information will be provided.
-J9NLS_JCL_JVM_CPU_USAGE_RETRIEVAL_ERROR.user_response=Contact IBM Service.
+J9NLS_JCL_JVM_CPU_USAGE_RETRIEVAL_ERROR.user_response=Contact your service representative.
 # END NON-TRANSLATABLE
 
 J9NLS_JCL_JVM_CPU_USAGE_INVALID_TIMESTAMP=JVM CPU \uc0ac\uc6a9 \uc815\ubcf4\ub97c \uac80\uc0c9\ud560 \ub54c \uc2dc\uac04\uc18c\uc778\uc774 \uc62c\ubc14\ub974\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4.
 # START NON-TRANSLATABLE
 J9NLS_JCL_JVM_CPU_USAGE_INVALID_TIMESTAMP.explanation=Timestamp is invalid when retrieving JVM CPU usage info.
 J9NLS_JCL_JVM_CPU_USAGE_INVALID_TIMESTAMP.system_action=The JVM will continue, but no JVM CPU usage related information will be provided.
-J9NLS_JCL_JVM_CPU_USAGE_INVALID_TIMESTAMP.user_response=Contact IBM Service.
+J9NLS_JCL_JVM_CPU_USAGE_INVALID_TIMESTAMP.user_response=Contact your service representative.
 # END NON-TRANSLATABLE
 
 J9NLS_JCL_OOM_NEW_GLOBAL_REF=\uc0c8 JNI \uae00\ub85c\ubc8c \ucc38\uc870\uc5d0 \ub300\ud55c \uba54\ubaa8\ub9ac\ub97c \ud560\ub2f9\ud560 \uc218 \uc5c6\uc74c
@@ -406,3 +407,32 @@ J9NLS_JCL_OOM_NEW_GLOBAL_REF.explanation=The JVM was not able to allocate the na
 J9NLS_JCL_OOM_NEW_GLOBAL_REF.system_action=The JVM will exit unless the OutOfMemoryError is caught and recovered from.
 J9NLS_JCL_OOM_NEW_GLOBAL_REF.user_response=Ensure the process has enough native memory to run.
 # END NON-TRANSLATABLE
+
+# Message for IllegalArgumentException if host class and anonymous class are in different packages
+# argument 1 is the host class
+# argument 2 is the anonymous class
+
+J9NLS_JCL_HOSTCLASS_ANONCLASS_DIFFERENT_PACKAGES=\ud638\uc2a4\ud2b8 \ud074\ub798\uc2a4 %2$.*1$s \ubc0f \uc775\uba85 \ud074\ub798\uc2a4 %4$.*3$s\uc774(\uac00) \uc11c\ub85c \ub2e4\ub978 \ud328\ud0a4\uc9c0\uc5d0 \uc788\uc74c
+# START NON-TRANSLATABLE
+J9NLS_JCL_HOSTCLASS_ANONCLASS_DIFFERENT_PACKAGES.sample_input_1=Foo
+J9NLS_JCL_HOSTCLASS_ANONCLASS_DIFFERENT_PACKAGES.sample_input_2=3
+J9NLS_JCL_HOSTCLASS_ANONCLASS_DIFFERENT_PACKAGES.sample_input_3=Bar
+J9NLS_JCL_HOSTCLASS_ANONCLASS_DIFFERENT_PACKAGES.sample_input_4=3
+J9NLS_JCL_HOSTCLASS_ANONCLASS_DIFFERENT_PACKAGES.explanation=NOTAG
+J9NLS_JCL_HOSTCLASS_ANONCLASS_DIFFERENT_PACKAGES.system_action=
+J9NLS_JCL_HOSTCLASS_ANONCLASS_DIFFERENT_PACKAGES.user_response=
+# END NON-TRANSLATABLE
+
+J9NLS_JCL_NEST_MEMBER_CLAIMS_DIFFERENT_NEST_HOST=%4$.*3$s\uc758 \uc911\ucca9 \uba64\ubc84 %2$.*1$s\uc774(\uac00) %6$.*5$s\uc758 \uc0c1\uc774\ud55c \uc911\ucca9 \ud638\uc2a4\ud2b8\ub97c \uc120\uc5b8\ud568
+# START NON-TRANSLATABLE
+J9NLS_JCL_NEST_MEMBER_CLAIMS_DIFFERENT_NEST_HOST.sample_input_1=Foobar
+J9NLS_JCL_NEST_MEMBER_CLAIMS_DIFFERENT_NEST_HOST.sample_input_2=6
+J9NLS_JCL_NEST_MEMBER_CLAIMS_DIFFERENT_NEST_HOST.sample_input_3=Baz
+J9NLS_JCL_NEST_MEMBER_CLAIMS_DIFFERENT_NEST_HOST.sample_input_4=3
+J9NLS_JCL_NEST_MEMBER_CLAIMS_DIFFERENT_NEST_HOST.sample_input_5=Foobar
+J9NLS_JCL_NEST_MEMBER_CLAIMS_DIFFERENT_NEST_HOST.sample_input_6=6
+J9NLS_JCL_NEST_MEMBER_CLAIMS_DIFFERENT_NEST_HOST.explanation=Nest host claims a nest member but the nest member claims a different nest host.
+J9NLS_JCL_NEST_MEMBER_CLAIMS_DIFFERENT_NEST_HOST.system_action=The JVM will throw an IncompatibleClassChangeError exception
+J9NLS_JCL_NEST_MEMBER_CLAIMS_DIFFERENT_NEST_HOST.user_response=Contact the provider of the classfile for a corrected version.
+# END NON-TRANSLATABLE
+

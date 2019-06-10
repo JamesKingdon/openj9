@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar17]*/
 /*******************************************************************************
- * Copyright (c) 2008, 2017 IBM Corp. and others
+ * Copyright (c) 2008, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.java.lang.management.internal;
 
@@ -379,87 +379,6 @@ public final class ManagementUtils {
 		return result;
 	}
 
-	private static final Map<Class<?>, Function<Object, CompositeData>> compositeConverterMap = new ConcurrentHashMap<>();
-
-	static {
-		// Register converters for all types in this module.
-		addCompositeConverter(LockInfo.class, LockInfoUtil::toCompositeData);
-		addCompositeConverter(MemoryNotificationInfo.class, MemoryNotificationInfoUtil::toCompositeData);
-		addCompositeConverter(MemoryUsage.class, MemoryUsageUtil::toCompositeData);
-		addCompositeConverter(MonitorInfo.class, MonitorInfoUtil::toCompositeData);
-		addCompositeConverter(StackTraceElement.class, StackTraceElementUtil::toCompositeData);
-		addCompositeConverter(ThreadInfo.class, ThreadInfoUtil::toCompositeData);
-	}
-
-	public static <T> void addCompositeConverter(Class<T> clazz, Function<T, CompositeData> object) {
-		// This cast is safe because we use the runtime class of the data
-		// to locate the entry in the map before applying the function.
-		@SuppressWarnings("unchecked")
-		Function<Object, CompositeData> converter = (Function<Object, CompositeData>) object;
-
-		compositeConverterMap.put(clazz, converter);
-	}
-
-	/**
-	 * Convenience method to convert an object, <code>data</code> from its
-	 * Java type <code>realClass</code> to the specified open MBean type
-	 * <code>openClass</code>.
-	 *
-	 * @param <T>
-	 *            the open MBean class
-	 * @param data
-	 *            the object to be converted
-	 * @param openClass
-	 *            the open MBean class
-	 * @param realClass
-	 *            the real Java type of <code>data</code>
-	 * @return a new instance of type <code>openClass</code>
-	 */
-	@SuppressWarnings("unchecked")
-	public static <T> T convertToOpenType(Object data, Class<T> openClass, Class<?> realClass) {
-		// Bail out early on null input.
-		if (data == null) {
-			return null;
-		}
-
-		T result = null;
-
-		if (openClass.isArray() && realClass.isArray()) {
-			Class<?> openElementClass = openClass.getComponentType();
-			Class<?> realElementClass = realClass.getComponentType();
-			Object[] dataArray = (Object[]) data;
-			int length = dataArray.length;
-
-			result = (T) Array.newInstance(openElementClass, length);
-
-			for (int i = 0; i < length; ++i) {
-				Array.set(result, i, convertToOpenType(dataArray[i], openElementClass, realElementClass));
-			}
-		} else if (openClass.equals(CompositeData.class)) {
-			Function<Object, CompositeData> converter = compositeConverterMap.get(realClass);
-
-			if (converter != null) {
-				result = (T) converter.apply(data);
-			}
-		} else if (openClass.equals(TabularData.class)) {
-			if (realClass.equals(Map.class)) {
-				result = (T) toSystemPropertiesTabularData((Map<String, String>) data);
-			}
-		} else if (openClass.equals(String[].class)) {
-			if (realClass.equals(List.class)) {
-				List<?> list = (List<?>) data;
-
-				result = (T) list.toArray(new String[list.size()]);
-			}
-		} else if (openClass.equals(String.class)) {
-			if (realClass.isEnum()) {
-				result = (T) ((Enum<?>) data).name();
-			}
-		}
-
-		return result;
-	}
-
 	/**
 	 * @param propsMap
 	 *            a <code>Map&lt;String, String%gt;</code> of the system
@@ -804,6 +723,7 @@ public final class ManagementUtils {
 		private static final String HYPERVISOR_MXBEAN_NAME = "com.ibm.virtualization.management:type=Hypervisor"; //$NON-NLS-1$
 
 		private static final String JVM_CPU_MONITOR_MXBEAN_NAME = "com.ibm.lang.management:type=JvmCpuMonitor"; //$NON-NLS-1$
+		private static final String OPENJ9_DIAGNOSTICS_MXBEAN_NAME = "openj9.lang.management:type=OpenJ9Diagnostics"; //$NON-NLS-1$
 
 		static void registerAll() {
 			// register standard singleton beans
@@ -839,7 +759,7 @@ public final class ManagementUtils {
 				.addInterface(java.lang.management.ThreadMXBean.class)
 				.validateAndRegister();
 
-			// register IBM-specific singleton beans
+			// register OpenJ9-specific singleton beans
 			create(GUEST_OPERATING_SYSTEM_MXBEAN_NAME, com.ibm.virtualization.management.internal.GuestOS.getInstance())
 				.addInterface(com.ibm.virtualization.management.GuestOSMXBean.class)
 				.validateAndRegister();
@@ -850,6 +770,10 @@ public final class ManagementUtils {
 
 			create(JVM_CPU_MONITOR_MXBEAN_NAME, com.ibm.lang.management.internal.JvmCpuMonitor.getInstance())
 				.addInterface(com.ibm.lang.management.JvmCpuMonitorMXBean.class)
+				.validateAndRegister();
+
+			create(OPENJ9_DIAGNOSTICS_MXBEAN_NAME, openj9.lang.management.internal.OpenJ9DiagnosticsMXBeanImpl.getInstance())
+				.addInterface(openj9.lang.management.OpenJ9DiagnosticsMXBean.class)
 				.validateAndRegister();
 
 			// register standard optional beans

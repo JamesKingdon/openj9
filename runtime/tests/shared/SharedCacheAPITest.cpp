@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 extern "C" {
@@ -48,9 +48,14 @@ getCacheDir(J9JavaVM *vm, char *cacheDir)
 	PORT_ACCESS_FROM_JAVAVM(vm);
 	IDATA rc;
 	char cacheDirNoTestBasedir[J9SH_MAXPATH];
+	U_32 flags = J9SHMEM_GETDIR_APPEND_BASEDIR;
 
-	rc = j9shmem_getDir(NULL, FALSE, cacheDirNoTestBasedir, J9SH_MAXPATH);
-	if (rc == -1) {
+#if defined(OPENJ9_BUILD)
+	flags |= J9SHMEM_GETDIR_USE_USERHOME;
+#endif /* defined(OPENJ9_BUILD) */
+
+	rc = j9shmem_getDir(NULL, flags, cacheDirNoTestBasedir, J9SH_MAXPATH);
+	if (rc < 0) {
 		j9tty_printf(PORTLIB, "Cannot get a directory\n");
 	}
 
@@ -212,11 +217,11 @@ validateSharedCacheCallback(J9JavaVM *vm, J9SharedCacheInfo *cacheInfo, void *us
 
 	cacheCount++;
 
-#if defined(J9VM_ENV_DATA64) && defined(J9VM_GC_COMPRESSED_POINTERS)
-	addrMode |= COM_IBM_ITERATE_SHARED_CACHES_COMPRESSED_POINTERS_MODE;
-#else
-	addrMode |= COM_IBM_ITERATE_SHARED_CACHES_NON_COMPRESSED_POINTERS_MODE;
-#endif /* defined(J9VM_ENV_DATA64) && defined(J9VM_GC_COMPRESSED_POINTERS) */
+	if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm)) {
+		addrMode |= COM_IBM_ITERATE_SHARED_CACHES_COMPRESSED_POINTERS_MODE;
+	} else {
+		addrMode |= COM_IBM_ITERATE_SHARED_CACHES_NON_COMPRESSED_POINTERS_MODE;
+	}
 
 	/* calculate cache size for empty cache */
 	if (J9PORT_SHR_CACHE_TYPE_PERSISTENT == cacheInfo->cacheType) {

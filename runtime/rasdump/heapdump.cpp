@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2003, 2017 IBM Corp. and others
+ * Copyright (c) 2003, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /* Includes */
@@ -90,7 +90,7 @@ public :
 
 	/* Assignment operators... */
 
-	/* Assigment methods... */
+	/* Assignment methods... */
 
 	/* Append operators... */
 	/* Operator for appending another string */
@@ -183,7 +183,7 @@ public :
 		return (DataType*)&_Buffer;
 	}
 
-	/* Method for locating the first occurence of a zero terminated substring in a string */
+	/* Method for locating the first occurrence of a zero terminated substring in a string */
 	inline LengthType find(const DataType* targetString, LengthType position = 0) const
 	{
 		/* Determine the length of the target string */
@@ -255,7 +255,7 @@ protected :
 		/* Declared data */
 		LengthType iCapacity;
 		LengthType iLength;
-		DataType*  iDebugData;  /* Only required for debuging */
+		DataType*  iDebugData;  /* Only required for debugging */
 
 		/* Internal method for accessing the data associated with a header */
 		inline DataType* data(void)
@@ -415,7 +415,7 @@ protected :
 	Buffer*        _Buffer;
 	
 private :
-	/* Prevent use of the unimplemmented copy constructor and assignment operator */
+	/* Prevent use of the unimplemented copy constructor and assignment operator */
 	inline Strings& operator=(const Strings& source);
 	inline Strings(const Strings& source);
 };
@@ -643,7 +643,6 @@ public:
 /**************************************************************************************************/
 /*                                                                                                */
 /* Class for walking the superclass references from a class. See CMVC 177688.                     */
-/*  Note: adapted from GC_ClassSuperclassesIterator in Modron/gc_structs                          */
 /*                                                                                                */
 /**************************************************************************************************/
 class SuperclassesIterator
@@ -1721,7 +1720,7 @@ BinaryHeapDumpWriter::writeArrayObjectRecord(J9MM_IterateObjectDescriptor* objec
 			// Write a long primitive array record with the hash code.
 			/* Calculate the start tag / flags */
 			int flags =((dataType << 5) & 0xE0 );
-			// We can only specifiy byte or word size.
+			// We can only specify byte or word size.
 			if( overallEncoding != 0 ) {
 				flags = flags | 0x10;
 			}
@@ -1906,12 +1905,12 @@ BinaryHeapDumpWriter::writeArrayObjectRecord(J9MM_IterateObjectDescriptor* objec
 void
 BinaryHeapDumpWriter::writeClassRecord(J9Class *currentClass)
 {
-	if (J9CLASS_FLAGS(currentClass) & J9_JAVA_CLASS_HOT_SWAPPED_OUT) {
+	if (J9CLASS_FLAGS(currentClass) & J9AccClassHotSwappedOut) {
 		/* Skip classes which have been redefined */
 		return;
 	}
 	
-	if (J9CLASS_FLAGS(currentClass) & J9_JAVA_CLASS_DYING) {
+	if (J9CLASS_FLAGS(currentClass) & J9AccClassDying) {
 		/* Skip classes which are dying */
 		return;
 	}
@@ -2175,7 +2174,7 @@ BinaryHeapDumpWriter::writeClassRecord(J9Class *currentClass)
 		return;
 	}
 
-	/* Write the comibined number of references */
+	/* Write the combined number of references */
 	writeNumber(instanceActiveReferenceCount + staticActiveReferenceCount, 4);
 	if (_Error) {
 		return;

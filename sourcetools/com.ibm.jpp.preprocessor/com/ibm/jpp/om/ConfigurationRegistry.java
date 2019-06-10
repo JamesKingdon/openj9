@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1999, 2017 IBM Corp. and others
+ * Copyright (c) 1999, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jpp.om;
 
@@ -121,18 +121,18 @@ public class ConfigurationRegistry {
 	}
 
 	/**
-	 * Returns a {@link Set} of the registered cofigurations.
+	 * Returns a {@link Set} of the registered configurations.
 	 *
-	 * @return      the registered cofigurations as a Set
+	 * @return      the registered configurations as a Set
 	 */
 	public Collection<ConfigObject> getConfigurationsAsCollection() {
 		return configs;
 	}
 
 	/**
-	 * Returns a {@link Set} of the names of the registered cofigurations.
+	 * Returns a {@link Set} of the names of the registered configurations.
 	 *
-	 * @return      the registered cofiguration names as a Set
+	 * @return      the registered configuration names as a Set
 	 */
 	public Set<String> getConfigurationNamesAsSet() {
 		return configsByName.keySet();
@@ -254,7 +254,7 @@ public class ConfigurationRegistry {
 
 	/**
 	 * Used if a configuration is added with the same name as a previous one.
-	 * It is not a recommended practice to override the an exisiting configuration
+	 * It is not a recommended practice to override the an existing configuration
 	 * as it may produce unexpected results.
 	 * <p>
 	 * A configuration can be also defined as local if it was defined in the registry's

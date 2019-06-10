@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if !defined(HEAPREGIONDESCRIPTORVLHGC_HPP)
@@ -51,6 +51,7 @@ public:
 	};
 	struct {
 		bool _shouldMark;	/**< true if the collector is to mark this region during the collection cycle */
+		bool _noEvacuation; /**< true if the region is set that do not copyforward, it is valid if _shouldMark is true. */
 		UDATA _dynamicMarkCost;	/**< The cost of marking this region (that is, the number of other regions (not including this one) which will need to be scanned - this value is dynamic in that converting the regions which refer to it to scan or mark reduces this number.  It is only valid during GC setup */
 		U_8 _overflowFlags;	/**< Used to denote that work packet overflow occurred for an object in this region - bits 0x1 is GMP or global while 0x2 is PGC */
 	} _markData;
@@ -91,7 +92,7 @@ private:
 	U_64 _allocationAge; /**< allocation age (number of bytes allocated since the last attempted allocation) */
 	U_64 _lowerAgeBound; /**< lowest possible age of any object in this region */
 	U_64 _upperAgeBound; /**< highest possible age of any object in this region */
-	double _allocationAgeSizeProduct; /**< sum of (age * size) products for each object in the region. used for age merging math in surivovor regions */
+	double _allocationAgeSizeProduct; /**< sum of (age * size) products for each object in the region. used for age merging math in survivor regions */
 	UDATA _age; /**< logical allocation age (number of GC cycles since the last attempted allocation) */
 	MM_RememberedSetCardList _rememberedSetCardList; /**< remembered set card list */
 	MM_RememberedSetCard *_rsclBufferPool;			 /**< RSCL Buffer pool owned by this region (Buffers can still be shared among other regions) */
@@ -266,7 +267,7 @@ public:
 	}
 
 	/**
-	 * @return True if region is in survivor set (there is no explict flag, but info is inferred from _survivorBase being non-null
+	 * @return True if region is in survivor set (there is no explicit flag, but info is inferred from _survivorBase being non-null
 	 */
 	MMINLINE bool isSurvivorRegion() { return NULL != _copyForwardData._survivorBase; }
 

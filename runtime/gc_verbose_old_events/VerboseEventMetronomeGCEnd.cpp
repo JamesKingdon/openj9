@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "VerboseEventMetronomeGCEnd.hpp"
@@ -186,7 +186,7 @@ MM_VerboseEventMetronomeGCEnd::formattedOutput(MM_VerboseOutputAgent *agent)
 {
 	OMRPORT_ACCESS_FROM_OMRVMTHREAD(_omrThread);
 	char timestamp[32];
-	/* Invervalms is reported as distance (in time) between this event and any of (whichever is the last one)
+	/* Intervalms is reported as distance (in time) between this event and any of (whichever is the last one)
 	 * trigger start, previous heartbeat or syncGC events */
 	U_64 timeSinceLastEvent = omrtime_hires_delta(_manager->getLastMetronomeTime(), _time, J9PORT_TIME_DELTA_IN_MICROSECONDS);
 

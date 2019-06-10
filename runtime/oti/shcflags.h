@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,13 +17,15 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef SHCFLAGS_H
 #define SHCFLAGS_H
 
 /* @ddr_namespace: map_to_type=ShCFlags */
+
+#include "j9comp.h" /* for J9CONST64 */
 
 /* These are error codes */
 #define J9SHR_RESOURCE_STORE_EXISTS  1
@@ -50,7 +52,7 @@
 #define J9SHR_DATA_TYPE_CACHELET  7
 #define J9SHR_DATA_TYPE_ZIPCACHE 8
 #define J9SHR_DATA_TYPE_JITHINT 9
-#define J9SHR_DATA_TYPE_UNUSED1 10
+#define J9SHR_DATA_TYPE_STARTUP_HINTS 10
 #define J9SHR_DATA_TYPE_AOTCLASSCHAIN 11
 #define J9SHR_DATA_TYPE_AOTTHUNK 12
 #define J9SHR_DATA_TYPE_MAX 12
@@ -62,9 +64,10 @@
 
 #define J9SHR_RUNTIMEFLAG_ENABLE_TIMESTAMP_CHECKS  1
 #define J9SHR_RUNTIMEFLAG_ENABLE_LOCAL_CACHEING  2
+/*The bit 4 is free for use.*/
 #define J9SHR_RUNTIMEFLAG_ENABLE_REDUCE_STORE_CONTENTION  8
-/*The below bit (32) used to be for the safemod flag, it is now free for use.*/
-#define J9SHR_RUNTIMEFLAG_ENABLE_FREE_FOR_USE 32
+/*The bit 16 is free for use.*/
+#define J9SHR_RUNTIMEFLAG_ENABLE_CACHE_NON_BOOT_CLASSES  32
 #define J9SHR_RUNTIMEFLAG_ENABLE_TRACECOUNT  64
 #define J9SHR_RUNTIMEFLAG_ENABLE_BYTECODEFIX  0x80
 #define J9SHR_RUNTIMEFLAG_BYTECODE_AGENT_RUNNING  0x100
@@ -132,6 +135,17 @@
 #define J9SHR_VERBOSEFLAG_ENABLE_VERBOSE_INTERN  64
 #define J9SHR_VERBOSEFLAG_ENABLE_VERBOSE_PAGES  0x80
 #define J9SHR_VERBOSEFLAG_ENABLE_VERBOSE_JITDATA  0x100
+
+/* flags used by J9SharedLocalStartupHints.localStartupHintFlags */
+#define J9SHR_LOCAL_STARTUPHINTS_FLAG_FETCHED	1
+#define J9SHR_LOCAL_STARTUPHINTS_FLAG_STORE_HEAPSIZES	2
+#define J9SHR_LOCAL_STARTUPHINTS_FLAG_OVERWRITE_HEAPSIZES	4
+#define J9SHR_LOCAL_STARTUPHINTS_FLAG_WRITE_HINTS (J9SHR_LOCAL_STARTUPHINTS_FLAG_STORE_HEAPSIZES | J9SHR_LOCAL_STARTUPHINTS_FLAG_OVERWRITE_HEAPSIZES)
+#define J9SHR_LOCAL_STARTUPHINTS_FLAG_OVERWRITE_HINTS (J9SHR_LOCAL_STARTUPHINTS_FLAG_OVERWRITE_HEAPSIZES)
+
+/* flags used by J9SharedStartupHintsDataDescriptor->flags */
+#define J9SHR_STARTUPHINTS_HEAPSIZES_SET	1
+
 
 #define J9SHR_LOADTYPE_NORMAL  1
 #define J9SHR_LOADTYPE_REDEFINED  2

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2015 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <limits.h>
@@ -223,7 +223,7 @@ moduleLoaded(UtThreadData **thr, UtModuleInfo *modInfo)
 	if (modInfo->intf == NULL) {
 		modInfo->intf = internalUtIntfS.module;
 
-		rc = initialiseComponentData(&compData, modInfo, modInfo->name);
+		rc = initializeComponentData(&compData, modInfo, modInfo->name);
 		if (OMR_ERROR_NONE == rc) {
 			rc = addComponentToList(compData, UT_GLOBAL(componentList));
 		}
@@ -311,7 +311,7 @@ moduleUnLoading(UtThreadData **thr, UtModuleInfo *modInfo)
 	UT_DBGOUT(1, ("<UT> ModuleUnloading: %s\n", modInfo->name));
 
 	if (modInfo->traceVersionInfo == NULL){
-		/* this is a pre 142 module - not comaptible with this trace engine fail silently to register this module */
+		/* this is a pre 142 module - not compatible with this trace engine fail silently to register this module */
 		UT_DBGOUT(1, ("<UT> ModuleLoaded refusing deregistration to %s because it's version is less than the supported UT version %d\n", modInfo->name, UT_VERSION));
 		return OMR_ERROR_NONE;
 	} /* else {
@@ -885,7 +885,7 @@ freeTrace(UtThreadData **thr)
 		UT_DBGOUT(1, ("<UT thr="UT_POINTER_SPEC"> Error: cleanUpTrace called before trace has been finalized\n", thr));
 	}
 
-	/* so that we get cleaned up even in the case where trace hasn't initalized yet */
+	/* so that we get cleaned up even in the case where trace hasn't initialized yet */
 	destroyQueue(&UT_GLOBAL(outputQueue));
 
 	config = UT_GLOBAL(config);
@@ -1141,13 +1141,13 @@ initializeTrace(UtThreadData **thr, void **gbl,
 		}
 	}
 
-	rc = initialiseComponentList(&UT_GLOBAL(componentList));
+	rc = initializeComponentList(&UT_GLOBAL(componentList));
 	if (OMR_ERROR_NONE != rc) {
 		UT_DBGOUT(1, ("<UT> Error initializing component list\n"));
 		goto fail;
 	}
 
-	rc = initialiseComponentList(&UT_GLOBAL(unloadedComponentList));
+	rc = initializeComponentList(&UT_GLOBAL(unloadedComponentList));
 	if (OMR_ERROR_NONE != rc) {
 		UT_DBGOUT(1, ("<UT> Error initializing unloaded component list\n"));
 		goto fail;
@@ -1461,7 +1461,7 @@ trcGetComponents(UtThreadData **thr, char ***list, int32_t *number)
 
 /*******************************************************************************
  * name        - trcGetComponent
- * description - Return a bitmap tracepoints incleded in the build for a given
+ * description - Return a bitmap tracepoints included in the build for a given
  *               component.
  * parameters  - component name, format array
  * returns     - OMR error code
@@ -1881,7 +1881,7 @@ trcGetTraceMetadata(void **data, int32_t *length)
 {
 	UtTraceFileHdr *traceHeader;
 
-	/* Ensure we have initialised the trace header */
+	/* Ensure we have initialized the trace header */
 	if (initTraceHeader() != OMR_ERROR_NONE) {
 		return OMR_ERROR_INTERNAL;
 	}
@@ -1977,7 +1977,7 @@ trcRegisterTracePointSubscriber(UtThreadData **thr, char *description, utsSubscr
 		return OMR_ERROR_OUT_OF_NATIVE_MEMORY;
 	}
 	
-	/* initialise the new subscription data structure */
+	/* initialize the new subscription data structure */
 	newSubscription->subscriber = subscriber;
 	newSubscription->userData = wrapper;
 	newSubscription->alarm = alarm;
@@ -2141,7 +2141,7 @@ fillInUTInterfaces(UtInterface **utIntf, UtServerInterface *utServerIntf, UtModu
 		memcpy(utServerIntf, &utServerIntfS, sizeof(UtServerInterface));
 
 		/*
-		 * Initialise the direct module interface, these are
+		 * Initialize the direct module interface, these are
 		 * wrappers to calls within trace that obtain a UtThreadData
 		 * before calling the real function.
 		 */

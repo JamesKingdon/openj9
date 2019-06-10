@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar18-SE]*/
 /*******************************************************************************
- * Copyright (c) 2000, 2016 IBM Corp. and others
+ * Copyright (c) 2000, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jvm.format;
 
@@ -48,7 +48,7 @@ final public class TraceArgs {
     public      static            boolean              override;
     public      static            String               datFileDirectory = null;
     
-   /** Initialises static variables.
+   /** Initializes static variables.
     *
     *  <p>This is called each time the TraceFormatter is started, from the initStatics()
     *     method in TraceFormat.java</p>
@@ -68,7 +68,7 @@ final public class TraceArgs {
 	override = false;
     }
 
-    /** parses the command line arguements
+    /** parses the command line arguments
      *
      * @param   args      the arguments
      * @throws  UsageException
@@ -140,13 +140,13 @@ final public class TraceArgs {
                         }                        
                     } else if ( args[index].startsWith("-50") ){
 			/* this offers a manual override to enforce 50 behaviour when the trace file has a version number of
-			 * < 5.0. This could be useful if you have a development build that produced a snap but didn;t yet have
+			 * < 5.0. This could be useful if you have a development build that produced a snap but didn't yet have
 			 * the ute.h patch to upgrade the version number in the headers.
 			 */
 			is50orNewer = true;
 		    } else if ( args[index].startsWith("-11") ){
 			/* this offers a manual override to enforce 50 behaviour when the trace file has a version number of
-			 * < 5.0. This could be useful if you have a development build that produced a snap but didn;t yet have
+			 * < 5.0. This could be useful if you have a development build that produced a snap but didn't yet have
 			 * the ute.h patch to upgrade the version number in the headers.
 			 */
 			is50orNewer = false;

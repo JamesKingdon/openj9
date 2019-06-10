@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2016 IBM Corp. and others
+ * Copyright (c) 1998, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #ifndef mgmtinit_h
 #define mgmtinit_h
@@ -69,6 +69,7 @@
 #define J9VM_MANAGEMENT_GC_ID_SCAVENGE (J9VM_MANAGEMENT_GC_HEAP + J9VM_MANAGEMENT_GC_LOCAL + J9_GC_MANAGEMENT_COLLECTOR_SCAVENGE)
 #define J9VM_MANAGEMENT_GC_ID_PGC (J9VM_MANAGEMENT_GC_HEAP + J9VM_MANAGEMENT_GC_LOCAL + J9_GC_MANAGEMENT_COLLECTOR_PGC)
 #define J9VM_MANAGEMENT_GC_ID_GGC (J9VM_MANAGEMENT_GC_HEAP + J9_GC_MANAGEMENT_COLLECTOR_GGC)
+#define J9VM_MANAGEMENT_GC_ID_EPSILON (J9VM_MANAGEMENT_GC_HEAP + J9_GC_MANAGEMENT_COLLECTOR_EPSILON)
 
 #define J9VM_MANAGEMENT_NONHEAPPOOL_NAME_CLASSES "class storage"
 #define J9VM_MANAGEMENT_NONHEAPPOOL_NAME_MISC "miscellaneous non-heap storage"

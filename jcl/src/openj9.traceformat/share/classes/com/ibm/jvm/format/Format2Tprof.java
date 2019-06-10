@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar18-SE]*/
 /*******************************************************************************
- * Copyright (c) 2000, 2016 IBM Corp. and others
+ * Copyright (c) 2000, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,15 +18,13 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jvm.format;
 
 /**
- * Trace Tool routine for generating profile format output 
- * 
+ * Trace Tool routine for generating profile format output.
  */
-
 import java.io.*;
 import java.util.*;
 
@@ -69,7 +67,7 @@ public class Format2Tprof {
                  public int compare(Object o1, Object o2) {
                     MethodEntry m1 = (MethodEntry) o1;
                     MethodEntry m2 = (MethodEntry) o2;
-                    return m2.count - m1.count;   // in decending order
+                    return m2.count - m1.count;   // in descending order
                   }
                }
             );
@@ -113,7 +111,7 @@ public class Format2Tprof {
        {
           MethodEntry e = (MethodEntry) iter.next();
           float percent = (float) (e.count * 100) / totalCount;
-          String percentStr = (new Float(percent)).toString().substring(0,4) + "%";
+          String percentStr = Float.toString(percent).substring(0, 4) + "%";
           out.println(percentStr + " " + e.count + " " + e.name);
        }
     }
@@ -162,6 +160,3 @@ public class Format2Tprof {
       return rc;
    }
 }
-
-
-

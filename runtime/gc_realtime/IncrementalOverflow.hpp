@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -29,7 +28,6 @@
 #if !defined(INCREMENTALOVERFLOW_HPP_)
 #define INCREMENTALOVERFLOW_HPP_
 
-#include "j9.h"
 #include "EnvironmentBase.hpp"
 #include "Metronome.hpp"
 #include "WorkPacketOverflow.hpp"
@@ -46,7 +44,7 @@ class MM_IncrementalOverflow : public MM_WorkPacketOverflow
 public:
 protected:
 private:
-	MM_GCExtensions *_extensions;
+	MM_GCExtensionsBase *_extensions;
 	MM_HeapRegionDescriptorRealtime *_overflowList;
 	bool _overflowThisGCCycle; /**< set to signify an overflow happened sometime during GC cycle */
 	

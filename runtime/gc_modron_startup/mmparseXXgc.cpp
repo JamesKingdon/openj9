@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
  
 /**
@@ -101,11 +100,9 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 		}
 		if (try_scan(&scan_start, "stw")) {
 			MM_Scheduler::initializeForVirtualSTW(extensions);
-#if defined(J9VM_GC_STACCATO)
 			/* Stop the world collects should not do any concurrent work */
 			extensions->concurrentSweepingEnabled = false;
 			extensions->concurrentTracingEnabled = false;
-#endif /* J9VM_GC_STACCATO */
 			continue;
 		}
 		if (try_scan(&scan_start, "headroom=")) {
@@ -198,7 +195,6 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 			}
 			continue;
 		}
-#if defined(J9VM_GC_STACCATO)
 		if(try_scan(&scan_start, "noConcurrentSweep")) {
 			extensions->concurrentSweepingEnabled = false;
 			continue;
@@ -215,7 +211,6 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 			extensions->concurrentTracingEnabled = true;
 			continue;
 		}
-#endif /* J9VM_GC_STACCATO */
 
 		if (try_scan(&scan_start, "allocationContextCount=")) {
 			if(!scan_udata_helper(vm, &scan_start, &(extensions->managedAllocationContextCount), "allocationContextCount=")) {
@@ -247,7 +242,7 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 		}
 #endif /* J9VM_INTERP_NATIVE_SUPPORT */
 
-#if defined (J9VM_GC_COMPRESSED_POINTERS)
+#if defined (OMR_GC_COMPRESSED_POINTERS)
 		/* see if we are to force disable shifting in compressed refs */
 		if (try_scan(&scan_start, "noShiftingCompression")) {
 			extensions->shouldAllowShiftingCompression = false;
@@ -269,7 +264,7 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 
 			continue;
 		}
-#endif /* defined (J9VM_GC_COMPRESSED_POINTERS) */
+#endif /* defined (OMR_GC_COMPRESSED_POINTERS) */
 
 #if defined (J9VM_GC_VLHGC)
 		/* parse the maximum age a region can have to be included in the nursery set, if specified */
@@ -310,11 +305,25 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 			continue;
 		}
 
-		if (try_scan(&scan_start, "tarokKickoffHeadroomRegionCount=")) {
-			if(!scan_udata_memory_size_helper(vm, &scan_start, &(extensions->tarokKickoffHeadroomRegionCount), "tarokKickoffHeadroomRegionCount=")) {
+		if (try_scan(&scan_start, "tarokKickoffHeadroomRegionRate=")) {
+			if(!scan_u32_helper(vm, &scan_start, &(extensions->tarokKickoffHeadroomRegionRate), "tarokKickoffHeadroomRegionRate=")) {
 				returnValue = JNI_EINVAL;
 				break;
 			}
+			if (50 < extensions->tarokKickoffHeadroomRegionRate) {
+				j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_GC_OPTIONS_INTEGER_OUT_OF_RANGE, "tarokKickoffHeadroomRegionRate=", (UDATA)0, (UDATA)50);
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			continue;
+		}
+
+		if (try_scan(&scan_start, "tarokKickoffHeadroomInBytes=")) {
+			if(!scan_udata_memory_size_helper(vm, &scan_start, &(extensions->tarokKickoffHeadroomInBytes), "tarokKickoffHeadroomInBytes=")) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			extensions->tarokForceKickoffHeadroomInBytes = true;
 			continue;
 		}
 
@@ -618,6 +627,16 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 
 			continue;
 		}
+		if (try_scan(&scan_start, "tarokEnableCopyForwardMarkCompactHybrid")) {
+			extensions->tarokEnableCopyForwardHybrid = true;
+			continue;
+		}
+
+		if (try_scan(&scan_start, "tarokDisableCopyForwardMarkCompactHybrid")) {
+			extensions->tarokEnableCopyForwardHybrid = false;
+			continue;
+		}
+
 #endif /* defined (J9VM_GC_VLHGC) */
 
 		if(try_scan(&scan_start, "packetListLockSplit=")) {
@@ -766,10 +785,28 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 
 			continue;
 		}
+		if (try_scan(&scan_start, "aliasInhibitingThresholdPercentage=")) {
+			UDATA percentage = 0;
+			if(!scan_udata_helper(vm, &scan_start, &percentage, "aliasInhibitingThresholdPercentage=")) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			if(percentage > 100) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			extensions->aliasInhibitingThresholdPercentage = ((double)percentage) / 100.0;
+
+			continue ;
+		}
 
 #if defined(OMR_GC_CONCURRENT_SCAVENGER)
 		if (try_scan(&scan_start, "debugConcurrentScavengerPageAlignment")) {
 			extensions->setDebugConcurrentScavengerPageAlignment(true);
+			continue;
+		}
+		if(try_scan(&scan_start, "softwareRangeCheckReadBarrier")) {
+			extensions->softwareRangeCheckReadBarrier = true;
 			continue;
 		}
 #endif /* defined(OMR_GC_CONCURRENT_SCAVENGER) */
@@ -900,14 +937,63 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 			continue;
 		}
 
-		/* Temporary option. See Jazz 31620: Reserve unused space at end of heap for JIT */
-		if (try_scan(&scan_start, "heapTailPadding=")) {
-			if(!scan_udata_memory_size_helper(vm, &scan_start, &extensions->heapTailPadding, "heapTailPadding=")) {
+		if (try_scan(&scan_start, "heapSizeStartupHintConservativeFactor=")) {
+			UDATA percentage = 0;
+			if(!scan_udata_helper(vm, &scan_start, &percentage, "heapSizeStartupHintConservativeFactor=")) {
 				returnValue = JNI_EINVAL;
 				break;
 			}
+			if(percentage > 100) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			extensions->heapSizeStartupHintConservativeFactor = ((float)percentage) / 100.0f;
+			continue ;
+		}
+
+		if (try_scan(&scan_start, "heapSizeStartupHintWeightNewValue=")) {
+			UDATA percentage = 0;
+			if(!scan_udata_helper(vm, &scan_start, &percentage, "heapSizeStartupHintWeightNewValue=")) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			if(percentage > 100) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			extensions->heapSizeStartupHintWeightNewValue = ((float)percentage) / 100.0f;
+			continue ;
+		}
+
+		if (try_scan(&scan_start, "darkMatterCompactThreshold=")) {
+			UDATA percentage = 0;
+			if(!scan_udata_helper(vm, &scan_start, &percentage, "darkMatterCompactThreshold=")) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			if(percentage > 100) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			extensions->darkMatterCompactThreshold = ((float)percentage) / 100.0f;
 			continue;
 		}
+		
+#if defined(OMR_GC_IDLE_HEAP_MANAGER)
+		if (try_scan(&scan_start, "gcOnIdleCompactThreshold=")) {
+			UDATA percentage = 0;
+			if(!scan_udata_helper(vm, &scan_start, &percentage, "gcOnIdleCompactThreshold=")) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			if(percentage > 100) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			extensions->gcOnIdleCompactThreshold = ((float)percentage) / 100.0f;
+			continue;
+		}
+#endif /* defined(OMR_GC_IDLE_HEAP_MANAGER) */
 
 #if defined (J9VM_GC_VLHGC)
 		if (try_scan(&scan_start, "fvtest_tarokSimulateNUMA=")) {
@@ -1095,6 +1181,32 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 			continue;
 		}
 
+#if defined(OMR_ENV_DATA64) && defined(OMR_GC_FULL_POINTERS)
+		if (try_scan(&scan_start, "fvtest_enableReadBarrierVerification=")) {
+			extensions->fvtest_enableReadBarrierVerification = 0;
+
+			char * pattern = scan_to_delim(PORTLIB, &scan_start, ',');
+
+			if (true == ('0' != pattern[4])) {
+				extensions->fvtest_enableHeapReadBarrierVerification = 1;
+				extensions->fvtest_enableReadBarrierVerification = 1;
+			}
+			if (true == ('0' !=  pattern[3])) {
+				extensions->fvtest_enableClassStaticsReadBarrierVerification = 1;
+				extensions->fvtest_enableReadBarrierVerification = 1;
+			}
+			if (true == ('0' != pattern[2])){
+				extensions->fvtest_enableMonitorObjectsReadBarrierVerification = 1;
+				extensions->fvtest_enableReadBarrierVerification = 1;
+			}
+			if (true == ('0' != pattern[1])) {
+				extensions->fvtest_enableJNIGlobalWeakReadBarrierVerification = 1;
+				extensions->fvtest_enableReadBarrierVerification = 1;
+			}
+			continue;
+		}
+#endif /* defined(OMR_ENV_DATA64) && defined(OMR_GC_FULL_POINTERS) */
+
 		if (try_scan(&scan_start, "fvtest_forceReferenceChainWalkerMarkMapCommitFailure=")) {
 			if(!scan_udata_helper(vm, &scan_start, &(extensions->fvtest_forceReferenceChainWalkerMarkMapCommitFailure), "fvtest_forceReferenceChainWalkerMarkMapCommitFailure=")) {
 				returnValue = JNI_EINVAL;
@@ -1109,6 +1221,20 @@ gcParseXXgcArguments(J9JavaVM *vm, char *optArg)
 		if (try_scan(&scan_start, "fvtest_forceReferenceChainWalkerMarkMapCommitFailure")) {
 			extensions->fvtest_forceReferenceChainWalkerMarkMapCommitFailure = 1;
 			extensions->fvtest_forceReferenceChainWalkerMarkMapCommitFailureCounter = 0;
+			continue;
+		}
+
+		if (try_scan(&scan_start, "fvtest_forceCopyForwardHybridMarkCompactRatio=")) {
+			/* the percentage of the collectionSet regions would like to markCompact instead of copyForward */
+			if(!scan_udata_helper(vm, &scan_start, &(extensions->fvtest_forceCopyForwardHybridRatio), "fvtest_forceCopyForwardHybridMarkCompactRatio=")) {
+				returnValue = JNI_EINVAL;
+				break;
+			}
+			if ((extensions->fvtest_forceCopyForwardHybridRatio < 1) || (100 < extensions->fvtest_forceCopyForwardHybridRatio)) {
+				j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_GC_OPTIONS_INTEGER_OUT_OF_RANGE, "fvtest_forceCopyForwardHybridMarkCompactRatio=", (UDATA)1, (UDATA)100);
+				returnValue = JNI_EINVAL;
+				break;
+			}
 			continue;
 		}
 

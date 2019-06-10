@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "gc_internal.h"
@@ -36,6 +36,7 @@ J9MemoryManagerFunctions MemoryManagerFunctions = {
 	allocateMemoryForSublistFragment,
 	j9gc_heap_free_memory,
 	j9gc_heap_total_memory,
+	j9gc_is_garbagecollection_disabled,
 	j9gc_allsupported_memorypools,
 	j9gc_allsupported_garbagecollectors,
 	j9gc_pool_name,
@@ -52,9 +53,9 @@ J9MemoryManagerFunctions MemoryManagerFunctions = {
 	j9gc_get_private_hook_interface,
 	gcStartupHeapManagement,
 	gcShutdownHeapManagement,
+	j9gc_jvmPhaseChange,
 	initializeMutatorModelJava,
 	cleanupMutatorModelJava,
-	internalFreeMemorySpace,
 #if defined(J9VM_GC_FINALIZATION)
 	j9gc_finalizer_startup,
 	j9gc_finalizer_shutdown,
@@ -76,6 +77,7 @@ J9MemoryManagerFunctions MemoryManagerFunctions = {
 	getStaticObjectAllocateFlags,
 	j9gc_scavenger_enabled,
 	j9gc_concurrent_scavenger_enabled,
+	j9gc_software_read_barrier_enabled,
 #if defined(J9VM_GC_HEAP_CARD_TABLE)
 	j9gc_concurrent_getCardSize,
 	j9gc_concurrent_getHeapBase,
@@ -100,9 +102,8 @@ J9MemoryManagerFunctions MemoryManagerFunctions = {
 	j9gc_jit_isInlineAllocationSupported,
 	J9MetronomeWriteBarrierStore,
 	J9MetronomeWriteBarrierJ9ClassStore,
-#if defined(OMR_GC_CONCURRENT_SCAVENGER)
 	J9ReadBarrier,
-#endif /* OMR_GC_CONCURRENT_SCAVENGER */
+	J9ReadBarrierJ9Class,
 	j9gc_objaccess_monitorTableReadObject,
 	j9gc_objaccess_monitorTableReadObjectVM,
 	j9gc_ext_check_is_valid_heap_object,
@@ -177,6 +178,7 @@ J9MemoryManagerFunctions MemoryManagerFunctions = {
 	j9gc_objaccess_getArrayObjectDataAddress,
 	j9gc_objaccess_getLockwordAddress,
 	j9gc_objaccess_cloneObject,
+	j9gc_objaccess_copyObjectFields,
 	j9gc_objaccess_cloneIndexableObject,
 	j9gc_objaccess_asConstantPoolObject,
 #if defined(J9VM_GC_REALTIME)
@@ -221,6 +223,7 @@ J9MemoryManagerFunctions MemoryManagerFunctions = {
 	j9gc_arraylet_getLeafSize,
 	j9gc_arraylet_getLeafLogSize,
 #endif /* J9VM_GC_ARRAYLETS */
+	j9gc_set_allocation_sampling_interval,
 	j9gc_set_allocation_threshold,
 	j9gc_objaccess_recentlyAllocatedObject,
 	j9gc_objaccess_postStoreClassToClassLoader,

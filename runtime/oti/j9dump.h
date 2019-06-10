@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef j9dump_h
@@ -85,9 +85,7 @@ typedef struct J9RASdumpAgent {
 #define J9RAS_DUMP_ON_OBJECT_ALLOCATION_BIT  21
 #define J9RAS_DUMP_ON_CORRUPT_CACHE_BIT  22
 #define J9RAS_DUMP_ON_EXCESSIVE_GC_BIT  23
-#define J9RAS_DUMP_ON_VM_TENANT_STARTUP_BIT  24
-#define J9RAS_DUMP_ON_VM_TENANT_SHUTDOWN_BIT  25
-#define J9RAS_DUMP_HOOK_TABLE_SIZE  26  /* 1+ the last _BIT */
+#define J9RAS_DUMP_HOOK_TABLE_SIZE  24  /* 1+ the last _BIT */
 
 /* bit flags corresponding to the _BIT values above. Definitions must be simple so that DDR can process them. */
 #define J9RAS_DUMP_ON_VM_STARTUP  1
@@ -113,10 +111,8 @@ typedef struct J9RASdumpAgent {
 #define J9RAS_DUMP_ON_USER_REQUEST  0x100000
 #define J9RAS_DUMP_ON_OBJECT_ALLOCATION  0x200000
 #define J9RAS_DUMP_ON_CORRUPT_CACHE  0x400000
-#define J9RAS_DUMP_ON_EXCESSIVE_GC  0x800000
-#define J9RAS_DUMP_ON_VM_TENANT_STARTUP  0x1000000
-#define J9RAS_DUMP_ON_VM_TENANT_SHUTDOWN  0x2000000
-#define J9RAS_DUMP_ON_ANY  0x3FFFFFF /* mask of all bit flags above */
+#define J9RAS_DUMP_ON_EXCESSIVE_GC 0x800000
+#define J9RAS_DUMP_ON_ANY 0x0FFFFFF /* mask of all bit flags above */
 
 /* ...additional VM requests... */
 #define J9RAS_DUMP_DO_EXCLUSIVE_VM_ACCESS  1

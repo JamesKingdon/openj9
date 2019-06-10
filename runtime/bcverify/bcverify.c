@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
@@ -478,16 +478,21 @@ parseLocals (J9BytecodeVerificationData * verifyData, U_8** stackMapData, J9Bran
 			}
 			liveStack->stackElements[localsCount] = BCV_BASE_TYPE_TOP;
 
-			/* Possibly remove a double or long (counts as 1 local, but two slots).
-			 * A double or a long is pushed as <top, double|long>
+			/* Check long/double type as long as there still remains local variables
+			 * in the stackmap frame.
 			 */
-			stackEntry = liveStack->stackElements[localsCount - 1];
-			if ((stackEntry == BCV_BASE_TYPE_DOUBLE) || (stackEntry == BCV_BASE_TYPE_LONG)) {
-				localsCount--;
-				if (localsCount < 0) {
-					goto _underflow;
+			if (localsCount > 0) {
+				/* Possibly remove a double or long (counts as 1 local, but two slots).
+				 * A double or a long is pushed as <top, double|long>
+				 */
+				stackEntry = liveStack->stackElements[localsCount - 1];
+				if ((BCV_BASE_TYPE_DOUBLE == stackEntry) || (BCV_BASE_TYPE_LONG == stackEntry)) {
+					localsCount--;
+					if (localsCount < 0) {
+						goto _underflow;
+					}
+					liveStack->stackElements[localsCount] = BCV_BASE_TYPE_TOP;
 				}
-				liveStack->stackElements[localsCount] = BCV_BASE_TYPE_TOP;
 			}
 		}
 
@@ -495,13 +500,13 @@ parseLocals (J9BytecodeVerificationData * verifyData, U_8** stackMapData, J9Bran
 		for (;localDelta; localDelta--) {
 			stackEntry = parseElement (verifyData, stackMapData);
 			if (localsCount >= maxLocals) {
-				/* Oveflow */
+				/* Overflow */
 				goto _overflow;
 			}
 			liveStack->stackElements[localsCount++] = stackEntry;
-			if ((stackEntry == BCV_BASE_TYPE_DOUBLE) || (stackEntry == BCV_BASE_TYPE_LONG)) {
+			if ((BCV_BASE_TYPE_DOUBLE == stackEntry) || (BCV_BASE_TYPE_LONG == stackEntry)) {
 				if (localsCount >= maxLocals) {
-					/* Oveflow */
+					/* Overflow */
 					goto _overflow;
 				}
 				liveStack->stackElements[localsCount++] = BCV_BASE_TYPE_TOP;
@@ -1346,7 +1351,7 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 	maxStack = J9_MAX_STACK_FROM_ROM_METHOD(romMethod);
 
 	/* Jazz 105041: Initialize the 1st data slot on 'stack' with 'top' (placeholdler)
-	 * to avoid storing gargbage data type in the error message buffer
+	 * to avoid storing garbage data type in the error message buffer
 	 * when stack underflow occurs.
 	 */
 	liveStack->stackElements[liveStack->stackBaseIndex] = BCV_BASE_TYPE_TOP;
@@ -1505,7 +1510,7 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 				} else {
 					index = PARAM_16(bcIndex, 1);
 				}
-				stackTop = pushLdcType(romClass, index, stackTop);
+				stackTop = pushLdcType(verifyData, romClass, index, stackTop);
 				break;
 
 			/* Change lookup table to generate constant of correct type */
@@ -1675,18 +1680,16 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 				if ((*J9UTF8_DATA(utf8string) == 'D') || (*J9UTF8_DATA(utf8string) == 'J')) {
 					DROP(1);
 				}
-				CHECK_STACK_UNDERFLOW;
 
 			} else {
 				/* JBgetfield/JBgetstatic - even bc's */
-				CHECK_STACK_UNDERFLOW;
 				stackTop = pushFieldType(verifyData, utf8string, stackTop);
 			}
 			break;
 
 		case RTV_SEND:
 			if (bc == JBinvokeinterface2) {
-				/* Set to point to JBinvokenterface */
+				/* Set to point to JBinvokeinterface */
 				bcIndex += 2;
 			}
 			index = PARAM_16(bcIndex, 1);
@@ -1705,15 +1708,14 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 			stackTop -= getSendSlotsFromSignature(J9UTF8_DATA(utf8string));
 
 			if ((JBinvokestatic != bc) 
-				&& (JBinvokedynamic != bc)
-				&& (JBinvokestaticsplit != bc)
+			&& (JBinvokedynamic != bc)
+			&& (JBinvokestaticsplit != bc)
 			) {
 				if ((JBinvokespecial == bc) 
-					|| (JBinvokespecialsplit == bc)
+				|| (JBinvokespecialsplit == bc)
 				) {
 
 					type = POP;
-					CHECK_STACK_UNDERFLOW;
 					if (J9UTF8_DATA(J9ROMNAMEANDSIGNATURE_NAME(J9ROMMETHODREF_NAMEANDSIGNATURE((J9ROMMethodRef *) info)))[0] == '<') {
 
 						/* This is <init>, verify that this is a NEW or INIT object */
@@ -1738,7 +1740,6 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 				} 
 			}
 
-			CHECK_STACK_UNDERFLOW;
 			stackTop = pushReturnType(verifyData, utf8string, stackTop);
 			break;
 
@@ -1891,7 +1892,6 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 
 		case RTV_BYTECODE_DUP:
 			type = POP;
-			CHECK_STACK_UNDERFLOW;
 			PUSH(type);
 			PUSH(type);
 			break;
@@ -1899,7 +1899,6 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 		case RTV_BYTECODE_DUPX1:
 			type = POP;
 			temp1 = POP;
-			CHECK_STACK_UNDERFLOW;
 			PUSH(type);
 			PUSH(temp1);
 			PUSH(type);
@@ -1909,7 +1908,6 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 			type = POP;
 			temp1 = POP;
 			temp2 = POP;
-			CHECK_STACK_UNDERFLOW;
 			PUSH(type);
 			PUSH(temp2);
 			PUSH(temp1);
@@ -1919,7 +1917,6 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 		case RTV_BYTECODE_DUP2:
 			temp1 = POP;
 			temp2 = POP;
-			CHECK_STACK_UNDERFLOW;
 			PUSH(temp2);
 			PUSH(temp1);
 			PUSH(temp2);
@@ -1930,7 +1927,6 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 			type = POP;
 			temp1 = POP;
 			temp2 = POP;
-			CHECK_STACK_UNDERFLOW;
 			PUSH(temp1);
 			PUSH(type);
 			PUSH(temp2);
@@ -1943,7 +1939,6 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 			temp1 = POP;
 			temp2 = POP;
 			temp3 = POP;
-			CHECK_STACK_UNDERFLOW;
 			PUSH(temp1);
 			PUSH(type);
 			PUSH(temp3);
@@ -1955,7 +1950,6 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 		case RTV_BYTECODE_SWAP:
 			type = POP;
 			temp1 = POP;
-			CHECK_STACK_UNDERFLOW;
 			PUSH(type);
 			PUSH(temp1);
 			break;
@@ -2296,7 +2290,7 @@ j9bcv_initializeVerificationData(J9JavaVM* javaVM)
 	J9BytecodeVerificationData * verifyData;
 	PORT_ACCESS_FROM_JAVAVM(javaVM);
 	JavaVM* jniVM = (JavaVM*)javaVM;
-    J9ThreadEnv* threadEnv;
+	J9ThreadEnv* threadEnv;
 
 	(*jniVM)->GetEnv(jniVM, (void**)&threadEnv, J9THREAD_VERSION_1_1);
 
@@ -2398,7 +2392,7 @@ j9bcv_verifyBytecodes (J9PortLibrary * portLib, J9Class * clazz, J9ROMClass * ro
 	/* save current and set vmState */
 	oldState = verifyData->vmStruct->omrVMThread->vmState;
 	verifyData->vmStruct->omrVMThread->vmState = J9VMSTATE_BCVERIFY;
-	
+
 	verifyData->romClass = romClass;
 	verifyData->errorPC = 0;
 	
@@ -2420,7 +2414,7 @@ j9bcv_verifyBytecodes (J9PortLibrary * portLib, J9Class * clazz, J9ROMClass * ro
 		UDATA createStackMaps;
 		
 		verifyData->ignoreStackMaps = (verifyData->verificationFlags & J9_VERIFY_IGNORE_STACK_MAPS) != 0;
-		
+		verifyData->createdStackMap = FALSE;
 		verifyData->romMethod = romMethod;
 
 		Trc_BCV_j9bcv_verifyBytecodes_VerifyMethod(verifyData->vmStruct,
@@ -2436,8 +2430,9 @@ j9bcv_verifyBytecodes (J9PortLibrary * portLib, J9Class * clazz, J9ROMClass * ro
 		if (!((romMethod->modifiers & J9AccNative) || (romMethod->modifiers & J9AccAbstract))) {
 			BOOLEAN isInitMethod = FALSE;
 
-	        /* BCV_TARGET_STACK_HEADER_UDATA_SIZE for pc/stackBase/stackEnd in J9BranchTargetStack and */
-	        /* BCV_STACK_OVERFLOW_BUFFER_UDATA_SIZE for late overflow detection of longs/doubles */
+			/* BCV_TARGET_STACK_HEADER_UDATA_SIZE for pc/stackBase/stackEnd in J9BranchTargetStack and
+			 * BCV_STACK_OVERFLOW_BUFFER_UDATA_SIZE for late overflow detection of longs/doubles
+			 */
 			verifyData->stackSize = (J9_MAX_STACK_FROM_ROM_METHOD(romMethod)
 									+ J9_ARG_COUNT_FROM_ROM_METHOD(romMethod)
 									+ J9_TEMP_COUNT_FROM_ROM_METHOD(romMethod)
@@ -2458,7 +2453,6 @@ _fallBack:
 			createStackMaps = !classVersionRequiresStackmaps && (verifyData->ignoreStackMaps || !hasStackMaps);
 
 			if (createStackMaps) {
-				
 				verifyData->stackMapsCount = buildBranchMap(verifyData);
 				
 				if (verifyData->stackMapsCount == (UDATA)BCV_ERR_INTERNAL_ERROR) {
@@ -2486,6 +2480,8 @@ _fallBack:
 		
 			if (createStackMaps && verifyData->stackMapsCount) {
 				UDATA mapIndex = 0;
+				/* Non-empty internal stackMap created */
+				verifyData->createdStackMap = TRUE;
 	
 				liveStack = BCV_FIRST_STACK ();
 				/* Initialize stackMaps */

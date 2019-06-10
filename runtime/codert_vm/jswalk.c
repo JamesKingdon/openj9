@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -731,18 +731,16 @@ static void walkJITFrameSlots(J9StackWalkState * walkState, U_8 * jitDescription
 static void jitWalkRegisterMap(J9StackWalkState *walkState, void *stackMap, J9JITStackAtlas *gcStackAtlas)
 {
 	UDATA registerMap = getJitRegisterMap(walkState->jitInfo, stackMap) & J9SW_REGISTER_MAP_MASK;
-	UDATA highWordRegisterMap = getJitHighWordRegisterMap(walkState->jitInfo, stackMap);
 
 #ifdef J9VM_INTERP_STACKWALK_TRACING
 	swPrintf(walkState, 3, "\tJIT-RegisterMap = %p\n", registerMap);
-	swPrintf(walkState, 3, "\tJIT-HighWordRegisterMap = %p\n", highWordRegisterMap);
 #endif
 
 	if (gcStackAtlas->internalPointerMap) {
 		registerMap &= ~INTERNAL_PTR_REG_MASK;
 	}
 
-	if (registerMap || highWordRegisterMap) {
+	if (registerMap) {
 		UDATA count = J9SW_POTENTIAL_SAVED_REGISTERS;
 		UDATA ** mapCursor;
 
@@ -784,75 +782,6 @@ static void jitWalkRegisterMap(J9StackWalkState *walkState, void *stackMap, J9JI
 
 #endif
 			}
-#if defined(J9VM_JIT_HIGH_WORD_REGISTERS) && defined(J9VM_GC_COMPRESSED_POINTERS)
-			else if (highWordRegisterMap & 3) {
-				UDATA compressedPointersShift = walkState->walkThread->javaVM->compressedPointersShift;
-
-				/* check low word and high word registers seperately */
-				if (highWordRegisterMap & 1) {
-					/* we have a 32-bit compressed reference living in the low word of GPR */
-					U_32* targetCompressedObject = *(((U_32 **) mapCursor) + sizeof (U_32));
-					/* decompress the low word object to a temp and pass it to the WalkFunction */
-					UDATA decompressedObject = *targetCompressedObject << compressedPointersShift;
-					j9object_t * targetDecompressedObject = (j9object_t *)(&decompressedObject);
-#ifdef J9VM_INTERP_STACKWALK_TRACING
-#ifdef J9VM_OUT_OF_PROCESS
-					U_32 oldCompressedObject = (targetCompressedObject == NULL) ? 0 : *targetCompressedObject;
-#else
-					U_32 oldCompressedObject = *targetCompressedObject;
-#endif
-					U_32 newObject;
-					swPrintf(walkState, 4, "\t\tJIT-RegisterMap-O-Slot (Low word) [%p] = 0x%x (%s)\n",REMOTE_ADDR(targetCompressedObject), oldCompressedObject, jitRegisterNames[mapCursor - ((UDATA **) &(walkState->registerEAs))]);
-#endif
-
-					walkState->objectSlotWalkFunction(walkState->walkThread, walkState, targetDecompressedObject, REMOTE_ADDR(targetDecompressedObject));
-
-					/* compress the new object in temp */
-					*targetCompressedObject = (U_32)(decompressedObject >> compressedPointersShift);
-#ifdef J9VM_INTERP_STACKWALK_TRACING
-#ifdef J9VM_OUT_OF_PROCESS
-					newObject = (targetCompressedObject == NULL) ? 0 : *targetCompressedObject;
-#else
-					newObject = *targetCompressedObject;
-#endif
-					if (oldCompressedObject != newObject) {
-						swPrintf(walkState, 4, "\t\t\t-> 0x%x\n", newObject);
-					}
-#endif
-				}
-				if (highWordRegisterMap & 2) {
-					/* we have a 32-bit compressed reference living in the high word of GPR */
-					U_32* targetCompressedObject = *( ((U_32 **) mapCursor));
-					/* decompress the high word object to a temp and pass it to the WalkFunction */
-					UDATA decompressedObject = *targetCompressedObject << compressedPointersShift;
-					j9object_t * targetDecompressedObject = (j9object_t *)(&decompressedObject);
-#ifdef J9VM_INTERP_STACKWALK_TRACING
-#ifdef J9VM_OUT_OF_PROCESS
-					U_32 oldCompressedObject = (targetCompressedObject == NULL) ? 0 : *targetCompressedObject;
-#else
-					U_32 oldCompressedObject = *targetCompressedObject;
-#endif
-					U_32 newObject;
-					swPrintf(walkState, 4, "\t\tJIT-RegisterMap-O-Slot (High word)[%p] = 0x%x (%s)\n", REMOTE_ADDR(targetCompressedObject), oldCompressedObject, jitRegisterNames[mapCursor - ((UDATA **) &(walkState->registerEAs))]);
-#endif
-
-					walkState->objectSlotWalkFunction(walkState->walkThread, walkState, targetDecompressedObject, REMOTE_ADDR(targetDecompressedObject));
-	
-					/* compress the new object in temp */
-					*targetCompressedObject = (U_32)(decompressedObject >> compressedPointersShift);
-#ifdef J9VM_INTERP_STACKWALK_TRACING
-#ifdef J9VM_OUT_OF_PROCESS
-					newObject = (targetCompressedObject == NULL) ? 0 : *targetCompressedObject;
-#else
-					newObject = *targetCompressedObject;
-#endif
-					if (oldCompressedObject != newObject) {
-						swPrintf(walkState, 4, "\t\t\t-> 0x%x\n", newObject);
-					}
-#endif
-				}
-			}
-#endif
 #ifdef J9VM_INTERP_STACKWALK_TRACING
 			else {
 				UDATA * targetSlot = *((UDATA **) mapCursor);
@@ -869,7 +798,6 @@ static void jitWalkRegisterMap(J9StackWalkState *walkState, void *stackMap, J9JI
 			++(walkState->slotIndex);
 			--count;
 			registerMap >>= 1;
-			highWordRegisterMap >>=2;
 #ifdef J9SW_REGISTER_MAP_WALK_REGISTERS_LOW_TO_HIGH
 			++mapCursor;
 #else
@@ -1096,26 +1024,38 @@ static void jitWalkResolveMethodFrame(J9StackWalkState *walkState)
 		walkState->unwindSP += J9SW_ARGUMENT_REGISTER_COUNT;
 		stackSpillCursor = walkState->unwindSP - 1;
 #endif
-#ifdef J9SW_JIT_RECOMPILATION_RESOLVE_OFFSET_TO_SAVED_RECEIVER
-		if (walkStackedReceiver && (walkState->flags & J9_STACKWALK_ITERATE_O_SLOTS)) {
-#ifdef J9VM_INTERP_STACKWALK_TRACING
-			swPrintf(walkState, 4, "\tObject push (recompilation saved receiver)\n");
-#endif
-			WALK_O_SLOT((j9object_t*) (walkState->unwindSP + J9SW_JIT_RECOMPILATION_RESOLVE_OFFSET_TO_SAVED_RECEIVER));
-		}
-#endif
 		walkState->unwindSP += getJitRecompilationResolvePushes();
 	} else if (resolveFrameType == J9_STACK_FLAGS_JIT_LOOKUP_RESOLVE) {
-		UDATA * interfaceObjectAndISlot = (UDATA *) JIT_RESOLVE_PARM(2);
-		J9Class * interfaceClass = READ_CLASS((J9Class *) READ_UDATA(interfaceObjectAndISlot));
-		UDATA methodIndex = READ_UDATA(interfaceObjectAndISlot + 1);
-		J9ROMMethod * romMethod = J9ROMCLASS_ROMMETHODS(interfaceClass->romClass);
-
-		while (methodIndex) {
-			romMethod = nextROMMethod(romMethod);
-			--methodIndex;
+		UDATA *interfaceObjectAndISlot = (UDATA *) JIT_RESOLVE_PARM(2);
+		J9Class *resolvedClass = READ_CLASS((J9Class *) READ_UDATA(interfaceObjectAndISlot));
+		UDATA iTableOffset = READ_UDATA(interfaceObjectAndISlot + 1);
+		J9Method *ramMethod = NULL;
+		J9ROMMethod *romMethod = NULL;
+		if (J9_ARE_ANY_BITS_SET(iTableOffset, J9_ITABLE_OFFSET_DIRECT)) {
+			ramMethod = (J9Method*)(iTableOffset & ~J9_ITABLE_OFFSET_TAG_BITS);
+		} else if (J9_ARE_ANY_BITS_SET(iTableOffset, J9_ITABLE_OFFSET_VIRTUAL)) {
+			UDATA vTableOffset = iTableOffset & ~J9_ITABLE_OFFSET_TAG_BITS;
+			J9Class *jlObject = J9VMJAVALANGOBJECT_OR_NULL(walkState->walkThread->javaVM);
+			ramMethod = *(J9Method**)((UDATA)jlObject + vTableOffset);
+		} else {
+			UDATA methodIndex = (iTableOffset - sizeof(J9ITable)) / sizeof(UDATA);
+			/* Find the appropriate segment for the referenced method within the
+			 * resolvedClass iTable.
+			 */
+			J9ITable *allInterfaces = (J9ITable*)resolvedClass->iTable;
+			for(;;) {
+				J9Class *interfaceClass = allInterfaces->interfaceClass;
+				UDATA methodCount = J9INTERFACECLASS_ITABLEMETHODCOUNT(interfaceClass);
+				if (methodIndex < methodCount) {
+					/* iTable segment located */
+					ramMethod = iTableMethodAtIndex(interfaceClass, methodIndex);
+					break;
+				}
+				methodIndex -= methodCount;
+				allInterfaces = allInterfaces->next;
+			}
 		}
-
+		romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(ramMethod);
 		signature = J9ROMMETHOD_GET_SIGNATURE(interfaceClass->romClass, romMethod);
 		pendingSendSlots = J9_ARG_COUNT_FROM_ROM_METHOD(romMethod); /* receiver is already included in this arg count */
 		walkStackedReceiver = TRUE;

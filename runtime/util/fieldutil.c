@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #if defined(J9VM_OUT_OF_PROCESS)
 #include "j9dbgext.h"
@@ -56,7 +56,11 @@ const U_8 fieldModifiersLookupTable[] = {
 	0x00												/* N */,
 	0x00												/* O */,
 	0x00												/* P */,
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+	(U_8)(J9FieldFlagObject >> 16)						/* Q */,
+#else
 	0x00												/* Q */,
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 	0x00												/* R */,
 	(U_8)(J9FieldTypeShort >> 16)						/* S */,
 	0x00												/* T */,

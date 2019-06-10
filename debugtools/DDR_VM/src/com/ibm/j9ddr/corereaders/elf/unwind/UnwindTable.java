@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2014, 2014 IBM Corp. and others
+ * Copyright (c) 2014, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.corereaders.elf.unwind;
 
@@ -25,10 +25,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Stack;
 
@@ -133,7 +130,7 @@ public class UnwindTable {
 		state.registerRules = new HashMap<Integer, RegisterRule>();
 
 		{
-//			out.printf("CIE has initial instuctions:\n");
+//			out.printf("CIE has initial instructions:\n");
 //			
 //			String s = "";
 //			for( byte b: fde.getCIE().getInitialInstructions() ) {
@@ -160,7 +157,7 @@ public class UnwindTable {
 		}
 
 		{
-//			System.err.printf("FDE has instuctions:\n");
+//			System.err.printf("FDE has instructions:\n");
 //			
 //			String s = "";
 //			for( byte b: fde.getCallFrameInstructions()) {

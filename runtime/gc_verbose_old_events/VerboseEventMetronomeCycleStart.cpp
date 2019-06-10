@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "VerboseEventMetronomeCycleStart.hpp"
@@ -74,7 +74,7 @@ MM_VerboseEventMetronomeCycleStart::formattedOutput(MM_VerboseOutputAgent *agent
 	char timestamp[32];
 	/* Intervalms for cycle start is the distance (in time) from previous cycle end and this cycle start.
 	 * There should be no heartbeat nither syncGC/OOM events in between the two, since no GC should be happening in between.
-	 * SyncGC due to Explict GC are possible between cycle end and cycle start */
+	 * SyncGC due to explicit GC are possible between cycle end and cycle start */
 	U_64 timeSinceLastCycleEnd;
 	U_64 prevTime;
 

@@ -1,5 +1,5 @@
 ##############################################################################
-#  Copyright (c) 2016, 2017 IBM Corp. and others
+#  Copyright (c) 2016, 2019 IBM Corp. and others
 #
 #  This program and the accompanying materials are made available under
 #  the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,13 +17,14 @@
 #  [1] https://www.gnu.org/software/classpath/license.html
 #  [2] http://openjdk.java.net/legal/assembly-exception.html
 #
-#  SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+#  SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 ##############################################################################
 
 use strict;
 use warnings;
 use Data::Dumper;
-use feature 'say';
+use File::Basename;
+use File::Path qw/make_path/;
 
 my $resultFile;
 my $failuremkarg;
@@ -44,7 +45,7 @@ for (my $i = 0; $i < scalar(@ARGV); $i++) {
 }
 
 if (!$failuremkarg) {
-	die "Please specify a vaild file path using --failuremk= option!";
+	die "Please specify a valid file path using --failuremk= option!";
 }
 
 my $failures = resultReporter();
@@ -55,10 +56,13 @@ sub resultReporter {
 	my $numOfFailed = 0;
 	my $numOfPassed = 0;
 	my $numOfSkipped = 0;
+	my $numOfDisabled = 0;
 	my $numOfTotal = 0;
+	my $runningDisabled = 0;
 	my @passed;
 	my @failed;
-	my @skipped;
+	my @disabled;
+	my @capSkipped;
 	my $tapString = '';
 	my $fhIn;
 
@@ -67,84 +71,120 @@ sub resultReporter {
 	if (open($fhIn, '<', $resultFile)) {
 		while ( my $result = <$fhIn> ) {
 			if ($result =~ /===============================================\n/) {
-				my $output = "  ---\n    output:\n      |\n";
+				my $output = "    output:\n      |\n";
 				$output .= '        ' . $result;
 				my $testName = '';
+				my $startTime = 0;
+				my $endTime = 0;
 				while ( $result = <$fhIn> ) {
+					# remove extra carriage return
+					$result =~ s/\r//g;
+					$output .= '        ' . $result;
 					if ($result =~ /Running test (.*) \.\.\.\n/) {
 						$testName = $1;
+					} elsif ($result =~ /^\Q$testName\E Start Time: .* Epoch Time \(ms\): (.*)\n/) {
+						$startTime = $1;
+					} elsif ($result =~ /^\Q$testName\E Finish Time: .* Epoch Time \(ms\): (.*)\n/) {
+						$endTime = $1;
+						$tapString .= "    duration_ms: " . ($endTime - $startTime) . "\n  ...\n";
+						last;
 					} elsif ($result eq ($testName . "_PASSED\n")) {
 						$result =~ s/_PASSED\n$//;
 						push (@passed, $result);
 						$numOfPassed++;
 						$numOfTotal++;
 						$tapString .= "ok " . $numOfTotal . " - " . $result . "\n";
+						$tapString .= "  ---\n";
 						if ($diagnostic eq 'all') {
-							$output .= "  ...\n";
 							$tapString .= $output;
 						}
-						last;
 					} elsif ($result eq ($testName . "_FAILED\n")) {
 						$result =~ s/_FAILED\n$//;
 						push (@failed, $result);
 						$numOfFailed++;
 						$numOfTotal++;
 						$tapString .= "not ok " . $numOfTotal . " - " . $result . "\n";
+						$tapString .= "  ---\n";
 						if (($diagnostic eq 'failure') || ($diagnostic eq 'all')) {
-							$output .= "  ...\n";
 							$tapString .= $output;
 						}
-						last;
-					} elsif ($result eq ($testName . "_SKIPPED\n")) {
-						$result =~ s/_SKIPPED\n$//;
-						push (@skipped, $result);
+					} elsif ($result eq ($testName . "_DISABLED\n")) {
+						$result =~ s/_DISABLED\n$//;
+						push (@disabled, $result);
+						$numOfDisabled++;
+						$numOfTotal++;
+					} elsif ($result eq ("Test is disabled due to:\n")) {
+						$runningDisabled = 1;
+					} elsif ($result =~ /(capabilities \(.*?\))\s*=>\s*${testName}_SKIPPED\n/) {
+						my $capabilities = $1;
+						push (@capSkipped, "$testName - $capabilities");
 						$numOfSkipped++;
 						$numOfTotal++;
-						$tapString .= "ok " . $numOfTotal . " - " . $result . " # skip\n";
-						last;
+						$tapString .= "ok " . $numOfTotal . " - " . $testName . " # skip\n";
+						$tapString .= "  ---\n";
+					} elsif ($result =~ /(jvm options|platform requirements).*=>\s*${testName}_SKIPPED\n/) {
+						$numOfSkipped++;
+						$numOfTotal++;
+						$tapString .= "ok " . $numOfTotal . " - " . $testName . " # skip\n";
+						$tapString .= "  ---\n";
 					}
-					$output .= '        ' . $result;
 				}
 			}
 		}
 
 		close $fhIn;
-
-		#generate tap output
-		if ($tapFile) {
-			open(my $fhOut, '>', $tapFile) or die "Cannot open file $tapFile!";
-			print $fhOut "1.." . $numOfTotal . "\n";
-			print $fhOut $tapString;
-			close $fhOut;
-		}
 	}
 
 	#generate console output
 	print "TEST TARGETS SUMMARY\n";
-	print "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
+	print "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
+
+	if ($numOfDisabled != 0) {
+		printTests(\@disabled, "DISABLED test targets");
+		print "\n";
+	}
+
+	# only print out skipped due to capabilities in console
+	if (@capSkipped) {
+		printTests(\@capSkipped, "SKIPPED test targets due to capabilities");
+		print "\n";
+	}
 
 	if ($numOfPassed != 0) {
-		printTests(\@passed, "PASSED");
+		printTests(\@passed, "PASSED test targets");
 		print "\n";
 	}
 
 	if ($numOfFailed != 0) {
-		printTests(\@failed, "FAILED");
+		printTests(\@failed, "FAILED test targets");
 		print "\n";
 	}
 
-	if ($numOfSkipped != 0) {
-		printTests(\@skipped, "SKIPPED");
-		print "\n";
+	$numOfExecuted = $numOfTotal - $numOfSkipped - $numOfDisabled;
+
+	print "TOTAL: $numOfTotal   EXECUTED: $numOfExecuted   PASSED: $numOfPassed   FAILED: $numOfFailed";
+	# Hide numOfDisabled when running disabled tests list.
+	if ($runningDisabled == 0) {
+		print "   DISABLED: $numOfDisabled";   
+	}
+	print "   SKIPPED: $numOfSkipped";
+	print "\n";
+	if ($numOfTotal > 0) {
+		#generate tap output
+		my $dir = dirname($tapFile);
+		if (!(-e $dir and -d $dir)) {
+			make_path($dir);
+		}
+		open(my $fhOut, '>', $tapFile) or die "Cannot open file $tapFile!";
+		print $fhOut "1.." . $numOfTotal . "\n";
+		print $fhOut $tapString;
+		close $fhOut;
+		if ($numOfFailed == 0) {
+			print "ALL TESTS PASSED\n";
+		}
 	}
 
-	$numOfExecuted = $numOfTotal - $numOfSkipped;
-
-	print "TOTAL: $numOfTotal   EXECUTED: $numOfExecuted   PASSED: $numOfPassed   FAILED: $numOfFailed   SKIPPED: $numOfSkipped\n";
-	if (($numOfTotal > 0) && ($numOfFailed == 0)) {
-		print "ALL TESTS PASSED\n";
-	}
-	print "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
+	print "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
 
 	unlink($resultFile);
 
@@ -152,8 +192,8 @@ sub resultReporter {
 }
 
 sub printTests() {
-	my ($tests, $tag) = @_;
-	print "$tag test targets:\n\t";
+	my ($tests, $msg) = @_;
+	print "$msg:\n\t";
 	print join("\n\t", @{$tests});
 	print "\n";
 }
@@ -169,12 +209,17 @@ sub failureMkGen {
 		. "########################################################\n"
 		. "\n";
 		print $fhOut $headerComments;
-		print $fhOut "failed:";
-		print $fhOut " \\\nrmResultFile";
+		print $fhOut ".DEFAULT_GOAL := failed\n\n"
+					. "D = /\n\n"
+					. "ifndef TEST_ROOT\n"
+					. "\tTEST_ROOT := \$(shell pwd)\$(D)..\n"
+					. "endif\n\n"
+					. "failed:\n";
 		foreach my $target (@$failureTargets) {
-			print $fhOut " \\\n" . $target;
+			print $fhOut '	@$(MAKE) -C $(TEST_ROOT) -f autoGen.mk ' . $target . "\n";
 		}
-		print $fhOut " \\\nresultsSummary";
+		print $fhOut "\n.PHONY: failed\n"
+					. ".NOTPARALLEL: failed";
 		close $fhOut;
 	}
 }

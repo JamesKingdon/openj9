@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 /**
  * @file
@@ -124,7 +124,7 @@ MM_InterRegionRememberedSet::flushBuffersForDecommitedRegions(MM_EnvironmentVLHG
 
 		/* At this point there should be no non-empty buffers used by decommitted regions.
 		 * Now, walk the global pool of free buffers, and remove them from the list if they are owned by decommitted region.
-		 * Before that, move all free buffes from thread local pools to the global
+		 * Before that, move all free buffers from thread local pools to the global
 		 */
 
 		releaseCardBufferControlBlockLocalPools(env);
@@ -265,13 +265,16 @@ MM_InterRegionRememberedSet::initialize(MM_EnvironmentVLHGC* env)
 	_regionTable = _heapRegionManager->_regionTable;
 	_tableDescriptorSize = _heapRegionManager->_tableDescriptorSize;
 	UDATA baseOfHeap = (UDATA) (_heapRegionManager->_regionTable)->getLowAddress();
-#if defined(J9VM_GC_COMPRESSED_POINTERS)
-	_cardToRegionShift = _heapRegionManager->_regionShift - CARD_SIZE_SHIFT;
-	_cardToRegionDisplacement = baseOfHeap >> CARD_SIZE_SHIFT;
-#else
-	_cardToRegionShift = _heapRegionManager->_regionShift;
-	_cardToRegionDisplacement = baseOfHeap;
-#endif
+#if defined(OMR_GC_COMPRESSED_POINTERS)
+	if (env->compressObjectReferences()) {
+		_cardToRegionShift = _heapRegionManager->_regionShift - CARD_SIZE_SHIFT;
+		_cardToRegionDisplacement = baseOfHeap >> CARD_SIZE_SHIFT;
+	} else
+#endif /* defined(OMR_GC_COMPRESSED_POINTERS) */
+	{
+		_cardToRegionShift = _heapRegionManager->_regionShift;
+		_cardToRegionDisplacement = baseOfHeap;
+	}
 	_cardTable = ext->cardTable;
 
 	return true;
@@ -424,6 +427,16 @@ MM_InterRegionRememberedSet::releaseCardBufferControlBlockList(MM_EnvironmentVLH
 }
 
 void
+MM_InterRegionRememberedSet::releaseCardBufferControlBlockListForThread(MM_EnvironmentVLHGC* env, MM_EnvironmentVLHGC* threadEnv)
+{
+	threadEnv->_rsclBufferControlBlockCount -= releaseCardBufferControlBlockList(env, threadEnv->_rsclBufferControlBlockHead, threadEnv->_rsclBufferControlBlockTail);
+	Assert_MM_true(0 == threadEnv->_rsclBufferControlBlockCount);
+	threadEnv->_rsclBufferControlBlockHead = NULL;
+	threadEnv->_rsclBufferControlBlockTail = NULL;
+	threadEnv->_lastOverflowedRsclWithReleasedBuffers = NULL;
+}
+
+void
 MM_InterRegionRememberedSet::releaseCardBufferControlBlockLocalPools(MM_EnvironmentVLHGC* env)
 {
 	GC_VMThreadListIterator vmThreadListIterator((J9JavaVM *)env->getLanguageVM());
@@ -433,20 +446,12 @@ MM_InterRegionRememberedSet::releaseCardBufferControlBlockLocalPools(MM_Environm
 	while((aThread = vmThreadListIterator.nextVMThread()) != NULL) {
 		MM_EnvironmentVLHGC *threadEnvironment = MM_EnvironmentVLHGC::getEnvironment(aThread);
 		if (GC_SLAVE_THREAD == threadEnvironment->getThreadType()) {
-			threadEnvironment->_rsclBufferControlBlockCount -= releaseCardBufferControlBlockList(env, threadEnvironment->_rsclBufferControlBlockHead, threadEnvironment->_rsclBufferControlBlockTail);
-			Assert_MM_true(0 == threadEnvironment->_rsclBufferControlBlockCount);
-			threadEnvironment->_rsclBufferControlBlockHead = NULL;
-			threadEnvironment->_rsclBufferControlBlockTail = NULL;
-			threadEnvironment->_lastOverflowedRsclWithReleasedBuffers = NULL;
+			releaseCardBufferControlBlockListForThread(env, threadEnvironment);
 		}
 	}
 
 	/* do the same for master-GC-thread */
-	env->_rsclBufferControlBlockCount -= releaseCardBufferControlBlockList(env, env->_rsclBufferControlBlockHead, env->_rsclBufferControlBlockTail);
-	Assert_MM_true(0 == env->_rsclBufferControlBlockCount);
-	env->_rsclBufferControlBlockHead = NULL;
-	env->_rsclBufferControlBlockTail = NULL;
-	env->_lastOverflowedRsclWithReleasedBuffers = NULL;
+	releaseCardBufferControlBlockListForThread(env, env);
 
 	_overflowedListHead = NULL;
 	_overflowedListTail = NULL;
@@ -743,10 +748,7 @@ MM_InterRegionRememberedSet::clearFromRegionReferencesForCompact(MM_EnvironmentV
 		clearFromRegionReferencesForCompactDirect(env);
 	}
 
-	env->_rsclBufferControlBlockCount -= releaseCardBufferControlBlockList(env, env->_rsclBufferControlBlockHead, env->_rsclBufferControlBlockTail);
-	Assert_MM_true(0 == env->_rsclBufferControlBlockCount);
-	env->_rsclBufferControlBlockHead = NULL;
-	env->_rsclBufferControlBlockTail = NULL;
+	releaseCardBufferControlBlockListForThread(env, env);
 }
 
 void
@@ -896,10 +898,7 @@ MM_InterRegionRememberedSet::clearFromRegionReferencesForMark(MM_EnvironmentVLHG
 		clearFromRegionReferencesForMarkDirect(env);
 	}
 
-	env->_rsclBufferControlBlockCount -= releaseCardBufferControlBlockList(env, env->_rsclBufferControlBlockHead, env->_rsclBufferControlBlockTail);
-	Assert_MM_true(0 == env->_rsclBufferControlBlockCount);
-	env->_rsclBufferControlBlockHead = NULL;
-	env->_rsclBufferControlBlockTail = NULL;
+	releaseCardBufferControlBlockListForThread(env, env);
 }
 
 void

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -78,7 +78,7 @@ verifyClassMethods(J9JavaVM *vm, J9Class *clazz)
 {
 	J9ROMClass *romClass = (J9ROMClass *)DBG_ARROW(clazz, romClass);
 	UDATA romClassModifiers = (UDATA)DBG_ARROW(romClass, modifiers);
-	BOOLEAN isInterfaceClass = (J9_JAVA_INTERFACE == (romClassModifiers & J9_JAVA_INTERFACE));
+	BOOLEAN isInterfaceClass = (J9AccInterface == (romClassModifiers & J9AccInterface));
 	J9ConstantPool *ramConstantPool = (J9ConstantPool *)DBG_ARROW(clazz, ramConstantPool);
 	U_32 methodCount = (U_32)DBG_ARROW(romClass, romMethodCount);
 	J9Method *methods = (J9Method *)DBG_ARROW(clazz, ramMethods);
@@ -116,12 +116,12 @@ static BOOLEAN
 findMethodInVTable(J9Method *method, J9Class *clazz)
 {
 	UDATA vTableIndex;
-	UDATA *vTable = (UDATA *)(clazz + 1);
-	UDATA vTableSize = DBG_STAR(vTable);
+	J9VTableHeader *vTableHeader = J9VTABLE_HEADER_FROM_RAM_CLASS(clazz);
+	UDATA vTableSize = vTableHeader->size;
+	J9Method **vTable = J9VTABLE_FROM_HEADER(vTableHeader);
 
-	/* skip magic first entry */
-	for (vTableIndex = 2; vTableIndex <= vTableSize; vTableIndex++) {
-		if (method == (J9Method *)DBG_INDEX(vTable, vTableIndex)) {
+	for (vTableIndex = 0; vTableIndex < vTableSize; vTableIndex++) {
+		if (method == vTable[vTableIndex]) {
 			return TRUE;
 		}
 	}

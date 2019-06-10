@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2017 IBM Corp. and others
+ * Copyright (c) 2012, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9accessbarrier.h"
@@ -226,14 +226,15 @@ extern _ENTRY globalLeConditionHandlerENTRY;
 #endif /* J9VM_PORT_ZOS_CEEHDLRSUPPORT */
 
 static VMINLINE J9Method*
-mapVirtualMethod(J9VMThread *currentThread, J9Method *method, UDATA vTableIndex, J9Class *receiverClass)
+mapVirtualMethod(J9VMThread *currentThread, J9Method *method, UDATA vTableOffset, J9Class *receiverClass)
 {
-	if (J9_ARE_ANY_BITS_SET(vTableIndex, J9_JNI_MID_INTERFACE)) {
-		UDATA iTableIndex = vTableIndex & ~(UDATA)J9_JNI_MID_INTERFACE;
+	/* J9_JNI_MID_INTERFACE will be set only for iTable methods.  Private interface methods
+	 * and Object methods will not have the tag.
+	 */
+	if (J9_ARE_ANY_BITS_SET(vTableOffset, J9_JNI_MID_INTERFACE)) {
+		UDATA iTableIndex = vTableOffset & ~(UDATA)J9_JNI_MID_INTERFACE;
 		J9Class *interfaceClass = J9_CLASS_FROM_METHOD(method);
-		// TODO: should this code be handling Object methods?
-		// refactor VMHelpers convertITableIndexToVTableIndex to take NAS?
-		vTableIndex = 0;
+		vTableOffset = 0;
 		J9ITable * iTable = receiverClass->lastITable;
 		if (interfaceClass == iTable->interfaceClass) {
 			goto foundITable;
@@ -243,14 +244,14 @@ mapVirtualMethod(J9VMThread *currentThread, J9Method *method, UDATA vTableIndex,
 			if (interfaceClass == iTable->interfaceClass) {
 				receiverClass->lastITable = iTable;
 foundITable:
-				vTableIndex = ((UDATA*)(iTable + 1))[iTableIndex];
+				vTableOffset = ((UDATA*)(iTable + 1))[iTableIndex];
 				break;
 			}
 			iTable = iTable->next;
 		}
 	}
-	if (0 != vTableIndex) {
-		method = *(J9Method**)(((UDATA)receiverClass) + vTableIndex);
+	if (0 != vTableOffset) {
+		method = *(J9Method**)(((UDATA)receiverClass) + vTableOffset);
 	}
 	return method;
 }
@@ -400,7 +401,7 @@ restoreCallInFrame(J9VMThread *currentThread)
 }
 
 void JNICALL
-sendClinit(J9VMThread *currentThread, J9Class *clazz, UDATA reserved1, UDATA reserved2, UDATA reserved3)
+sendClinit(J9VMThread *currentThread, J9Class *clazz)
 {
 	Trc_VM_sendClinit_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -423,15 +424,15 @@ sendClinit(J9VMThread *currentThread, J9Class *clazz, UDATA reserved1, UDATA res
 }
 
 void JNICALL
-sendLoadClass(J9VMThread *currentThread, j9object_t classLoaderObject, j9object_t classNameObject, UDATA reserved1, UDATA reserved2)
+sendLoadClass(J9VMThread *currentThread, j9object_t classLoaderObject, j9object_t classNameObject)
 {
 	Trc_VM_sendLoadClass_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
 	if (buildCallInStackFrame(currentThread, &newELS, true, false)) {
 		/* Run the method from the vTable */
-		UDATA vTableIndex = J9VMJAVALANGCLASSLOADER_LOADCLASS_REF(currentThread->javaVM)->methodIndexAndArgCount >> 8;
+		UDATA vTableOffset = J9VMJAVALANGCLASSLOADER_LOADCLASS_REF(currentThread->javaVM)->methodIndexAndArgCount >> 8;
 		J9Class *classLoaderClass = J9OBJECT_CLAZZ(currentThread, classLoaderObject);
-		J9Method *method = *(J9Method**)(((UDATA)classLoaderClass) + vTableIndex);
+		J9Method *method = *(J9Method**)(((UDATA)classLoaderClass) + vTableOffset);
 		*--currentThread->sp = (UDATA)classLoaderObject;
 		*--currentThread->sp = (UDATA)classNameObject;
 		currentThread->returnValue = J9_BCLOOP_RUN_METHOD;
@@ -443,7 +444,7 @@ sendLoadClass(J9VMThread *currentThread, j9object_t classLoaderObject, j9object_
 }
 
 void JNICALL
-cleanUpAttachedThread(J9VMThread *currentThread, UDATA reserved1, UDATA reserved2, UDATA reserved3, UDATA reserved4)
+cleanUpAttachedThread(J9VMThread *currentThread)
 {
 	Trc_VM_cleanUpAttachedThread_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -464,7 +465,7 @@ cleanUpAttachedThread(J9VMThread *currentThread, UDATA reserved1, UDATA reserved
 }
 
 void JNICALL
-handleUncaughtException(J9VMThread *currentThread, UDATA reserved1, UDATA reserved2, UDATA reserved3, UDATA reserved4)
+handleUncaughtException(J9VMThread *currentThread)
 {
 	Trc_VM_handleUncaughtException_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -535,20 +536,20 @@ oom:
 				}
 				j9object_t threadGroup = (NULL == group) ? NULL : *group;
 				*--currentThread->sp = (UDATA)threadObject;
-				if (J2SE_SHAPE(vm) == J2SE_SHAPE_RAW) {
-					/* Oracle constructor takes thread group, thread name */
-					J9VMJAVALANGTHREAD_SET_PRIORITY(currentThread, threadObject, priority);
-					J9VMJAVALANGTHREAD_SET_ISDAEMON(currentThread, threadObject, (I_32)daemon);
-					*--currentThread->sp = (UDATA)threadGroup;
-					*--currentThread->sp = (UDATA)threadName;
-				} else {
-					/* J9 constructor takes thread name, thread group, priority and isDaemon */
-					J9VMJAVALANGTHREAD_SET_STARTED(currentThread, threadObject, JNI_TRUE);
-					*--currentThread->sp = (UDATA)threadName;
-					*--currentThread->sp = (UDATA)threadGroup;
-					*(I_32*)--currentThread->sp = priority;
-					*(I_32*)--currentThread->sp = (I_32)daemon;
-				}
+#ifdef J9VM_IVE_RAW_BUILD /* J9VM_IVE_RAW_BUILD is not enabled by default */
+				/* Oracle constructor takes thread group, thread name */
+				J9VMJAVALANGTHREAD_SET_PRIORITY(currentThread, threadObject, priority);
+				J9VMJAVALANGTHREAD_SET_ISDAEMON(currentThread, threadObject, (I_32)daemon);
+				*--currentThread->sp = (UDATA)threadGroup;
+				*--currentThread->sp = (UDATA)threadName;
+#else /* J9VM_IVE_RAW_BUILD */
+				/* J9 constructor takes thread name, thread group, priority and isDaemon */
+				J9VMJAVALANGTHREAD_SET_STARTED(currentThread, threadObject, JNI_TRUE);
+				*--currentThread->sp = (UDATA)threadName;
+				*--currentThread->sp = (UDATA)threadGroup;
+				*(I_32*)--currentThread->sp = priority;
+				*(I_32*)--currentThread->sp = (I_32)daemon;
+#endif /* J9VM_IVE_RAW_BUILD */
 				currentThread->returnValue = J9_BCLOOP_RUN_METHOD;
 				currentThread->returnValue2 = (UDATA)J9VMJAVALANGTHREAD_INIT_METHOD(vm);
 				c_cInterpreter(currentThread);
@@ -606,7 +607,7 @@ internalSendExceptionConstructor(J9VMThread *currentThread, J9Class *exceptionCl
 }
 
 void JNICALL
-printStackTrace(J9VMThread *currentThread, j9object_t exception, UDATA reserved1, UDATA reserved2, UDATA reserved3)
+printStackTrace(J9VMThread *currentThread, j9object_t exception)
 {
 	Trc_VM_printStackTrace_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -627,7 +628,7 @@ printStackTrace(J9VMThread *currentThread, j9object_t exception, UDATA reserved1
 }
 
 void JNICALL
-runJavaThread(J9VMThread *currentThread, UDATA reserved1, UDATA reserved2, UDATA reserved3, UDATA reserved4)
+runJavaThread(J9VMThread *currentThread)
 {
 	Trc_VM_runJavaThread_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -649,12 +650,15 @@ runJavaThread(J9VMThread *currentThread, UDATA reserved1, UDATA reserved2, UDATA
 }
 
 void JNICALL
-runStaticMethod(J9VMThread *currentThread, U_8* className, J9NameAndSignature* selector, UDATA argCount, UDATA* arguments)
+runStaticMethod(J9VMThread *currentThread, U_8 *className, J9NameAndSignature *selector, UDATA argCount, UDATA *arguments)
 {
 	/* Assumes that the called method returns void and that className is a canonical UTF.
 	 * Also, the arguments must be in stack shape (ints in the low-memory half of the stack slot on 64-bit)
 	 * and contain no object pointers, as there are GC points in here before the arguments are copied to
 	 * the stack.
+	 *
+	 * Storing ints in the low-memory half of the stack slot on 64-bit.
+	 * Example: *(I_32 *)arguments = (I_32)value
 	 */
 	Trc_VM_runStaticMethod_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -702,7 +706,7 @@ internalRunStaticMethod(J9VMThread *currentThread, J9Method *method, BOOLEAN ret
 }
 
 void JNICALL
-sendCheckPackageAccess(J9VMThread *currentThread, J9Class *clazz, j9object_t protectionDomain, UDATA reserved3, UDATA reserved4)
+sendCheckPackageAccess(J9VMThread *currentThread, J9Class *clazz, j9object_t protectionDomain)
 {
 	Trc_VM_sendCheckPackageAccess_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -719,7 +723,7 @@ sendCheckPackageAccess(J9VMThread *currentThread, J9Class *clazz, j9object_t pro
 }
 
 void JNICALL
-sendCompleteInitialization(J9VMThread *currentThread, UDATA reserved1, UDATA reserved2, UDATA reserved3, UDATA reserved4)
+sendCompleteInitialization(J9VMThread *currentThread)
 {
 	Trc_VM_sendCompleteInitialization_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -767,7 +771,7 @@ isAccessibleToAllModulesViaReflection(J9VMThread *currentThread, J9Class *clazz,
 }
 
 void JNICALL
-sendInit(J9VMThread *currentThread, j9object_t object, J9Class *senderClass, UDATA lookupOptions, UDATA reserved4)
+sendInit(J9VMThread *currentThread, j9object_t object, J9Class *senderClass, UDATA lookupOptions)
 {
 	Trc_VM_sendInit_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -806,7 +810,7 @@ sendInit(J9VMThread *currentThread, j9object_t object, J9Class *senderClass, UDA
 }
 
 void JNICALL
-sendInitCause(J9VMThread *currentThread, j9object_t receiver, j9object_t cause, UDATA reserved3, UDATA reserved4)
+sendInitCause(J9VMThread *currentThread, j9object_t receiver, j9object_t cause)
 {
 	Trc_VM_sendInitCause_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -828,7 +832,7 @@ sendInitCause(J9VMThread *currentThread, j9object_t receiver, j9object_t cause, 
 }
 
 void JNICALL
-sendInitializationAlreadyFailed(J9VMThread *currentThread, J9Class *clazz, UDATA reserved2, UDATA reserved3, UDATA reserved4)
+sendInitializationAlreadyFailed(J9VMThread *currentThread, J9Class *clazz)
 {
 	Trc_VM_sendInitializationAlreadyFailed_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -844,7 +848,7 @@ sendInitializationAlreadyFailed(J9VMThread *currentThread, J9Class *clazz, UDATA
 }
 
 void JNICALL
-sendRecordInitializationFailure(J9VMThread *currentThread, J9Class *clazz, j9object_t throwable, UDATA reserved3, UDATA reserved4)
+sendRecordInitializationFailure(J9VMThread *currentThread, J9Class *clazz, j9object_t throwable)
 {
 	Trc_VM_sendRecordInitializationFailure_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -861,7 +865,7 @@ sendRecordInitializationFailure(J9VMThread *currentThread, J9Class *clazz, j9obj
 }
 
 void JNICALL
-sendFromMethodDescriptorString(J9VMThread *currentThread, J9UTF8 *descriptor, J9ClassLoader *classLoader, J9Class *appendArgType, UDATA reserved4)
+sendFromMethodDescriptorString(J9VMThread *currentThread, J9UTF8 *descriptor, J9ClassLoader *classLoader, J9Class *appendArgType)
 {
 	Trc_VM_sendFromMethodDescriptorString_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -874,14 +878,9 @@ sendFromMethodDescriptorString(J9VMThread *currentThread, J9UTF8 *descriptor, J9
 			/* Run the method */
 			*--currentThread->sp = (UDATA)descriptorString;
 			*--currentThread->sp = (UDATA)classLoader->classLoaderObject;
+			*--currentThread->sp = (UDATA)J9VM_J9CLASS_TO_HEAPCLASS(appendArgType);
 			currentThread->returnValue = J9_BCLOOP_RUN_METHOD;
-			if (NULL == appendArgType) {
-				currentThread->returnValue2 = (UDATA)J9VMJAVALANGINVOKEMETHODTYPE_FROMMETHODDESCRIPTORSTRING_METHOD(vm);
-			} else {
-				/* If an appendArgType has been provided, push it on the stack and call a different MethodType factory method. */
-				*--currentThread->sp = (UDATA)J9VM_J9CLASS_TO_HEAPCLASS(appendArgType);
-				currentThread->returnValue2 = (UDATA)J9VMJAVALANGINVOKEMETHODTYPE_FROMMETHODDESCRIPTORSTRINGAPPENDARG_METHOD(vm);
-			}
+			currentThread->returnValue2 = (UDATA)J9VMJAVALANGINVOKEMETHODTYPE_VMRESOLVEFROMMETHODDESCRIPTORSTRING_METHOD(vm);
 			c_cInterpreter(currentThread);
 		}
 		restoreCallInFrame(currentThread);
@@ -926,7 +925,7 @@ sendResolveMethodHandle(J9VMThread *currentThread, UDATA cpIndex, J9ConstantPool
 }
 
 void JNICALL
-sendForGenericInvoke(J9VMThread *currentThread, j9object_t methodHandle, j9object_t methodType, UDATA dropFirstArg, UDATA reserved4)
+sendForGenericInvoke(J9VMThread *currentThread, j9object_t methodHandle, j9object_t methodType, UDATA dropFirstArg)
 {
 	Trc_VM_sendForGenericInvoke_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -941,6 +940,53 @@ sendForGenericInvoke(J9VMThread *currentThread, j9object_t methodHandle, j9objec
 		restoreCallInFrame(currentThread);
 	}
 	Trc_VM_sendForGenericInvoke_Exit(currentThread);
+}
+
+void JNICALL
+sendResolveConstantDynamic(J9VMThread *currentThread, J9ConstantPool *ramCP, UDATA cpIndex, J9ROMNameAndSignature *nameAndSig, U_16 *bsmData)
+{
+	Trc_VM_sendResolveConstantDynamic_Entry(currentThread, ramCP, cpIndex, nameAndSig, bsmData);
+	J9VMEntryLocalStorage newELS;
+	if (buildCallInStackFrame(currentThread, &newELS, true, false)) {
+		/* Convert name and signature to String objects */
+		J9JavaVM *vm = currentThread->javaVM;
+		J9MemoryManagerFunctions const * const mmFuncs = vm->memoryManagerFunctions;
+		J9UTF8 *nameUTF = J9ROMNAMEANDSIGNATURE_NAME(nameAndSig);
+		j9object_t nameString = mmFuncs->j9gc_createJavaLangString(currentThread, J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), 0);
+		if (NULL != nameString) {
+			J9UTF8 *sigUTF = J9ROMNAMEANDSIGNATURE_SIGNATURE(nameAndSig);
+			PUSH_OBJECT_IN_SPECIAL_FRAME(currentThread, nameString);
+			j9object_t sigString = mmFuncs->j9gc_createJavaLangString(currentThread, J9UTF8_DATA(sigUTF), J9UTF8_LENGTH(sigUTF), 0);
+			nameString = POP_OBJECT_IN_SPECIAL_FRAME(currentThread);
+			if (NULL != sigString) {
+				/*
+				 * Need to pass the ramClass so that we can get the
+				 * correct ramConstantPool. If we pass the classObject
+				 * we will always get the latest ramClass, which is not always
+				 * the correct one. In cases where we can have an
+				 * old method (caused by class redefinition) on the stack,
+				 * we will need to search the old ramClass to get the correct
+				 * constantPool. It is difficult to do this if we pass the
+				 * classObject.
+				 */
+
+				/* Run the method */
+				/* skip one slot because we are passing a long */
+				currentThread->sp -= 2;
+
+				*(U_64*)currentThread->sp = (U_64)ramCP->ramClass;
+				*--currentThread->sp = (UDATA)nameString;
+				*--currentThread->sp = (UDATA)sigString;
+				currentThread->sp -= 2;
+				*(U_64*)currentThread->sp = (U_64)(UDATA)bsmData;
+				currentThread->returnValue = J9_BCLOOP_RUN_METHOD;
+				currentThread->returnValue2 = (UDATA)J9VMJAVALANGINVOKEMETHODHANDLE_RESOLVECONSTANTDYNAMIC_METHOD(vm);
+				c_cInterpreter(currentThread);
+			}
+		}
+		restoreCallInFrame(currentThread);
+	}
+	Trc_VM_sendResolveConstantDynamic_Exit(currentThread);
 }
 
 void JNICALL
@@ -970,7 +1016,7 @@ sendResolveInvokeDynamic(J9VMThread *currentThread, J9ConstantPool *ramCP, UDATA
 				 * the correct one. In cases where we can have an
 				 * old method (caused by class redefinition) on the stack,
 				 * we will need to search the old ramClass to get the correct
-				 * constanPool. It is difficult to do this if we pass the
+				 * constantPool. It is difficult to do this if we pass the
 				 * classObject.
 				 */
 				*(U_64*)currentThread->sp = (U_64)ramCP->ramClass;
@@ -1032,7 +1078,7 @@ runCallInMethod(JNIEnv *env, jobject receiver, jclass clazz, jmethodID methodID,
 }
 
 void JNICALL
-sidecarInvokeReflectMethodImpl(J9VMThread *currentThread, jobject methodRef, jobject recevierRef, jobjectArray argsRef, void *unused)
+sidecarInvokeReflectMethodImpl(J9VMThread *currentThread, jobject methodRef, jobject recevierRef, jobjectArray argsRef)
 {
 	Trc_VM_sidecarInvokeReflectMethod_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -1157,7 +1203,7 @@ done:
 }
 
 void JNICALL
-sidecarInvokeReflectConstructorImpl(J9VMThread *currentThread, jobject constructorRef, jobject recevierRef, jobjectArray argsRef, void *unused)
+sidecarInvokeReflectConstructorImpl(J9VMThread *currentThread, jobject constructorRef, jobject recevierRef, jobjectArray argsRef)
 {
 	Trc_VM_sidecarInvokeReflectConstructor_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -1209,7 +1255,7 @@ done:
 }
 
 void JNICALL
-jitFillOSRBuffer(struct J9VMThread *currentThread, void *osrBlock, UDATA reserved1, UDATA reserved2, UDATA reserved3)
+jitFillOSRBuffer(struct J9VMThread *currentThread, void *osrBlock)
 {
 	Trc_VM_jitFillOSRBuffer_Entry(currentThread);
 	J9VMEntryLocalStorage newELS;
@@ -1225,24 +1271,24 @@ jitFillOSRBuffer(struct J9VMThread *currentThread, void *osrBlock, UDATA reserve
 void JNICALL
 initializeAttachedThread(J9VMThread *currentThread, const char *name, j9object_t *group, UDATA daemon, J9VMThread *initializee)
 {
-	VM_VMAccess::inlineEnterVMFromJNI(currentThread);
+	VM_VMAccess::inlineAcquireVMAccess(currentThread);
 	initializeAttachedThreadImpl(currentThread, name, group, daemon, initializee);
 	VM_VMAccess::inlineReleaseVMAccess(currentThread);
 }
 
 void JNICALL
-sidecarInvokeReflectMethod(J9VMThread *currentThread, jobject methodRef, jobject recevierRef, jobjectArray argsRef, void *unused)
+sidecarInvokeReflectMethod(J9VMThread *currentThread, jobject methodRef, jobject recevierRef, jobjectArray argsRef)
 {
 	VM_VMAccess::inlineEnterVMFromJNI(currentThread);
-	sidecarInvokeReflectMethodImpl(currentThread, methodRef, recevierRef, argsRef, unused);
+	sidecarInvokeReflectMethodImpl(currentThread, methodRef, recevierRef, argsRef);
 	VM_VMAccess::inlineExitVMToJNI(currentThread);
 }
 
 void JNICALL
-sidecarInvokeReflectConstructor(J9VMThread *currentThread, jobject constructorRef, jobject recevierRef, jobjectArray argsRef, void *unused)
+sidecarInvokeReflectConstructor(J9VMThread *currentThread, jobject constructorRef, jobject recevierRef, jobjectArray argsRef)
 {
 	VM_VMAccess::inlineEnterVMFromJNI(currentThread);
-	sidecarInvokeReflectConstructorImpl(currentThread, constructorRef, recevierRef, argsRef, unused);
+	sidecarInvokeReflectConstructorImpl(currentThread, constructorRef, recevierRef, argsRef);
 	VM_VMAccess::inlineExitVMToJNI(currentThread);
 }
 

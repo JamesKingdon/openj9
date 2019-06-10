@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -52,13 +52,13 @@ MM_ReferenceObjectList::addAll(MM_EnvironmentBase* env, UDATA referenceObjectTyp
 
 	volatile j9object_t *list = NULL;
 	switch (referenceObjectType) {
-	case J9_JAVA_CLASS_REFERENCE_WEAK:
+	case J9AccClassReferenceWeak:
 		list = &_weakHead;
 		break;
-	case J9_JAVA_CLASS_REFERENCE_SOFT:
+	case J9AccClassReferenceSoft:
 		list = &_softHead;
 		break;
-	case J9_JAVA_CLASS_REFERENCE_PHANTOM:
+	case J9AccClassReferencePhantom:
 		list = &_phantomHead;
 		break;
 	default:

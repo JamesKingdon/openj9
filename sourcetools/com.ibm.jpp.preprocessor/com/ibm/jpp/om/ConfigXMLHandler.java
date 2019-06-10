@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1999, 2017 IBM Corp. and others
+ * Copyright (c) 1999, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jpp.om;
 
@@ -49,7 +49,7 @@ import com.ibm.jpp.xml.XMLParser;
  * {xmlfilepath}" to define a different default filepath</li>
  * <li>A second xml file can be defined using the command line argument (-xml
  * {xmlfilepath} {basedirectory}). With this command, the given xml file is
- * parsed for not only configuration setup, but relative source and ouput paths
+ * parsed for not only configuration setup, but relative source and output paths
  * for the build. The only other command line arguments currently allowed in
  * combination with -xml is -xmldefault. All build information
  * must be found inside the xml. More than one configuration to be built can be
@@ -75,12 +75,12 @@ import com.ibm.jpp.xml.XMLParser;
  * <li>Precede the flag/dependency name with '-' to remove, rather than add
  * that flag/dependency from the final flagset, trying it remove flags that
  * don't exist in the flagset will not cause an error.</li>
- * <li>Options that apply to the entire set/config are added as a seperate
+ * <li>Options that apply to the entire set/config are added as a separate
  * element called parameter, with attributes name and value.</li>
  * <li>Other elements, such as extension point will be ignored</li>
  * <li>Use the output path attribute of configuration to set the output path,
  * note that this path will be combined with the {basedir} arg</li>
- * <li>For each source, create a seperate source element, with attribute path
+ * <li>For each source, create a separate source element, with attribute path
  * to define the source location. Add "type=simplecopy" to do a copy instead of
  * a preprocess, add an element called parameter with attributes name and value
  * to add an option to a specific source dir</li>
@@ -98,9 +98,8 @@ import com.ibm.jpp.xml.XMLParser;
  *         label="XTREME"
  *         outputpath="pConfig XTREME/src"
  *         dependencies="xtr"&gt;
- *       &lt;source
- *             path="src"&gt;
- *           &lt;parameter name="macro:define" value="com.ibm.oti.vm.library.version=23;com.ibm.oti.jcl.build=plugin2"/&gt;
+ *       &lt;source path="src"&gt;
+ *           &lt;parameter name="macro:define" value="com.ibm.oti.vm.library.version=29;com.ibm.oti.jcl.build=plugin2"/&gt;
  *       &lt;/source&gt;
  *       &lt;parameter name="jxerules:outputdir" value="com/ibm/oti/util"/&gt;
  *   &lt;/configuration&gt;
@@ -136,7 +135,7 @@ public class ConfigXMLHandler implements IXMLDocumentHandler {
 	private String bootTestsOutputPathSuffix = " Tests BootPath";
 
 	/**
-	 * Constructs a ConfigXMLHanler...
+	 * Constructs a ConfigXMLHandler...
 	 *
 	 * @param       filename    the file to be parsed
 	 *
@@ -329,7 +328,7 @@ public class ConfigXMLHandler implements IXMLDocumentHandler {
 	}
 
 	/**
-	 * A series of if statements to identify the signifiance of the parsed
+	 * A series of if statements to identify the significance of the parsed
 	 * element and act accordingly.
 	 *
 	 * @param       elementName     the XML element name
@@ -532,7 +531,7 @@ public class ConfigXMLHandler implements IXMLDocumentHandler {
 		} else if (elementName.equals("coption")) {
 			currentConfig.addCompilerOption(attributes.get("name").toString(), attributes.get("value").toString());
 		} else if (elementName.equals("classpathentry")) {
-			boolean exported = (attributes.get("exported") != null) ? new Boolean(attributes.get("exported").toString()).booleanValue() : false;
+			boolean exported = (attributes.get("exported") != null) && Boolean.parseBoolean(attributes.get("exported"));
 			/* [PR 120359] New classpath entry is needed for configurations */
 			if (attributes.get("kind") != null) {
 				if (attributes.get("sourcepath") != null) {

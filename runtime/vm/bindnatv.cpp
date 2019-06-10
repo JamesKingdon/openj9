@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
@@ -83,6 +83,7 @@ static inlMapping mappings[] = {
 	{ "Java_java_lang_Class_isPrimitive__", J9_BCLOOP_SEND_TARGET_INL_CLASS_IS_PRIMITIVE },
 	{ "Java_java_lang_Class_getModifiersImpl__", J9_BCLOOP_SEND_TARGET_INL_CLASS_GET_MODIFIERS_IMPL },
 	{ "Java_java_lang_Class_getComponentType__", J9_BCLOOP_SEND_TARGET_INL_CLASS_GET_COMPONENT_TYPE },
+	{ "Java_java_lang_Class_arrayTypeImpl__", J9_BCLOOP_SEND_TARGET_CLASS_ARRAY_TYPE_IMPL },
 	{ "Java_java_lang_System_arraycopy__Ljava_lang_Object_2ILjava_lang_Object_2II", J9_BCLOOP_SEND_TARGET_INL_SYSTEM_ARRAYCOPY },
 	{ "Java_java_lang_System_currentTimeMillis__", J9_BCLOOP_SEND_TARGET_INL_SYSTEM_CURRENT_TIME_MILLIS },
 	{ "Java_java_lang_System_nanoTime__", J9_BCLOOP_SEND_TARGET_INL_SYSTEM_NANO_TIME },
@@ -175,10 +176,9 @@ static inlMapping mappings[] = {
 	{ "Java_java_lang_Object_notify__", J9_BCLOOP_SEND_TARGET_INL_OBJECT_NOTIFY },
 	{ "Java_java_lang_Class_isInstance__Ljava_lang_Object_2", J9_BCLOOP_SEND_TARGET_INL_CLASS_IS_INSTANCE },
 	{ "Java_java_lang_Class_getSimpleNameImpl__", J9_BCLOOP_SEND_TARGET_INL_CLASS_GET_SIMPLE_NAME_IMPL },
-	{ "Java_com_ibm_oti_vm_VM_initializeClassLoader__Ljava_lang_ClassLoader_2ZZ", J9_BCLOOP_SEND_TARGET_INL_VM_INITIALIZE_CLASS_LOADER },
+	{ "Java_com_ibm_oti_vm_VM_initializeClassLoader__Ljava_lang_ClassLoader_2IZ", J9_BCLOOP_SEND_TARGET_INL_VM_INITIALIZE_CLASS_LOADER },
 	{ "Java_com_ibm_oti_vm_VM_getClassPathEntryType__Ljava_lang_Object_2I", J9_BCLOOP_SEND_TARGET_INL_VM_GET_CLASS_PATH_ENTRY_TYPE },
 	{ "Java_com_ibm_oti_vm_VM_isBootstrapClassLoader__Ljava_lang_ClassLoader_2", J9_BCLOOP_SEND_TARGET_INL_VM_IS_BOOTSTRAP_CLASS_LOADER },
-	{ "Java_java_lang_Class_getClassDepth__", J9_BCLOOP_SEND_TARGET_INL_CLASS_GET_CLASS_DEPTH },
 	{ "Java_sun_misc_Unsafe_allocateInstance__Ljava_lang_Class_2", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_ALLOCATE_INSTANCE },
 	{ "Java_com_ibm_tools_attach_target_Attachment_loadAgentLibraryImpl__Ljava_lang_ClassLoader_2Ljava_lang_String_2Ljava_lang_String_2Z", J9_BCLOOP_SEND_TARGET_INL_ATTACHMENT_LOADAGENTLIBRARYIMPL },
 	{ "Java_com_ibm_oti_vm_VM_getStackClass__I", J9_BCLOOP_SEND_TARGET_INL_VM_GETSTACKCLASS },
@@ -242,6 +242,10 @@ static inlMapping mappings[] = {
 	{ "Java_jdk_internal_misc_Unsafe_getObjectVolatile__Ljava_lang_Object_2J", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_GETOBJECT_VOLATILE },
 	{ "Java_jdk_internal_misc_Unsafe_putObject__Ljava_lang_Object_2JLjava_lang_Object_2", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_PUTOBJECT },
 	{ "Java_jdk_internal_misc_Unsafe_putObjectVolatile__Ljava_lang_Object_2JLjava_lang_Object_2", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_PUTOBJECT_VOLATILE },
+	{ "Java_jdk_internal_misc_Unsafe_getReference__Ljava_lang_Object_2J", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_GETOBJECT },
+	{ "Java_jdk_internal_misc_Unsafe_getReferenceVolatile__Ljava_lang_Object_2J", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_GETOBJECT_VOLATILE },
+	{ "Java_jdk_internal_misc_Unsafe_putReference__Ljava_lang_Object_2JLjava_lang_Object_2", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_PUTOBJECT },
+	{ "Java_jdk_internal_misc_Unsafe_putReferenceVolatile__Ljava_lang_Object_2JLjava_lang_Object_2", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_PUTOBJECT_VOLATILE },
 	{ "Java_jdk_internal_misc_Unsafe_putOrderedObject__Ljava_lang_Object_2JLjava_lang_Object_2", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_PUTOBJECT_VOLATILE },
 	{ "Java_jdk_internal_misc_Unsafe_getAddress__J", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_GETADDRESS },
 	{ "Java_jdk_internal_misc_Unsafe_putAddress__JJ", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_PUTADDRESS },
@@ -257,6 +261,7 @@ static inlMapping mappings[] = {
 	{ "Java_jdk_internal_misc_Unsafe_compareAndSwapLong__Ljava_lang_Object_2JJJ", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_COMPAREANDSWAPLONG },
 	{ "Java_jdk_internal_misc_Unsafe_compareAndSwapInt__Ljava_lang_Object_2JII", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_COMPAREANDSWAPINT },
 	{ "Java_jdk_internal_misc_Unsafe_compareAndSetObject__Ljava_lang_Object_2JLjava_lang_Object_2Ljava_lang_Object_2", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_COMPAREANDSWAPOBJECT },
+	{ "Java_jdk_internal_misc_Unsafe_compareAndSetReference__Ljava_lang_Object_2JLjava_lang_Object_2Ljava_lang_Object_2", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_COMPAREANDSWAPOBJECT },
 	{ "Java_jdk_internal_misc_Unsafe_compareAndSetLong__Ljava_lang_Object_2JJJ", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_COMPAREANDSWAPLONG },
 	{ "Java_jdk_internal_misc_Unsafe_compareAndSetInt__Ljava_lang_Object_2JII", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_COMPAREANDSWAPINT },
 	{ "Java_jdk_internal_misc_Unsafe_allocateInstance__Ljava_lang_Class_2", J9_BCLOOP_SEND_TARGET_INL_UNSAFE_ALLOCATE_INSTANCE },
@@ -273,13 +278,12 @@ static J9OutOfLineINLMapping outOfLineINLmappings[] = {
 	{ "Java_sun_misc_Unsafe_fullFence__", OutOfLineINL_jdk_internal_misc_Unsafe_fullFence },
 	{ "Java_jdk_internal_misc_Unsafe_compareAndExchangeObjectVolatile__Ljava_lang_Object_2JLjava_lang_Object_2Ljava_lang_Object_2", OutOfLineINL_jdk_internal_misc_Unsafe_compareAndExchangeObjectVolatile },
 	{ "Java_jdk_internal_misc_Unsafe_compareAndExchangeObject__Ljava_lang_Object_2JLjava_lang_Object_2Ljava_lang_Object_2", OutOfLineINL_jdk_internal_misc_Unsafe_compareAndExchangeObjectVolatile },
+	{ "Java_jdk_internal_misc_Unsafe_compareAndExchangeReference__Ljava_lang_Object_2JLjava_lang_Object_2Ljava_lang_Object_2", OutOfLineINL_jdk_internal_misc_Unsafe_compareAndExchangeObjectVolatile },
 	{ "Java_jdk_internal_misc_Unsafe_compareAndExchangeIntVolatile__Ljava_lang_Object_2JII", OutOfLineINL_jdk_internal_misc_Unsafe_compareAndExchangeIntVolatile },
 	{ "Java_jdk_internal_misc_Unsafe_compareAndExchangeInt__Ljava_lang_Object_2JII", OutOfLineINL_jdk_internal_misc_Unsafe_compareAndExchangeIntVolatile },
 	{ "Java_jdk_internal_misc_Unsafe_compareAndExchangeLongVolatile__Ljava_lang_Object_2JJJ", OutOfLineINL_jdk_internal_misc_Unsafe_compareAndExchangeLongVolatile },
 	{ "Java_jdk_internal_misc_Unsafe_compareAndExchangeLong__Ljava_lang_Object_2JJJ", OutOfLineINL_jdk_internal_misc_Unsafe_compareAndExchangeLongVolatile },
-#if defined(J9VM_OPT_VALHALLA_MVT)
-	{ "Java_jdk_experimental_value_ValueType_valueClassImpl__Ljava_lang_Class_2", OutOfLineINL_jdk_experimental_value_ValueType_valueClassImpl },
-#endif /* defined(J9VM_OPT_VALHALLA_MVT) */
+	{ "Java_com_ibm_jit_JITHelpers_acmplt__Ljava_lang_Object_2Ljava_lang_Object_2", OutOfLineINL_com_ibm_jit_JITHelpers_acmplt },
 #if defined(J9VM_OPT_PANAMA)
 	{ "Java_java_lang_invoke_NativeMethodHandle_initJ9NativeCalloutDataRef___3Ljava_lang_String_2", OutOfLineINL_java_lang_invoke_NativeMethodHandle_initJ9NativeCalloutDataRef },
 	{ "Java_java_lang_invoke_NativeMethodHandle_freeJ9NativeCalloutDataRef__", OutOfLineINL_java_lang_invoke_NativeMethodHandle_freeJ9NativeCalloutDataRef },
@@ -807,7 +811,7 @@ resolveNativeAddress(J9VMThread *currentThread, J9Method *nativeMethod, UDATA ru
 
 #if defined(J9VM_OPT_JVMTI)
 	/* Binds from within a JIT compile-time resolve must not run java code.
-	 * The only way that could happpen is from inside the JNI native method bind event
+	 * The only way that could happen is from inside the JNI native method bind event
 	 * in JVMTI.  If that event is not enabled, allow JNI natives to be bound at compile time.
 	 */
 	if (!runtimeBind) {
@@ -963,7 +967,7 @@ bindNative(J9VMThread *currentThread, J9Method *nativeMethod, char * longJNI, ch
 	}
 
 #if defined(J9VM_OPT_JVMTI)
-	/* If the native is not found in any registered library, seach JVMTI agent libraries.
+	/* If the native is not found in any registered library, search JVMTI agent libraries.
 	 * The lookup hook calls lookupNativeAddress with bindJNINative = TRUE, so it must be TRUE
 	 * here in order to call the hook.
 	 */
@@ -1013,7 +1017,7 @@ lookupJNINative(J9VMThread *currentThread, J9NativeLibrary *nativeLibrary, J9Met
 				J9Class* ramClass;
 				
 				ramClass = J9_CLASS_FROM_METHOD(nativeMethod);
-				ramClass->classDepthAndFlags |= J9_JAVA_CLASS_HAS_JDBC_NATIVES;
+				ramClass->classDepthAndFlags |= J9AccClassHasJDBCNatives;
 			}
 		}
 #endif
@@ -1036,7 +1040,7 @@ lookupJNINative(J9VMThread *currentThread, J9NativeLibrary *nativeLibrary, J9Met
 
 /**
  * Probes for the various JNI function names in the order specified by the JNI
- * specification (short then long).  JNI natives supercede INL equivalents.
+ * specification (short then long).  JNI natives supersede INL equivalents.
  * \param currentThread
  * \param nativeMethod The JNI native method to bind.
  * \param nativeLibrary The library to scan for the matching entrypoint.

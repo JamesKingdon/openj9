@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2015 IBM Corp. and others
+ * Copyright (c) 2009, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.corereaders.tdump;
 
@@ -649,7 +649,7 @@ public class TDumpReader implements ICoreFileReader
 					long usedTextRangeLimits[][] = new long[rr.length][2];
 					long usedDataRangeLimits[][] = new long[rr.length][2];
 					for (int i = 0; i < rr.length; ++i) {
-						// initialise lower limit addresses to high value
+						// initialize lower limit addresses to high value
 						usedTextRangeLimits[i][0] = Long.MAX_VALUE;
 						usedDataRangeLimits[i][0] = Long.MAX_VALUE;
 					}
@@ -735,7 +735,7 @@ public class TDumpReader implements ICoreFileReader
 					List<ISymbol> symbols = new ArrayList<ISymbol>();
 					// Array of lowest and highest symbol addresses found in each contiguous memory range
 					long usedTextRangeLimits[][] = new long[rr.length][2];
-					// initialise start address to high
+					// initialize start address to high
 					for (int i = 0; i < rr.length; ++i) {
 						usedTextRangeLimits[i][0] = Long.MAX_VALUE;
 					}

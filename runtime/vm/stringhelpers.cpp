@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -257,185 +257,139 @@ compareStringToUTF8(J9VMThread *vmThread, j9object_t string, UDATA translateDots
 	return ((tmpUtfLength == 0) && (tmpStringLength == 0));
 }
 
-#if !defined (J9VM_OUT_OF_PROCESS)
-
-/**
- * Copy certain number of Unicode characters from an offset into a Unicode character array to a UTF8 data buffer.
- *
- * @param[in] vmThread the current J9VMThread
- * @param[in] compressed if the Unicode character array is compressed
- * @param[in] nullTermination if the utf8 data is going to be NULL terminated
- * @param[in] stringFlags the flag to determine performing '.' --> '/'
- * @param[in] unicodeBytes a Unicode character array
- * @param[in] unicodeOffset an offset into the Unicode character array
- * @param[in] unicodeLength the number of Unicode characters to be copied
- * @param[in] utf8Data a utf8 data buffer
- * @param[in] utf8Length the size of the utf8 data buffer
- *
- * @return UDATA_MAX if a failure occurred, otherwise the number of utf8 data copied excluding null termination
- */
+#if !defined(J9VM_OUT_OF_PROCESS)
 UDATA
-copyCharsIntoUTF8Helper(
-	J9VMThread *vmThread, BOOLEAN compressed, BOOLEAN nullTermination, UDATA stringFlags, j9object_t unicodeBytes, UDATA unicodeOffset, UDATA unicodeLength, U_8 *utf8Data, UDATA utf8Length)
-{
-	UDATA remaining = utf8Length;
-	U_8 *data = utf8Data;
-	UDATA result = 0;
-	UDATA i = 0;
-
-	if (compressed) {
-		/* following implementation is expected to be different from non-compressed case when String compressing is enabled */
-		for (i = unicodeOffset; i < unicodeOffset + unicodeLength; i++) {
-			result = VM_VMHelpers::encodeUTF8CharN(J9JAVAARRAYOFBYTE_LOAD(vmThread, unicodeBytes, i), data, (U_32)remaining);
-			if (0 == result) {
-				return UDATA_MAX;
-			} else {
-				if ((stringFlags & J9_STR_XLAT) && ('.' == *data)) {
-					*data = '/';
-				}
-				remaining -= result;
-				data += result;
-			}
-		}
-	} else {
-		for (i = unicodeOffset; i < (unicodeOffset + unicodeLength); i++) {
-			result = VM_VMHelpers::encodeUTF8CharN(J9JAVAARRAYOFCHAR_LOAD(vmThread, unicodeBytes, i), data, (U_32)remaining);
-			if (0 == result) {
-				return UDATA_MAX;
-			} else {
-				if ((stringFlags & J9_STR_XLAT) && ('.' == *data)) {
-					*data = '/';
-				}
-				remaining -= result;
-				data += result;
-			}
-		}
-	}
-	if (nullTermination && (0 == remaining)) {
-		return UDATA_MAX;
-	}
-	if (nullTermination) {
-		*data = '\0';
-	}
-
-	return data - utf8Data;
-}
-
-/**
- * Copy a Unicode String to a UTF8 data buffer with NULL termination.
- *
- * @param[in] vmThread the current J9VMThread
- * @param[in] string a string object to be copied, it can't be NULL
- * @param[in] nullTermination if the utf8 data is going to be NULL terminated
- * @param[in] stringFlags the flag to determine performing '.' --> '/'
- * @param[in] utf8Data a utf8 data buffer
- * @param[in] utf8Length the size of the utf8 data buffer
- *
- * @return UDATA_MAX if a failure occurred, otherwise the number of utf8 data copied excluding null termination
- */
-UDATA
-copyStringToUTF8Helper(J9VMThread *vmThread, j9object_t string, BOOLEAN nullTermination, UDATA stringFlags, U_8 *utf8Data, UDATA utf8Length)
+copyStringToUTF8Helper(J9VMThread *vmThread, j9object_t string, UDATA stringFlags, UDATA stringOffset, UDATA stringLength, U_8 *utf8Data, UDATA utf8DataLength)
 {
 	Assert_VM_notNull(string);
 
-	UDATA unicodeLength = J9VMJAVALANGSTRING_LENGTH(vmThread, string);
-	j9object_t unicodeBytes = J9VMJAVALANGSTRING_VALUE(vmThread, string);
+	j9object_t stringValue = J9VMJAVALANGSTRING_VALUE(vmThread, string);
+	U_8 *data = utf8Data;
 
-	return copyCharsIntoUTF8Helper(vmThread, IS_STRING_COMPRESSED(vmThread, string), nullTermination, stringFlags, unicodeBytes, 0, unicodeLength, utf8Data, utf8Length);
-}
+	if (IS_STRING_COMPRESSED(vmThread, string)) {
+		/* Manually version J9_STR_XLAT flag checking from the loop for performance as the compiler does not do it */
+		if ((stringFlags & J9_STR_XLAT) == 0) {
+			for (UDATA i = stringOffset; i < stringOffset + stringLength; i++) {
+				data += VM_VMHelpers::encodeUTF8CharI8(J9JAVAARRAYOFBYTE_LOAD(vmThread, stringValue, i), data);
+			}
+		} else {
+			for (UDATA i = stringOffset; i < stringOffset + stringLength; i++) {
+				UDATA encodedLength = VM_VMHelpers::encodeUTF8CharI8(J9JAVAARRAYOFBYTE_LOAD(vmThread, stringValue, i), data);
 
+				if ('.' == *data) {
+					*data = '/';
+				}
 
-/**
- * !!! this method is for backwards compatibility with JIT usage !!!
- * Copy a Unicode String to a UTF8 data buffer with NULL termination.
- *
- * @param[in] vmThread the current J9VMThread
- * @param[in] string a string object to be copied, it can't be NULL
- * @param[in] stringFlags the flag to determine performing '.' --> '/'
- * @param[in] utf8Data a utf8 data buffer
- * @param[in] utf8Length the size of the utf8 data buffer
- *
- * @return 1 if a failure occurred, otherwise 0 for success
- */
-UDATA
-copyStringToUTF8(J9VMThread *vmThread, j9object_t string, UDATA stringFlags, U_8 *utf8Data, UDATA utf8Length)
-{
-	if (UDATA_MAX == copyStringToUTF8Helper(vmThread, string, TRUE, stringFlags, utf8Data, utf8Length)) {
-		return 1;
+				data += encodedLength;
+			}
+		}
 	} else {
-		return 0;
+		/* Manually version J9_STR_XLAT flag checking from the loop for performance as the compiler does not do it */
+		if ((stringFlags & J9_STR_XLAT) == 0) {
+			for (UDATA i = stringOffset; i < stringOffset + stringLength; i++) {
+				data += VM_VMHelpers::encodeUTF8Char(J9JAVAARRAYOFCHAR_LOAD(vmThread, stringValue, i), data);
+			}
+		} else {
+			for (UDATA i = stringOffset; i < stringOffset + stringLength; i++) {
+				UDATA encodedLength = VM_VMHelpers::encodeUTF8Char(J9JAVAARRAYOFCHAR_LOAD(vmThread, stringValue, i), data);
+
+				if ('.' == *data) {
+					*data = '/';
+				}
+
+				data += encodedLength;
+			}
+		}
 	}
+
+	UDATA returnLength = (UDATA)(data - utf8Data);
+
+	if ((stringFlags & J9_STR_NULL_TERMINATE_RESULT) != 0) {
+		*data = '\0';
+
+		Assert_VM_true(utf8DataLength >= returnLength + 1);
+	} else {
+		Assert_VM_true(utf8DataLength >= returnLength);
+	}
+
+	return returnLength;
 }
 
-
-/**
- * !!! this method is for backwards compatibility with JIT usage !!!
- * Copy a Unicode String to a UTF8 data buffer without NULL termination.
- * dest is assumed to have enough length - the easiest way to ensure this is to pass a buffer with 1.5 * string length in it
- *
- * @param[in] vmThread the current J9VMThread
- * @param[in] string a string object to be copied, it can't be NULL
- * @param[in] dest a utf8 data buffer
- *
- * @return UDATA_MAX if a failure occurred, otherwise the number of utf8 data copied excluding null termination
- */
-UDATA
-copyFromStringIntoUTF8(J9VMThread * vmThread, j9object_t string, char * dest)
-{
-	return copyStringToUTF8Helper(vmThread, string, FALSE, J9_STR_NONE, (U_8*)dest, UDATA_MAX);
-}
-
-
-/**
- * Copy a string object to a UTF8 data buffer, optionally to prepend a string before it
- *
- * ***The caller must free the memory from this pointer if the return value is NOT the buffer argument ***
- *
- * @param[in] vmThread the current J9VMThread
- * @param[in] string a string object to be copied, it can't be NULL
- * @param[in] stringFlags the flag to determine performing '.' --> '/'
- * @param[in] prependStr the string to be prepended before the string object to be copied
- * 				it can't be NULL but can be an empty string ""
- * @param[in] buffer the buffer for the string
- * @param[in] bufferLength the buffer length, not expected to larger than 64K
- *
- * @return a char pointer to the string (with NULL termination)
- */
 char*
-copyStringToUTF8WithMemAlloc(J9VMThread *vmThread, j9object_t string, UDATA stringFlags, const char *prependStr, char *buffer, UDATA bufferLength)
+copyStringToUTF8WithMemAlloc(J9VMThread *vmThread, j9object_t string, UDATA stringFlags, const char *prependStr, UDATA prependStrLength, char *buffer, UDATA bufferLength, UDATA *utf8Length)
 {
 	Assert_VM_notNull(prependStr);
 	Assert_VM_notNull(string);
 
-	char *strUTF = NULL;
-	UDATA stringLen = getStringUTF8Length(vmThread, string);
-	UDATA prependStrLen = strlen(prependStr);
-	UDATA length = stringLen + prependStrLen + 1;
+	U_8* result = NULL;
+	UDATA stringLength = J9VMJAVALANGSTRING_LENGTH(vmThread, string);
+	UDATA length = prependStrLength + (stringLength * 3);
+
+	if (J9_ARE_ALL_BITS_SET(stringFlags, J9_STR_NULL_TERMINATE_RESULT)) {
+		++length;
+	}
 
 	PORT_ACCESS_FROM_VMC(vmThread);
 
 	if (length > bufferLength) {
-		strUTF = (char *)j9mem_allocate_memory(length, OMRMEM_CATEGORY_VM);
+		result = (U_8*)j9mem_allocate_memory(length, OMRMEM_CATEGORY_VM);
 	} else {
-		strUTF = buffer;
-		length = bufferLength;
+		result = (U_8*)buffer;
 	}
-	if (NULL != strUTF) {
-		if (0 < prependStrLen) {
-			memcpy(strUTF, prependStr, prependStrLen);
+
+	if (NULL != result) {
+		UDATA computedUtf8Length = 0;
+
+		if (0 < prependStrLength) {
+			memcpy(result, prependStr, prependStrLength);
 		}
-		if (UDATA_MAX == copyStringToUTF8Helper(
-			vmThread, string, TRUE, stringFlags, (U_8 *)(strUTF + prependStrLen), length - prependStrLen)
-		) {
-			if (buffer != strUTF) {
-				j9mem_free_memory(strUTF);
-			}
-			return NULL;
+
+		computedUtf8Length = copyStringToUTF8Helper(vmThread, string, stringFlags, 0, stringLength, result + prependStrLength, length - prependStrLength);
+
+		if (NULL != utf8Length) {
+			*utf8Length = computedUtf8Length + prependStrLength;
 		}
 	}
-	return strUTF;
+
+	return (char*)result;
 }
 
+J9UTF8*
+copyStringToJ9UTF8WithMemAlloc(J9VMThread *vmThread, j9object_t string, UDATA stringFlags, const char *prependStr, UDATA prependStrLength, char *buffer, UDATA bufferLength)
+{
+	Assert_VM_notNull(prependStr);
+	Assert_VM_notNull(string);
+
+	U_8* result = NULL;
+	UDATA stringLength = J9VMJAVALANGSTRING_LENGTH(vmThread, string);
+	UDATA length = sizeof(((J9UTF8*)0)->length) + prependStrLength + (stringLength * 3);
+
+	if (J9_ARE_ALL_BITS_SET(stringFlags, J9_STR_NULL_TERMINATE_RESULT)) {
+		++length;
+	}
+
+	PORT_ACCESS_FROM_VMC(vmThread);
+
+	if (length > bufferLength) {
+		result = (U_8*)j9mem_allocate_memory(length, OMRMEM_CATEGORY_VM);
+	} else {
+		result = (U_8*)buffer;
+	}
+
+	if (NULL != result) {
+		UDATA computedUtf8Length = 0;
+
+		if (0 < prependStrLength) {
+			memcpy(result + sizeof(((J9UTF8*)0)->length), prependStr, prependStrLength);
+		}
+
+		computedUtf8Length = copyStringToUTF8Helper(vmThread, string, stringFlags, 0, stringLength, result + sizeof(((J9UTF8*)0)->length) + prependStrLength, length - sizeof(((J9UTF8*)0)->length) - prependStrLength);
+
+		J9UTF8_SET_LENGTH(result, (U_16)computedUtf8Length + (U_16)prependStrLength);
+	}
+
+	return (J9UTF8*)result;
+}
 
 IDATA
 getStringUTF8Length(J9VMThread *vmThread, j9object_t string)
@@ -447,7 +401,7 @@ getStringUTF8Length(J9VMThread *vmThread, j9object_t string)
 
 	if (IS_STRING_COMPRESSED(vmThread, string)) {
 		for (i = 0; i < unicodeLength; i++) {
-			utf8Length += VM_VMHelpers::encodedUTF8Length(J9JAVAARRAYOFBYTE_LOAD(vmThread, unicodeBytes, i));
+			utf8Length += VM_VMHelpers::encodedUTF8LengthI8(J9JAVAARRAYOFBYTE_LOAD(vmThread, unicodeBytes, i));
 		}
 	} else {
 		for (i = 0; i < unicodeLength; i++) {
@@ -474,7 +428,7 @@ verifyQualifiedName(J9VMThread *vmThread, j9object_t string)
 		if ('[' == J9JAVAARRAYOFBYTE_LOAD(vmThread, unicodeBytes, 0)) {
 			rc = CLASSNAME_VALID_ARRARY;
 		}
-		for (i = 1; i < unicodeLength; i++) {
+		for (i = 0; i < unicodeLength; i++) {
 			U_8 c = J9JAVAARRAYOFBYTE_LOAD(vmThread, unicodeBytes, i);
 			if (c == '/') {
 				rc = CLASSNAME_INVALID;
@@ -495,7 +449,7 @@ verifyQualifiedName(J9VMThread *vmThread, j9object_t string)
 	}
 	return rc;
 }
-#endif
+#endif /* !defined(J9VM_OUT_OF_PROCESS) */
 
 /**
  * Check that each UTF8 character is well-formed.
@@ -613,4 +567,4 @@ methodToString(J9VMThread * vmThread, J9Method* method)
 			J9UTF8_DATA(sig), J9UTF8_LENGTH(sig));
 }
 
-}
+} /* extern "C" */

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.j9;
 
@@ -277,10 +277,12 @@ public class J9VMThreadPointerUtil {
 			thrinfo.lockObject = null;
 			vmstate = getInflatedMonitorState(j9self, j9state, thrinfo);
 		}
-		
-		if(thrinfo.rawLock != null) {
-			if(thrinfo.rawLock.flags().allBitsIn(J9THREAD_MONITOR_OBJECT)) {
-				thrinfo.lockObject = J9ObjectPointer.cast(thrinfo.rawLock.userData());
+
+		if((thrinfo.lockObject == null) || thrinfo.lockObject.isNull()) {
+			if(!((thrinfo.rawLock == null) || thrinfo.rawLock.isNull())) {
+				if(thrinfo.rawLock.flags().allBitsIn(J9THREAD_MONITOR_OBJECT)) {
+					thrinfo.lockObject = J9ObjectPointer.cast(thrinfo.rawLock.userData());
+				}
 			}
 		}
 		

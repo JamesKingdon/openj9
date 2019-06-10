@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "CompositeCacheImpl.hpp"
@@ -248,20 +248,20 @@ CompositeCacheTest::allocateAndStats(J9JavaVM* vm, IDATA testCacheSize, SH_Compo
 	cc1->enterWriteMutex(vm->mainThread, false, "allocateAndStats");
 
 	/* Check all is 0'd */
-	if (result |= localTestStats(vm, testCacheSize, 0, 0, 0, 0, 0, cc1, cacheBase)) goto _done;
-	if (result |= localTestStats(vm, testCacheSize, 0, 0, 0, 0, 0, cc1a, cacheBase)) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, 0, 0, 0, 0, 0, cc1, cacheBase))) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, 0, 0, 0, 0, 0, cc1a, cacheBase))) goto _done;
 
 	itemPtr->dataLen = 64;
 	
 	address = cc1->allocateWithSegment(vm->mainThread, itemPtr, 0, &segBuf);
-	if (result |= localTestStats(vm, testCacheSize, 0, 0, 0, 0, 0, cc1, cacheBase)) goto _done;
-	if (result |= localTestStats(vm, testCacheSize, 0, 0, 0, 0, 0, cc1a, cacheBase)) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, 0, 0, 0, 0, 0, cc1, cacheBase))) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, 0, 0, 0, 0, 0, cc1a, cacheBase))) goto _done;
 
 	/* Stats should not be updated until update is committed */
 	cc1->commitUpdate(vm->mainThread, false);
 	runningTotal += itemPtr->dataLen;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 0, 0, 0, 1, cc1, cacheBase)) goto _done;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 0, 0, 0, 1, cc1a, cacheBase)) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 0, 0, 0, 1, cc1, cacheBase))) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 0, 0, 0, 1, cc1a, cacheBase))) goto _done;
 
 	if (cc1->isAddressInROMClassSegment(address)) {
 		j9tty_printf(PORTLIB, "Address %p should not be in romclass segment\n", address);
@@ -275,12 +275,12 @@ CompositeCacheTest::allocateAndStats(J9JavaVM* vm, IDATA testCacheSize, SH_Compo
 	}
 
 	address = cc1->allocateWithSegment(vm->mainThread, itemPtr, 256, &segBuf);
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 0, 0, 0, 1, cc1, cacheBase)) goto _done;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 0, 0, 0, 1, cc1a, cacheBase)) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 0, 0, 0, 1, cc1, cacheBase))) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 0, 0, 0, 1, cc1a, cacheBase))) goto _done;
 	cc1->commitUpdate(vm->mainThread, false);
 	runningTotal += itemPtr->dataLen;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 256, 0, 0, 2, cc1, cacheBase)) goto _done;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 256, 0, 0, 2, cc1a, cacheBase)) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 256, 0, 0, 2, cc1, cacheBase))) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 256, 0, 0, 2, cc1a, cacheBase))) goto _done;
 
 	if (cc1->isAddressInROMClassSegment(address)) {
 		j9tty_printf(PORTLIB, "Address %p should not be in romclass segment\n", address);
@@ -296,12 +296,12 @@ CompositeCacheTest::allocateAndStats(J9JavaVM* vm, IDATA testCacheSize, SH_Compo
 	itemPtr->dataLen = 32;
 	
 	address = cc1->allocateWithSegment(vm->mainThread, itemPtr, 8, &segBuf);
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 256, 0, 0, 2, cc1, cacheBase)) goto _done;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 256, 0, 0, 2, cc1a, cacheBase)) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 256, 0, 0, 2, cc1, cacheBase))) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 256, 0, 0, 2, cc1a, cacheBase))) goto _done;
 	cc1->commitUpdate(vm->mainThread, false);
 	runningTotal += itemPtr->dataLen;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 3, cc1, cacheBase)) goto _done;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 3, cc1a, cacheBase)) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 3, cc1, cacheBase))) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 3, cc1a, cacheBase))) goto _done;
 	if (cc1->isAddressInROMClassSegment(address)) {
 		j9tty_printf(PORTLIB, "Address %p should not be in romclass segment\n", address);
 		result = 10;
@@ -316,12 +316,12 @@ CompositeCacheTest::allocateAndStats(J9JavaVM* vm, IDATA testCacheSize, SH_Compo
 	itemPtr->dataLen = 100;
 
 	address = cc1->allocateBlock(vm->mainThread, itemPtr, SHC_WORDALIGN, 0);
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 3, cc1, cacheBase)) goto _done;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 3, cc1a, cacheBase)) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 3, cc1, cacheBase))) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 3, cc1a, cacheBase))) goto _done;
 	cc1->commitUpdate(vm->mainThread, false);
 	runningTotal += itemPtr->dataLen;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 4, cc1, cacheBase)) goto _done;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 4, cc1a, cacheBase)) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 4, cc1, cacheBase))) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 4, cc1a, cacheBase))) goto _done;
 	if (cc1->isAddressInROMClassSegment(address)) {
 		j9tty_printf(PORTLIB, "Address %p should not be in romclass segment\n", address);
 		result = 16;
@@ -331,12 +331,12 @@ CompositeCacheTest::allocateAndStats(J9JavaVM* vm, IDATA testCacheSize, SH_Compo
 	itemPtr->dataLen = 128;
 
 	address = cc1->allocateAOT(vm->mainThread, itemPtr, 96);
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 4, cc1, cacheBase)) goto _done;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 4, cc1a, cacheBase)) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 4, cc1, cacheBase))) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 0, 0, 4, cc1a, cacheBase))) goto _done;
 	cc1->commitUpdate(vm->mainThread, false);
 	runningTotal += itemPtr->dataLen - 96;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 96, 0, 5, cc1, cacheBase)) goto _done;
-	if (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 96, 0, 5, cc1a, cacheBase)) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 96, 0, 5, cc1, cacheBase))) goto _done;
+	if (0 != (result |= localTestStats(vm, testCacheSize, runningTotal, 264, 96, 0, 5, cc1a, cacheBase))) goto _done;
 	if (cc1->isAddressInROMClassSegment(address)) {
 		j9tty_printf(PORTLIB, "Address %p should not be in romclass segment\n", address);
 		result = 17;
@@ -908,7 +908,7 @@ CompositeCacheTest::writeHashTest(J9JavaVM* vm, IDATA testCacheSize, SH_Composit
 	if (cc1a->testAndSetWriteHash(currentThread, 999) != 1) {
 		return 5;
 	}
-	/* muliple calls should return same result */
+	/* multiple calls should return same result */
 	if (cc1a->testAndSetWriteHash(currentThread, 999) != 1) {
 		return 6;
 	}

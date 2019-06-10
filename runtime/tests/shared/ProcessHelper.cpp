@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /* These headers are required for ChildrenTest */
@@ -30,7 +30,7 @@
 #include "j9port.h"
 #include "j9memcategories.h"
 
-#if defined(LINUX) | defined(J9ZOS390) | defined(AIXPPC)
+#if defined(LINUX) || defined(J9ZOS390) || defined(AIXPPC) || defined(OSX)
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/ipc.h>
@@ -49,9 +49,9 @@ extern "C" {
 }
 #endif
 
-#if defined(LINUX) | defined(J9ZOS390) | defined(AIXPPC)
+#if defined(LINUX) || defined(J9ZOS390) || defined(AIXPPC) || defined(OSX)
 
-#if defined(__GNU_LIBRARY__) && !defined(_SEM_SEMUN_UNDEFINED)
+#if (defined(__GNU_LIBRARY__) && !defined(_SEM_SEMUN_UNDEFINED)) || defined(OSX)
 /* union semun is defined by including <sys/sem.h> */
 #else
 /* according to X/OPEN we have to define it ourselves */
@@ -146,7 +146,7 @@ CloseLaunchSemaphore (J9PortLibrary* portLibrary, IDATA semaphore)
 	return 0;
 }
 
-#endif /* defined(LINUX) | defined(J9ZOS390) | defined(AIXPPC) */
+#endif /* defined(LINUX) | defined(J9ZOS390) | defined(AIXPPC) | defined(OSX)  */
 
 
 #if defined(WIN32)
@@ -303,7 +303,7 @@ SleepFor(IDATA second)
 {
 #if defined(WIN32)
 	Sleep((DWORD)(second*1000));
-#elif defined(LINUX) | defined(J9ZOS390) | defined(AIXPPC)
+#elif defined(LINUX) || defined(J9ZOS390) || defined(AIXPPC) || defined(OSX)
 	sleep(second);
 #endif
 }

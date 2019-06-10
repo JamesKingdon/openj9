@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar19-SE]*/
 /*******************************************************************************
- * Copyright (c) 2017, 2017 IBM Corp. and others
+ * Copyright (c) 2017, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package java.lang.invoke;
 
@@ -28,11 +28,23 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+/*[IF Java12]*/
+import java.util.Optional;
+/*[ENDIF]*/
 /*[IF Sidecar19-SE]
 import jdk.internal.misc.Unsafe;
 /*[ELSE]*/
 import sun.misc.Unsafe;
 /*[ENDIF]*/
+/*[IF Java12]*/
+import java.lang.constant.ClassDesc;
+import java.lang.constant.Constable;
+import java.lang.constant.ConstantDesc;
+import java.lang.constant.ConstantDescs;
+import java.lang.constant.DirectMethodHandleDesc;
+import java.lang.constant.DynamicConstantDesc;
+import java.util.Objects;
+/*[ENDIF] Java12 */
 
 /**
  * Dynamically typed reference to a field, allowing read and write operations, 
@@ -42,7 +54,11 @@ import sun.misc.Unsafe;
  * VarHandle instances are created through the MethodHandles factory API.
  * 
  */
-public abstract class VarHandle extends VarHandleInternal {
+public abstract class VarHandle extends VarHandleInternal 
+/*[IF Java12]*/
+	implements Constable
+/*[ENDIF]*/
+{
 	/**
 	 * Access mode identifiers for VarHandle operations.
 	 */
@@ -253,6 +269,9 @@ public abstract class VarHandle extends VarHandleInternal {
 	final Class<?> fieldType;
 	final Class<?>[] coordinateTypes;
 	final int modifiers;
+/*[IF Java12]*/
+	private int hashCode = 0;
+/*[ENDIF] Java12 */
 	
 	/**
 	 * Constructs a generic VarHandle instance. 
@@ -260,7 +279,6 @@ public abstract class VarHandle extends VarHandleInternal {
 	 * @param fieldType The type of the field referenced by this VarHandle.
 	 * @param coordinateTypes An array of the argument types required to utilize the access modes on this VarHandle.
 	 * @param handleTable An array of MethodHandles referencing the methods corresponding to this VarHandle's access modes.
-	 * @param typeTable An array of MethodTypes describing the exact descriptors to be used when invoking access modes on this VarHandle.
 	 * @param modifiers The field's modifiers.
 	 */
 	VarHandle(Class<?> fieldType, Class<?>[] coordinateTypes, MethodHandle[] handleTable, int modifiers) {
@@ -301,9 +319,101 @@ public abstract class VarHandle extends VarHandleInternal {
 	 * 
 	 * @return The parameters required to access the field.
 	 */
-	public List<Class<?>> coordinateTypes() {
+	public final List<Class<?>> coordinateTypes() {
 		return Collections.unmodifiableList(Arrays.<Class<?>>asList(coordinateTypes));
 	}
+
+/*[IF Java12]*/
+	/**
+	 * Returns the nominal descriptor of this VarHandle instance, or an empty Optional 
+	 * if construction is not possible.
+	 * 
+	 * @return Optional with a nominal descriptor of VarHandle instance
+	 */
+	public Optional<VarHandleDesc> describeConstable() {
+		/* this method should be overridden by types that are supported */
+		return Optional.empty();
+	}
+
+	/**
+	 * Compares the specified object to this VarHandle and answer if they are equal.
+	 *
+	 * @param obj the object to compare
+	 * @return true if the specified object is equal to this VarHandle, false otherwise
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+
+		if (!(obj instanceof VarHandle)) {
+			return false;
+		}
+
+		/* argument comparison */
+		VarHandle that = (VarHandle)obj;
+		if (!(this.fieldType.equals(that.fieldType) 
+			&& (this.modifiers == that.modifiers)
+			&& Arrays.equals(this.coordinateTypes, that.coordinateTypes))
+		) {
+			return false;
+		}
+
+		/* Compare properties of FieldVarHandle that are not captured in the parent class */
+		if (obj instanceof FieldVarHandle) {
+			if (!(this instanceof FieldVarHandle)) {
+				return false;
+			}
+
+			FieldVarHandle thisf = (FieldVarHandle)this;
+			FieldVarHandle thatf = (FieldVarHandle)obj;
+			if (!(thisf.definingClass.equals(thatf.definingClass)
+				&& thisf.fieldName.equals(thatf.fieldName))
+			) {
+				return false;
+			}
+			
+		}
+
+		return true;
+	}
+
+	/**
+	 * Answers an integer hash code for the VarHandle. VarHandle instances
+	 * which are equal answer the same value for this method.
+	 *
+	 * @return a hash for this VarHandle
+	 */
+	@Override
+	public int hashCode() {
+		if (hashCode == 0) {
+			hashCode = fieldType.hashCode();
+			for (Class<?> c : coordinateTypes) {
+				hashCode = 31 * hashCode + c.hashCode();
+			}
+
+			/* Add properties for FieldVarHandle */
+			if (this instanceof FieldVarHandle) {
+				hashCode = 31 * hashCode + ((FieldVarHandle)this).definingClass.hashCode();
+			}
+		}
+		return hashCode;
+	}
+
+	/**
+	 * Returns a text representation of the VarHandle instance.
+	 * 
+	 * @return String representation of VarHandle instance
+	 */
+	@Override
+	public final String toString() {
+		/* VarHandle[varType=x, coord=[x, x]] */
+		String structure = "VarHandle[varType=%s, coord=%s]"; //$NON-NLS-1$
+		String coordList = Arrays.toString(coordinateTypes);
+		return String.format(structure, this.fieldType.getName(), coordList);
+	}
+/*[ENDIF]*/
 	
 	/**
 	 * Each {@link AccessMode}, e.g. get and set, requires different parameters
@@ -325,14 +435,13 @@ public abstract class VarHandle extends VarHandleInternal {
 	}
 	
 	/**
-	 * Not all AccessMode are supported for all {@link VarHandle} instances, e.g. 
-	 * because of the field type and/or field modifiers. This method indicates whether 
-	 * a specific {@link AccessMode} is supported by by this {@link VarHandle} instance.
+	 * This is a helper method to allow sub-class ViewVarHandle provide its own implementation
+	 * while making isAccessModeSupported(accessMode) final to satisfy signature tests.
 	 * 
 	 * @param accessMode The {@link AccessMode} to check support for.
 	 * @return A boolean value indicating whether the {@link AccessMode} is supported.
 	 */
-	public boolean isAccessModeSupported(AccessMode accessMode) {
+	boolean isAccessModeSupportedHelper(AccessMode accessMode) {
 		switch (accessMode) {
 		case GET:
 		case GET_VOLATILE:
@@ -375,6 +484,18 @@ public abstract class VarHandle extends VarHandleInternal {
 	}
 	
 	/**
+	 * Not all AccessMode are supported for all {@link VarHandle} instances, e.g. 
+	 * because of the field type and/or field modifiers. This method indicates whether 
+	 * a specific {@link AccessMode} is supported by by this {@link VarHandle} instance.
+	 * 
+	 * @param accessMode The {@link AccessMode} to check support for.
+	 * @return A boolean value indicating whether the {@link AccessMode} is supported.
+	 */
+	public final boolean isAccessModeSupported(AccessMode accessMode) {
+		return isAccessModeSupportedHelper(accessMode);
+	}
+	
+	/**
 	 * This method creates a {@link MethodHandle} for a specific {@link AccessMode}.
 	 * The {@link MethodHandle} is bound to this {@link VarHandle} instance.
 	 * 
@@ -395,6 +516,10 @@ public abstract class VarHandle extends VarHandleInternal {
 				error.initCause(e);
 				throw error;
 			}
+			/* The resulting method handle must come with the same signature as the requested access mode method
+			 * so as to throw out UnsupportedOperationException from that method.
+			 */
+			mh = mh.asType(MethodType.methodType(mt.returnType));
 			mh = MethodHandles.dropArguments(mh, 0, mt.arguments);
 		}
 		
@@ -906,4 +1031,237 @@ public abstract class VarHandle extends VarHandleInternal {
 	MethodHandle getFromHandleTable(int operation) {
 		return handleTable[operation];
 	}
+
+/*[IF Java12]*/
+	/* nominal descriptor of a VarHandle constant */
+	public static final class VarHandleDesc extends DynamicConstantDesc<VarHandle> implements ConstantDesc {
+		private Kind type = null;
+
+		private static enum Kind {
+			ARRAY,
+			STATIC_FIELD,
+			INSTANCE_FIELD;
+
+			DirectMethodHandleDesc getBootstrap() {
+				DirectMethodHandleDesc result = null;
+				switch (this) {
+					case ARRAY:
+						result = ConstantDescs.BSM_VARHANDLE_ARRAY;
+						break;
+					case STATIC_FIELD:
+						result = ConstantDescs.BSM_VARHANDLE_STATIC_FIELD;
+						break;
+					case INSTANCE_FIELD:
+						result = ConstantDescs.BSM_VARHANDLE_FIELD;
+						break;
+				}
+				return result;
+			}
+
+			ConstantDesc[] getBootstrapArgs(ClassDesc declaringClassDesc, ClassDesc varHandleDesc) {
+				ConstantDesc[] result = null;
+				switch(this) {
+					case ARRAY:
+						result = new ConstantDesc[] { varHandleDesc };
+						break;
+					case STATIC_FIELD:
+					case INSTANCE_FIELD:
+						result = new ConstantDesc[] { declaringClassDesc, varHandleDesc };
+						break;
+				}
+				return result;
+			}
+
+			boolean isField() {
+				return !this.equals(ARRAY);
+			}
+		}
+
+		/**
+		 * Create a nominal descriptor for a VarHandle.
+		 * 
+		 * @param type kind of VarHandleDesc to be created
+		 * @param declaringClassDesc ClassDesc describing the declaring class for the field (null for array)
+		 * @param name unqualified String name of the field ("_" for array)
+		 * @param varHandleType ClassDesc describing the field or array type
+		 * @throws NullPointerException if name argument is null
+		 */
+		private VarHandleDesc(Kind type, ClassDesc declaringClassDesc, String name, ClassDesc varHandleDesc) throws NullPointerException {
+			super(type.getBootstrap(), name, ConstantDescs.CD_VarHandle, type.getBootstrapArgs(declaringClassDesc, varHandleDesc));
+			this.type = type;
+		}
+
+		/**
+		 * Creates a VarHandleDesc describing a VarHandle for an array type.
+		 * 
+		 * @param arrayClassDesc ClassDesc describing the array type
+		 * @return VarHandleDesc describing a VarHandle for an array type
+		 * @throws NullPointerException if there is a null argument
+		 */
+		public static VarHandleDesc ofArray(ClassDesc arrayClassDesc) throws NullPointerException {
+			/* Verify that arrayClass is an array. This also covers the null check. */
+			if (!arrayClassDesc.isArray()) {
+				/*[MSG "K0625", "{0} is not an array type."]*/
+				throw new IllegalArgumentException(com.ibm.oti.util.Msg.getString("K0625", arrayClassDesc.descriptorString())); //$NON-NLS-1$
+			}
+			return new VarHandleDesc(Kind.ARRAY, null, "_", arrayClassDesc); //$NON-NLS-1$
+		}
+
+		/**
+		 * Creates a VarHandleDesc describing an instance field.
+		 * 
+		 * @param declaringClassDesc ClassDesc describing the declaring class for the field
+		 * @param name unqualified String name of the field
+		 * @param fieldTypeDesc ClassDesc describing the field type
+		 * @return VarHandleDesc describing the instance field
+		 * @throws NullPointerException if there is a null argument
+		 */
+		public static VarHandleDesc ofField(ClassDesc declaringClassDesc, String name, ClassDesc fieldTypeDesc) throws NullPointerException {
+			/* name null check is in the constructor */
+			Objects.requireNonNull(declaringClassDesc);
+			Objects.requireNonNull(fieldTypeDesc);
+			return new VarHandleDesc(Kind.INSTANCE_FIELD, declaringClassDesc, name, fieldTypeDesc);
+		}
+
+		/**
+		 * Creates a VarHandleDesc describing a static field.
+		 * 
+		 * @param declaringClassDesc ClassDesc describing the declaring class for the field
+		 * @param name unqualified String name of the field
+		 * @param fieldTypeDesc ClassDesc describing the field type
+		 * @return VarHandleDesc describing the static field
+		 * @throws NullPointerException if there is a null argument
+		 */
+		public static VarHandleDesc ofStaticField(ClassDesc declaringClassDesc, String name, ClassDesc fieldTypeDesc) throws NullPointerException {
+			/* name null check is in the constructor */
+			Objects.requireNonNull(declaringClassDesc);
+			Objects.requireNonNull(fieldTypeDesc);
+			return new VarHandleDesc(Kind.STATIC_FIELD, declaringClassDesc, name, fieldTypeDesc);
+		}
+
+		/**
+		 * Resolve nominal VarHandle descriptor reflectively.
+		 * 
+		 * @param lookup provides name resolution and access control context
+		 * @return resolved VarHandle
+		 * @throws ReflectiveOperationException if field, class, or method could not be resolved
+		 */
+		@Override
+		public VarHandle resolveConstantDesc(MethodHandles.Lookup lookup) throws ReflectiveOperationException {
+			VarHandle result;
+
+			switch(type) {
+				case ARRAY:
+					Class<?> arrayClass = (Class<?>)getArrayTypeClassDesc().resolveConstantDesc(lookup);
+					result = MethodHandles.arrayElementVarHandle(arrayClass);
+					break;
+				case STATIC_FIELD:
+				case INSTANCE_FIELD:
+					/* resolve declaring class, field descriptor and field name */
+					Class<?> declaringClass = (Class<?>)getFieldDeclaringClassDesc().resolveConstantDesc(lookup);
+					Class<?> fieldClass = (Class<?>)getFieldTypeClassDesc().resolveConstantDesc(lookup);
+					String name = constantName();
+
+					try {
+						if (type.equals(Kind.STATIC_FIELD)) {
+							result = lookup.findStaticVarHandle(declaringClass, name, fieldClass);
+						} else {
+							result = lookup.findVarHandle(declaringClass, name, fieldClass);
+						}
+					} catch(Exception e) {
+						throw new ReflectiveOperationException(e);
+					}
+					break;
+				default:
+					/*[MSG "K0619", "Malformated VarHandleDesc, {0} could not be retrieved."]*/
+					throw new InternalError(com.ibm.oti.util.Msg.getString("K0619", "field type")); //$NON-NLS-1$ //$NON-NLS-2$
+			}
+			
+			return result;
+		}
+
+		/**
+		 * Returns a string containing a concise, human-readable representation of the VarHandleDesc. 
+		 * Description includes the bootstrap method, name, type, and bootstrap arguments.
+		 *
+		 * @return String that textually represents the Object instance
+		 */
+		@Override
+		public String toString() {
+			/* VarHandleDesc[(static) (declaring class name).(constant field):(var type)] */
+			String structure = "VarHandleDesc[%s]"; //$NON-NLS-1$
+			String content = ""; //$NON-NLS-1$
+
+			if (type.equals(Kind.ARRAY)) {
+				/* array type is declaring class, varType is the component type of the array */
+				content = String.format("%s[]", getArrayTypeClassDesc().displayName()); //$NON-NLS-1$
+			} else {
+				if (type.equals(Kind.STATIC_FIELD)) {
+					content += "static ";  //$NON-NLS-1$
+				}
+				content = String.format(content + "%s.%s:%s", getFieldDeclaringClassDesc().displayName(), //$NON-NLS-1$
+					constantName(), getFieldTypeClassDesc().displayName());
+			}
+
+			return String.format(structure, content);
+		}
+
+		/**
+		 * Returns a ClassDesc describing the variable represented by this VarHandleDesc.
+		 * 
+		 * @return ClassDesc of variable type
+		 */
+		public ClassDesc varType() {
+			return type.isField() ? getFieldTypeClassDesc() : getArrayTypeClassDesc().componentType();
+		}
+
+		/**
+		 * Helper to retrieve declaring class descriptor from superclass bootstrap arguments.
+		 * 
+		 * @return ClassDesc declaring class descriptor
+		 * @throws InternalError if VarHandleDesc was created improperly or instance is not a field
+		 */
+		private ClassDesc getFieldDeclaringClassDesc() {
+			ConstantDesc[] args = bootstrapArgs();
+			/* declaring class is always the first bootstrap argument */
+			if (!type.isField() || (args.length < 2) || !(args[0] instanceof ClassDesc)) {
+				/*[MSG "K0619", "Malformated VarHandleDesc, {0} could not be retrieved."]*/
+				throw new InternalError(com.ibm.oti.util.Msg.getString("K0619", "field declaring class descriptor")); //$NON-NLS-1$ //$NON-NLS-2$
+			}
+			return (ClassDesc)args[0];
+		}
+
+		/**
+		 * Helper to retrieve field type descriptor from superclass bootstrap arguments.
+		 * 
+		 * @return ClassDesc field type descriptor
+		 * @throws InternalError if VarHandleDesc was created improperly or instance is not a field
+		 */
+		private ClassDesc getFieldTypeClassDesc() {
+			ConstantDesc[] args = bootstrapArgs();
+			/* field type is always the second bootstrap argument */
+			if (!type.isField() || (args.length < 2) || !(args[1] instanceof ClassDesc)) {
+				/*[MSG "K0619", "Malformated VarHandleDesc, {0} could not be retrieved."]*/
+				throw new InternalError(com.ibm.oti.util.Msg.getString("K0619", "field class descriptor")); //$NON-NLS-1$ //$NON-NLS-2$
+			}
+			return (ClassDesc)args[1];
+		}
+
+		/**
+		 * Helper to retrieve array type descriptor from superclass bootstrap arguments.
+		 * 
+		 * @return ClassDesc array type descriptor
+		 * @throws InternalError if VarHandleDesc was created improperly or instance is not an array type
+		 */
+		private ClassDesc getArrayTypeClassDesc() {
+			ConstantDesc[] args = bootstrapArgs();
+			/* array type is always the first bootstrap argument for an array type */
+			if (type.isField() || (args.length == 0) || !(args[0] instanceof ClassDesc)) {
+				/*[MSG "K0619", "Malformated VarHandleDesc, {0} could not be retrieved."]*/
+				throw new InternalError(com.ibm.oti.util.Msg.getString("K0619", "array type descriptor")); //$NON-NLS-1$ //$NON-NLS-2$
+			}
+			return (ClassDesc)args[0];
+		}		
+	}
+/*[ENDIF] Java12 */ 
 }

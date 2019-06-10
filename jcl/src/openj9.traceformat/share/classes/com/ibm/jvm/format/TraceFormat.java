@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar18-SE]*/
 /*******************************************************************************
- * Copyright (c) 2000, 2016 IBM Corp. and others
+ * Copyright (c) 2000, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jvm.format;
 
@@ -86,7 +86,11 @@ final public class TraceFormat
 
 	// constants
 	protected static final String usageMessage = "Usage:\n"
+/*[IF Sidecar18-SE-OpenJ9]*/
+			+ "traceformat input_filespec [output_filespec] \n"
+/*[ELSE]*/
 			+ "java com.ibm.jvm.format.TraceFormat input_filespec [output_filespec] \n"
+/*[ENDIF] Sidecar18-SE-OpenJ9 */
 			+ "\t[-summary] [-datdir datfiledirectory] [-uservmid vmid] [-thread:id] [-indent] \n"
 			+ "\t[-overridetimezone noOfHours] [-help]\n"
 			+ "\n"
@@ -106,7 +110,11 @@ final public class TraceFormat
 			+ "\tuservmid = users can specify a string to be inserted into each\n"
 			+ "\t      tracepoint's formatted output, to help track and compare\n"
 			+ "\t      tracefiles from multiple jvm runs.\n"
+/*[IF Sidecar18-SE-OpenJ9]*/
+			+ "\t      e.g. traceformat 142trcfile /\n"
+/*[ELSE]*/
 			+ "\t      e.g. java com.ibm.jvm.format.TraceFormat 142trcfile /\n"
+/*[ENDIF] Sidecar18-SE-OpenJ9 */
 			+ "\t           -datdir /142sdk/jre/lib\n"
 			+ "\tthread = only trace information for the specified thread will \n"
 			+ "\t      be formatted. Any number of thread IDs can be specified, \n"
@@ -115,7 +123,11 @@ final public class TraceFormat
 			+ "\t      added to the formatted tracepoints (can be negative).\n"
 			+ "\t      This option allows the user to override the default time\n"
 			+ "\t      zone used in the formatter (GMT)\n"
+/*[IF Sidecar18-SE-OpenJ9]*/
+			+ "\t      e.g. traceformat 142trcfile /\n"
+/*[ELSE]*/
 			+ "\t      e.g. java com.ibm.jvm.format.TraceFormat trcfile /\n"
+/*[ENDIF] Sidecar18-SE-OpenJ9 */
 			+ "\t           -overridetimezone -4\n"
 			+ "\tindent = specify indentation at Entry/Exit trace points.\n"
 			+ "\t      Default is not to indent.\n"
@@ -208,7 +220,7 @@ final public class TraceFormat
 				"  ThreadID         TP id  Type         TraceEntry ");
 		expectedRecords = 0;
 
-		// initialise statics in other classes
+		// initialize statics in other classes
 		Util.initStatics();
 		TraceArgs.initStatics();
 		TraceRecord.initStatics();
@@ -437,6 +449,16 @@ final public class TraceFormat
 		}
 		
 		/*
+		 * Now load OMRTraceFormat.dat if available.
+		 */
+		String omrFormatFilePath = findDatFile(dirsToSearch, "OMRTraceFormat.dat");
+
+		if (omrFormatFilePath != null) {
+			/* we found a suitable dat file */
+			tryMessageFileInstantiation(omrFormatFilePath);
+		}
+
+		/*
 		 * Also load TraceFormat.dat as it contains the trace points for the class libraries.
 		 */
 		String filePath = findDatFile(dirsToSearch, "TraceFormat.dat");
@@ -477,7 +499,7 @@ final public class TraceFormat
 
 	private void prime() throws IOException
 	{
-		/* reinitialise class variables to allow reuse */
+		/* reinitialize class variables to allow reuse */
 		globalNumberOfBuffers = 0;
 		tempThreadArray = null;
 		tracedThreads = null;
@@ -517,7 +539,7 @@ final public class TraceFormat
 			}
 			if (((fileLength - dataStart) % bufferSize) != 0) {
 				outStream
-						.println("*** TraceFile is truncated, or corrupted, will ignore some incomplete data at the end, but process everything that is avaiable");
+						.println("*** TraceFile is truncated, or corrupted, will ignore some incomplete data at the end, but process everything that is available");
 				traceFileIsTruncatedOrCorrupt = true;
 			}
 			if (numberOfBuffers == 0) {
@@ -543,7 +565,7 @@ final public class TraceFormat
 				 */
 				traceRecord.processTraceBufferHeader(traceFile, (long)dataStart + (long)j * (long)bufferSize, bufferSize);
 
-				Long threadID = new Long(traceRecord.getThreadIDAsLong());
+				Long threadID = Long.valueOf(traceRecord.getThreadIDAsLong());
 				if (listOfThreadBuffers.containsKey(threadID)) {
 					TraceThread buffersForThread = (TraceThread) listOfThreadBuffers
 							.get(threadID);
@@ -664,7 +686,7 @@ final public class TraceFormat
 			tracePointsFormatted++;
 
 			threadID = tp.getThreadID();
-			if (Util.findThreadID(new Long(threadID))) {
+			if (Util.findThreadID(Long.valueOf(threadID))) {
 				String formattedTime = tp.getFormattedTime();
 				tempTPString.append(formattedTime);
 

@@ -2,6 +2,7 @@
 
 package java.lang;
 
+import com.ibm.oti.vm.J9UnmodifiableClass;
 import java.lang.ref.SoftReference;
 import java.lang.reflect.*;
 import java.security.AccessController;
@@ -30,7 +31,7 @@ import com.ibm.oti.util.Msg;
 
 
 /*******************************************************************************
- * Copyright (c) 1998, 2017 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -48,9 +49,10 @@ import com.ibm.oti.util.Msg;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
+@J9UnmodifiableClass
 final class J9VMInternals {
 	/*[PR VMDESIGN 1891] Move j9Version and j9Config from Class to J9VMInternals */
 	/*[IF]*/
@@ -333,7 +335,9 @@ final class J9VMInternals {
 	private static void checkPackageAccess(final Class clazz, ProtectionDomain pd) {
 		final SecurityManager sm = System.getSecurityManager();
 		if (sm != null) {
-			AccessController.doPrivileged(new PrivilegedAction() {
+			ProtectionDomain[] pdArray = (pd == null) ? new ProtectionDomain[]{} : new ProtectionDomain[]{pd};
+			AccessController.doPrivileged(new PrivilegedAction<Object>() {
+				@Override
 				public Object run() {
 					String packageName = clazz.getPackageName();
 					if (packageName != null) {
@@ -346,7 +350,7 @@ final class J9VMInternals {
 					}					
 					return null;
 				}
-			}, new AccessControlContext(new ProtectionDomain[]{pd}));
+			}, new AccessControlContext(pdArray));
 		}
 	}
 
@@ -439,7 +443,7 @@ final class J9VMInternals {
 				}
 			}
 		} else {
-			long ptr = (com.ibm.oti.vm.VM.FJ9OBJECT_SIZE == 4) ?  h.getIntFromObject(anObject, 0L) : h.getLongFromObject(anObject, 0L);
+			long ptr = (com.ibm.oti.vm.VM.FJ9OBJECT_SIZE == 4) ? Integer.toUnsignedLong(h.getIntFromObject(anObject, 0L)) : h.getLongFromObject(anObject, 0L);
 			if ((ptr & com.ibm.oti.vm.VM.OBJECT_HEADER_HAS_BEEN_MOVED_IN_CLASS) != 0) {
 				if (!h.isArray(anObject)) {
 					long j9class = ptr & com.ibm.oti.vm.VM.J9_JAVA_CLASS_MASK;
@@ -520,7 +524,7 @@ final class J9VMInternals {
 	
 	/**
 	 * Format a message to be used when creating a NoSuchMethodException from the VM.
-	 * On failure returns methodSig ie the old style of NoSuchMethoException message
+	 * On failure returns methodSig ie the old style of NoSuchMethodException message
 	 * @param methodSig String representation of the signature of the called method
 	 * @param clazz1 The calling class, 
 	 * @param classPath1 Classpath used to load calling class. Only set when class is loaded by bootstrap loader

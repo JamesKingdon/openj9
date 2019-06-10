@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2013 IBM Corp. and others
+ * Copyright (c) 2006, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,14 +17,12 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 package com.ibm.j9ddr.corereaders.tdump.zebedee.util;
 
-import javax.imageio.stream.ImageOutputStream;
 import java.io.IOException;
-import java.util.*;
 
 /**
  * This interface represents a zSeries emulator.
@@ -100,7 +98,7 @@ public interface Emulator {
 
         /**
          * Allocate a chunk of unused memory. This searches the known address ranges and tries
-         * to find an unallocated area of the given size. If succesfull, this area effectively
+         * to find an unallocated area of the given size. If successful, this area effectively
          * becomes part of this ImageSpace and may be read and written to as normal.
          * This method is used by users of the Emulator for things like allocating
          * stack, arguments etc.

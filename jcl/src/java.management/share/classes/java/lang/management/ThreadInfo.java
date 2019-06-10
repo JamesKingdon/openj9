@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar17]*/
 /*******************************************************************************
- * Copyright (c) 2007, 2017 IBM Corp. and others
+ * Copyright (c) 2007, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,10 +18,11 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package java.lang.management;
 
+import java.lang.Thread.State;
 import java.util.Arrays;
 import java.util.StringTokenizer;
 
@@ -29,9 +30,11 @@ import javax.management.openmbean.CompositeData;
 import javax.management.openmbean.InvalidKeyException;
 
 import com.ibm.java.lang.management.internal.LockInfoUtil;
+import com.ibm.java.lang.management.internal.ManagementAccessControl;
 import com.ibm.java.lang.management.internal.MonitorInfoUtil;
 import com.ibm.java.lang.management.internal.StackTraceElementUtil;
 import com.ibm.java.lang.management.internal.ThreadInfoUtil;
+import com.ibm.oti.util.Util;
 
 /**
  * Information about a snapshot of the state of a thread.
@@ -40,13 +43,13 @@ import com.ibm.java.lang.management.internal.ThreadInfoUtil;
  */
 public class ThreadInfo {
 
+	/* Set up access to ThreadInfo shared secret.*/
+	static {
+		ManagementAccessControl.setThreadInfoAccess(new ThreadInfoAccessImpl());
+	}
+
 	private long threadId;
 
-	/**
-	 * @brief Do /not/ rename this field; it is initialized but not used within the 
-	 * class's code (hence annotated "unused"), whereas, it is accessed via Reflection.
-	 */
-	@SuppressWarnings("unused")
 	private long nativeTId;
 
 	private String threadName;
@@ -247,7 +250,7 @@ public class ThreadInfo {
 	 * If thread contention monitoring is supported and enabled, returns the
 	 * total amount of time that the thread represented by this
 	 * <code>ThreadInfo</code> has spent blocked on any monitor objects. The
-	 * time is measued in milliseconds and will be measured over the time period
+	 * time is measured in milliseconds and will be measured over the time period
 	 * since thread contention was most recently enabled.
 	 * 
 	 * @return if thread contention monitoring is currently enabled, the number
@@ -277,7 +280,6 @@ public class ThreadInfo {
 	 * <li><code>@</code>
 	 * <li><code>Integer.toHexString(System.identityHashCode(monitor))</code>
 	 * </ul>
-	 * </p>
 	 * @return if blocked or waiting on a monitor, a string representation of
 	 *         the monitor object. Otherwise, <code>null</code>.
 	 * @see Integer#toHexString(int)
@@ -331,9 +333,20 @@ public class ThreadInfo {
 	}
 
 	/**
+	 * Returns the native thread identifier of the thread represented by this
+	 * <code>ThreadInfo</code>.
+	 * 
+	 * @return the native identifier of the thread corresponding to this
+	 *         <code>ThreadInfo</code>.
+	 */
+	long getNativeThreadId() {
+		return this.nativeTId;
+	}
+
+	/**
 	 * If available, returns the stack trace for the thread represented by this
 	 * <code>ThreadInfo</code> instance. The stack trace is returned in an
-	 * array of {@link StackTraceElement} objects with the &quot;top&quot of the
+	 * array of {@link StackTraceElement} objects with the &quot;top&quot; of the
 	 * stack encapsulated in the first array element and the &quot;bottom&quot;
 	 * of the stack in the last array element.
 	 * <p>
@@ -499,7 +512,7 @@ public class ThreadInfo {
 	 *             <code>java.lang.Long</code>)
 	 *             <li><code>blockedTime</code>(<code>java.lang.Long</code>)
 	 *             <li><code>waitedCount</code>(<code>java.lang.Long</code>)
-	 *             <li><code>waitedTime<code> (<code>java.lang.Long</code>)
+	 *             <li><code>waitedTime</code> (<code>java.lang.Long</code>)
 /*[IF Sidecar19-SE]
 	 *             <li><code>daemon</code> (<code>java.lang.Boolean</code>)
 	 *             <li><code>priority</code> (<code>java.lang.Integer</code>)
@@ -597,7 +610,7 @@ public class ThreadInfo {
 				daemonVal = ((Boolean) cd.get("daemon")).booleanValue(); //$NON-NLS-1$
 				priorityVal = ((Integer) cd.get("priority")).intValue(); //$NON-NLS-1$
 				/*[ENDIF]*/
-			} catch (InvalidKeyException e) {
+			} catch (NullPointerException | InvalidKeyException e) {
 				// throw an IllegalArgumentException as the CompositeData
 				// object does not contain an expected key
 				/*[MSG "K05E6", "CompositeData object does not contain expected key."]*/
@@ -744,17 +757,41 @@ public class ThreadInfo {
 	public String toString() {
 		// Since ThreadInfos are immutable the string value need only be
 		// calculated the one time
+		final String ls = System.lineSeparator();
 		if (TOSTRING_VALUE == null) {
 			StringBuilder result = new StringBuilder();
-			result.append(threadName + " " + threadId + " " + threadState); //$NON-NLS-1$ //$NON-NLS-2$
+/*[IF Java11]*/
+			result.append(String.format("\"%s\" prio=%d Id=%d %s",  //$NON-NLS-1$
+					threadName, Integer.valueOf(priority), Long.valueOf(threadId), threadState));
+/*[ELSE]*/
+			result.append(String.format("\"%s\" Id=%d %s",  //$NON-NLS-1$
+					threadName, Long.valueOf(threadId), threadState));
+/*[ENDIF]*/
+			if (State.BLOCKED == threadState) {
+				result.append(String.format(" on %s owned by \"%s\" Id=%d",  //$NON-NLS-1$
+						lockName, lockOwnerName, Long.valueOf(lockOwnerId)));
+			}
+			result.append(ls);
 			if (stackTraces != null && stackTraces.length > 0) {
-				result.append("\n"); //$NON-NLS-1$
-				for (StackTraceElement element : stackTraces) {
-					result.append(element.toString());
-					result.append("\n"); //$NON-NLS-1$
+				MonitorInfo[] lockList = getLockedMonitors();
+				MonitorInfo[] lockArray = new MonitorInfo[stackTraces.length];
+				for (MonitorInfo mi: lockList) {
+					int lockDepth = mi.getLockedStackDepth();
+					lockArray[lockDepth] = mi;
 				}
-			} else {
-				result.append(" null\n"); //$NON-NLS-1$
+				int stackDepth = 0;
+				for (StackTraceElement element : stackTraces) {
+					result.append("\tat "); //$NON-NLS-1$
+					Util.printStackTraceElement(element,
+							null, result, true);
+					result.append(ls);
+					if (null != lockArray[stackDepth]) {
+						MonitorInfo mi = lockArray[stackDepth];
+						result.append(String.format("\t- locked %s%n",  //$NON-NLS-1$
+								mi.toString()));
+					}
+					++stackDepth;
+				}
 			}
 			TOSTRING_VALUE = result.toString();
 		}

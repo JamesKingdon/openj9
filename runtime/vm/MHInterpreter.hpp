@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if !defined(MHINTERPRETER_HPP_)
@@ -150,6 +150,16 @@ private:
 		return J9VMJAVALANGINVOKESPREADHANDLE_ARRAYCLASS(_currentThread, methodHandle);
 	}
 
+	/**
+	 * Fetch the filterPosition field from the j.l.i.MethodHandle.
+	 * @param methodHandle[in] A MethodHandle object
+	 * @return The filterPosition field from the j.l.i.MethodHandle.
+	 */
+	VMINLINE U_32
+	getMethodHandleFilterPosition(j9object_t methodHandle) const
+	{
+		return (U_32)J9VMJAVALANGINVOKEFILTERARGUMENTSWITHCOMBINERHANDLE_FILTERPOSITION(_currentThread, methodHandle);
+	}
 
 	/**
 	 * Fetch the foldPosition field from the j.l.i.MethodHandle.
@@ -168,9 +178,15 @@ private:
 	 * @return The combinerHandle from the j.l.i.MethodHandle.
 	 */
 	VMINLINE j9object_t
-	getCombinerHandle(j9object_t methodHandle) const
+	getCombinerHandleForFold(j9object_t methodHandle) const
 	{
 		return J9VMJAVALANGINVOKEFOLDHANDLE_COMBINER(_currentThread, methodHandle);
+	}
+
+	VMINLINE j9object_t
+	getCombinerHandleForFilter(j9object_t methodHandle) const
+	{
+		return J9VMJAVALANGINVOKEFILTERARGUMENTSWITHCOMBINERHANDLE_COMBINER(_currentThread, methodHandle);
 	}
 
 	/**
@@ -389,7 +405,15 @@ foundITable:
 	{
 		switch (returnType) {
 		case J9NtcBoolean:
-			*returnStorage = (UDATA)(U_8)*returnStorage;
+		{
+			U_32 returnValue = (U_32)*returnStorage;
+			U_8 * returnAddress = (U_8 *)&returnValue;
+#ifdef J9VM_ENV_LITTLE_ENDIAN
+			*returnStorage = (UDATA)(0 != returnAddress[0]);
+#else
+			*returnStorage = (UDATA)(0 != returnAddress[3]);
+#endif /*J9VM_ENV_LITTLE_ENDIAN */
+		}
 			break;
 		case J9NtcByte:
 			*returnStorage = (UDATA)(IDATA)(I_8)*returnStorage;
@@ -510,11 +534,28 @@ foundITable:
 
 	/**
 	* @brief
+	* Perform argument filtering for filterArgumentsWithCombiner.
+	* @param methodHandle
+	* @return j9object_t The target MethodHandle with argument filtered by combinerHandle
+	*/
+	j9object_t
+	filterArgumentsWithCombiner(j9object_t methodHandle);
+
+	/**
+	* @brief
 	* Insert the return value of combinerHandle to the argument list of foldHandle.
 	* @return j9object_t The target MethodHandle  (the one to execute foldHandle)
 	*/
 	j9object_t
 	insertReturnValueForFoldArguments();
+
+	/**
+	* @brief
+	* Insert the return value of combinerHandle to the argument list of the methodHandle.
+	* @return j9object_t The target MethodHandle
+	*/
+	j9object_t
+	replaceReturnValueForFilterArgumentsWithCombiner();
 
 	/**
 	* @brief
@@ -608,7 +649,7 @@ protected:
 
 public:
 	/**
-	 * Run the MethodHandle using the intepreter dispatch target implementation.
+	 * Run the MethodHandle using the interpreter dispatch target implementation.
 	 *
 	 * @param methodHandle[in] the j.l.i.MethodHandle to run
 	 * @return the next action for the interpreter
@@ -620,7 +661,7 @@ public:
 	 * FilterReturn:
 	 * 		[ ... MH bytecodeframe returnSlot0 returnslot1] --> [ ... MH returnSlot0 returnslot1]
 	 * ConstructorHandle:
-	 * 		[ ... newUnitializedObject bytecodeframe] --> [ ... newInitializedObject]
+	 * 		[ ... newUninitializedObject bytecodeframe] --> [ ... newInitializedObject]
 	 * FoldHandle:
 	 * 		Refer to the implementation in MHInterpreter.cpp
 	 * GuardWithTestHandle:

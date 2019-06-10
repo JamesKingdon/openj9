@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,29 +17,26 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if !defined(METRONOME_HPP_)
 #define METRONOME_HPP_
 
 /* @ddr_namespace: default */
-#include "j9.h"
-#include "j9cp.h"
-#include "j9cfg.h"
-#include "modronopt.h"
-#include "modronbase.h"
+#include "omr.h"
+#include "omrcfg.h"
 
 #include <assert.h>
 #define ASSERT_LEVEL 0
 #define assert1(expr) assert((ASSERT_LEVEL < 1) || (expr));
 #define assert2(expr) assert((ASSERT_LEVEL < 2) || (expr));
 
-#define MAX_UINT ((UDATA) (-1))
+#define MAX_UINT ((uintptr_t) (-1))
 
 #define CLOCK_SWITCH_TICK_THRESHOLD 1000000
 #define INTER_YIELD_WARNING_THRESHOLD_NS 80000
-/* INTER_YIELD_WARNING_THRESHOLD_NS indicates that 80 usec for inter-yield checks is alreaady considered large.
+/* INTER_YIELD_WARNING_THRESHOLD_NS indicates that 80 usec for inter-yield checks is already considered large.
  * The largest interval between yield checks should be bounded by 500 usec, which is a HardRT quanta.
  */
 #define INTER_YIELD_MAX_NS 500000

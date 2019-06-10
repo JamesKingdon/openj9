@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <stdio.h>
@@ -130,11 +130,11 @@ void freeMemorySegment(J9JavaVM *javaVM, J9MemorySegment *segment, BOOLEAN freeD
 		} else if ((useAdvise) && (MEMORY_TYPE_JIT_SCRATCH_SPACE & segment->type)) {
 			j9mem_advise_and_free_memory(segment->baseAddress);
 		} else if (segment->type & (MEMORY_TYPE_RAM_CLASS | MEMORY_TYPE_UNDEAD_CLASS)) {
-#ifdef J9VM_INTERP_COMPRESSED_OBJECT_HEADER
-			j9mem_free_memory32(segment->baseAddress);
-#else /* J9VM_INTERP_COMPRESSED_OBJECT_HEADER */
-			j9mem_free_memory(segment->baseAddress);
-#endif /* J9VM_INTERP_COMPRESSED_OBJECT_HEADER */
+			if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(javaVM)) {
+				j9mem_free_memory32(segment->baseAddress);
+			} else {
+				j9mem_free_memory(segment->baseAddress);
+			}
 		} else {
 			j9mem_free_memory(segment->baseAddress);
 		}
@@ -229,11 +229,11 @@ allocateMemoryForSegment(J9JavaVM *javaVM,J9MemorySegment *segment, J9PortVmemPa
 		tmpAddr = j9vmem_reserve_memory_ex(&segment->vmemIdentifier, vmemParams);
 		Trc_VM_virtualRAMClassAlloc(tmpAddr);
 	} else if (J9_ARE_ALL_BITS_SET(segment->type, MEMORY_TYPE_RAM_CLASS)) {
-#ifdef J9VM_INTERP_COMPRESSED_OBJECT_HEADER
-		tmpAddr = j9mem_allocate_memory32(segment->size, memoryCategory);
-#else /* J9VM_INTERP_COMPRESSED_OBJECT_HEADER */
-		tmpAddr = j9mem_allocate_memory(segment->size, memoryCategory);
-#endif /* J9VM_INTERP_COMPRESSED_OBJECT_HEADER */
+		if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(javaVM)) {
+			tmpAddr = j9mem_allocate_memory32(segment->size, memoryCategory);
+		} else {
+			tmpAddr = j9mem_allocate_memory(segment->size, memoryCategory);
+		}
 	} else {
 		tmpAddr = j9mem_allocate_memory(segment->size, memoryCategory);
 	}
@@ -536,7 +536,7 @@ allLiveClassesNextDo(J9ClassWalkState* state)
 		if (clazzPtr != NULL) {
 			J9ClassLoader *classLoader = clazzPtr->classLoader;
 			if ((J9_GC_CLASS_LOADER_DEAD == (classLoader->gcFlags & J9_GC_CLASS_LOADER_DEAD))
-					|| (J9_JAVA_CLASS_DYING == (J9CLASS_FLAGS(clazzPtr) & J9_JAVA_CLASS_DYING))
+					|| (J9AccClassDying == (J9CLASS_FLAGS(clazzPtr) & J9AccClassDying))
 					|| (needCheckInGC && (0 == vm->memoryManagerFunctions->j9gc_objaccess_checkClassLive(vm, clazzPtr))))
 			{
 				/* class is not alive */

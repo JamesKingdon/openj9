@@ -19,7 +19,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 package java.lang.invoke;
@@ -50,7 +50,7 @@ abstract class DelegatingMethodHandle extends MethodHandle {
 	static LambdaForm makeReinvokerForm(MethodHandle mh, int num, Object obj, String str, boolean flag, LambdaForm.NamedFunction nf1, LambdaForm.NamedFunction nf2) {
 		throw OpenJDKCompileStub.OpenJDKCompileStubThrowError();
 	}
-	/*[IF Java18.3]*/
+	/*[IF Java10]*/
 	static LambdaForm makeReinvokerForm(MethodHandle mh, int num, Object obj, boolean flag, LambdaForm.NamedFunction nf1, LambdaForm.NamedFunction nf2) {
 		throw OpenJDKCompileStub.OpenJDKCompileStubThrowError();
 	}

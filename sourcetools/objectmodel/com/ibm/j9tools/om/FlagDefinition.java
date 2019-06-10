@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 IBM Corp. and others
+ * Copyright (c) 2007, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9tools.om;
 
@@ -65,7 +65,7 @@ public class FlagDefinition extends OMObject implements Comparable<FlagDefinitio
 	/**
 	 * A set of requires flags. 
 	 * Represents a depends-on linkage between flags. Indicates that the flag requires
-	 * that another flag be enabled. The flag which is dependended upon is identified 
+	 * that another flag be enabled. The flag which is dependent upon is identified 
 	 * by name using the flag attribute.
 	 */
 	protected Map<String, FlagDefinition> requires = new TreeMap<String, FlagDefinition>();

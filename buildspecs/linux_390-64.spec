@@ -1,27 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
 <!--
-  Copyright (c) 2006, 2017 IBM Corp. and others
- 
-  This program and the accompanying materials are made available under
-  the terms of the Eclipse Public License 2.0 which accompanies this
-  distribution and is available at https://www.eclipse.org/legal/epl-2.0/
-  or the Apache License, Version 2.0 which accompanies this distribution and
-  is available at https://www.apache.org/licenses/LICENSE-2.0.
- 
-  This Source Code may also be made available under the following
-  Secondary Licenses when the conditions for such availability set
-  forth in the Eclipse Public License, v. 2.0 are satisfied: GNU
-  General Public License, version 2 with the GNU Classpath
-  Exception [1] and GNU General Public License, version 2 with the
-  OpenJDK Assembly Exception [2].
- 
-  [1] https://www.gnu.org/software/classpath/license.html
-  [2] http://openjdk.java.net/legal/assembly-exception.html
+Copyright (c) 2006, 2019 IBM Corp. and others
 
-  SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+This program and the accompanying materials are made available under
+the terms of the Eclipse Public License 2.0 which accompanies this
+distribution and is available at https://www.eclipse.org/legal/epl-2.0/
+or the Apache License, Version 2.0 which accompanies this distribution and
+is available at https://www.apache.org/licenses/LICENSE-2.0.
+
+This Source Code may also be made available under the following
+Secondary Licenses when the conditions for such availability set
+forth in the Eclipse Public License, v. 2.0 are satisfied: GNU
+General Public License, version 2 with the GNU Classpath
+Exception [1] and GNU General Public License, version 2 with the
+OpenJDK Assembly Exception [2].
+
+[1] https://www.gnu.org/software/classpath/license.html
+[2] http://openjdk.java.net/legal/assembly-exception.html
+
+SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 -->
-
 <spec xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.ibm.com/j9/builder/spec" xsi:schemaLocation="http://www.ibm.com/j9/builder/spec spec-v1.xsd" id="linux_390-64">
 	<name>Linux S390 64bit</name>
 	<asmBuilderName>LinuxS390</asmBuilderName>
@@ -43,6 +41,7 @@
 		<property name="graph_commands.chroot" value=""/>
 		<property name="graph_commands.unix.remote_host" value=""/>
 		<property name="graph_datamines" value="commands.unix.datamine,site-zLinux.datamine,use.local.datamine"/>
+		<property name="graph_enable_gcc7_cmd" value="source {$buildinfo.fsroot.linux390Bin$}/set_gcc7_env &amp;&amp;"/>
 		<property name="graph_label.classlib" value="150"/>
 		<property name="graph_label.java5" value="j9vmxz6424"/>
 		<property name="graph_label.java6" value="pxz6460"/>
@@ -77,7 +76,6 @@
 		<property name="j9dt.make" value="gmake"/>
 		<property name="j9dt.toolsTarget" value="buildtools.mk"/>
 		<property name="javatestPlatform" value="linux_390-64"/>
-		<property name="jclMaxSecurityPolicyDefine" value=" &quot;-Djava.security.policy=file://$(J9_L390_ROOT)/testing/java.policy&quot; "/>
 		<property name="jclMemoryMax" value="-Xmx64m"/>
 		<property name="jclOSStackSizeMax" value=""/>
 		<property name="jgrinderTestingSupported" value="true"/>
@@ -90,12 +88,12 @@
 		<property name="svn_stream" value=""/>
 		<property name="uma_make_cmd_ar" value="ar"/>
 		<property name="uma_make_cmd_as" value="as"/>
-		<property name="uma_make_cmd_cc" value="cc"/>
+		<property name="uma_make_cmd_cc" value="gcc"/>
 		<property name="uma_make_cmd_cpp" value="cpp -E -P"/>
-		<property name="uma_make_cmd_cxx" value="$(CC)"/>
+		<property name="uma_make_cmd_cxx" value="g++"/>
 		<property name="uma_make_cmd_cxx_dll_ld" value="$(CC)"/>
 		<property name="uma_make_cmd_cxx_exe_ld" value="$(CC)"/>
-		<property name="uma_make_cmd_dll_ld" value="gcc"/>
+		<property name="uma_make_cmd_dll_ld" value="$(CC)"/>
 		<property name="uma_make_cmd_exe_ld" value="$(CC)"/>
 		<property name="uma_make_cmd_ranlib" value="ranlib"/>
 		<property name="uma_processor" value="s390"/>
@@ -106,7 +104,6 @@
 		<feature id="core"/>
 		<feature id="crypto"/>
 		<feature id="dbgext"/>
-		<feature id="harmony"/>
 		<feature id="se"/>
 		<feature id="se60_26"/>
 		<feature id="se7"/>
@@ -114,10 +111,12 @@
 	</features>
 	<source>
 		<project id="com.ibm.jvmti.tests"/>
-		<project id="tr.source"/>
-		<project id="VM_LINUX39064"/>
+		<project id="compiler"/>
 	</source>
 	<flags>
+		<flag id="interp_atomicFreeJni" value="true"/>
+		<flag id="interp_atomicFreeJniUsesFlush" value="true"/>
+		<flag id="interp_twoPassExclusive" value="true"/>
 		<flag id="arch_s390" value="true"/>
 		<flag id="build_SE6_package" value="true"/>
 		<flag id="build_autobuild" value="true"/>
@@ -125,7 +124,7 @@
 		<flag id="build_dropToToronto" value="true"/>
 		<flag id="build_j2se" value="true"/>
 		<flag id="build_java8" value="true"/>
-		<flag id="build_java9" value="true"/>
+		<flag id="build_java9" value="false"/>
 		<flag id="build_product" value="true"/>
 		<flag id="env_data64" value="true"/>
 		<flag id="env_hasFPU" value="true"/>
@@ -133,6 +132,7 @@
 		<flag id="env_sharedLibsUseGlobalTable" value="true"/>
 		<flag id="gc_batchClearTLH" value="true"/>
 		<flag id="gc_debugAsserts" value="true"/>
+		<flag id="gc_idleHeapManager" value="true"/>
 		<flag id="gc_inlinedAllocFields" value="true"/>
 		<flag id="gc_minimumObjectSize" value="true"/>
 		<flag id="gc_subpoolsAlias" value="true"/>
@@ -140,7 +140,7 @@
 		<flag id="graph_compile" value="true"/>
 		<flag id="graph_copyJ2SEToToronto" value="true"/>
 		<flag id="graph_copyJ2SEViaNovell" value="true"/>
-		<flag id="graph_enableTesting" value="true"/>
+		<flag id="graph_enableTesting" value="false"/>
 		<flag id="graph_enableTesting_Java8" value="true"/>
 		<flag id="graph_excludeUnzipTestSuite390" value="true"/>
 		<flag id="graph_j2seSanity" value="true"/>
@@ -160,7 +160,6 @@
 		<flag id="interp_nativeSupport" value="true"/>
 		<flag id="interp_profilingBytecodes" value="true"/>
 		<flag id="interp_sigQuitThread" value="true"/>
-		<flag id="interp_sigQuitThreadUsesSemaphores" value="true"/>
 		<flag id="interp_useUnsafeHelper" value="true"/>
 		<flag id="ive_jxeFileRelocator" value="true"/>
 		<flag id="ive_jxeInPlaceRelocator" value="true"/>
@@ -172,7 +171,6 @@
 		<flag id="jit_dynamicLoopTransfer" value="true"/>
 		<flag id="jit_fullSpeedDebug" value="true"/>
 		<flag id="jit_gcOnResolveSupport" value="true"/>
-		<flag id="jit_highWordRegisters" value="true"/>
 		<flag id="jit_newDualHelpers" value="true"/>
 		<flag id="jit_newInstancePrototype" value="true"/>
 		<flag id="jit_runtimeInstrumentation" value="true"/>
@@ -182,7 +180,6 @@
 		<flag id="module_algorithm_test" value="true"/>
 		<flag id="module_bcutil" value="true"/>
 		<flag id="module_bcverify" value="true"/>
-		<flag id="module_callconv" value="true"/>
 		<flag id="module_cassume" value="true"/>
 		<flag id="module_cfdumper" value="true"/>
 		<flag id="module_codegen_common" value="true"/>
@@ -194,26 +191,18 @@
 		<flag id="module_codert_common" value="true"/>
 		<flag id="module_codert_s390" value="true"/>
 		<flag id="module_codert_vm" value="true"/>
-		<flag id="module_cpo_common" value="true"/>
-		<flag id="module_cpo_controller" value="true"/>
 		<flag id="module_ddr" value="true"/>
 		<flag id="module_ddr_gdb_plugin" value="true"/>
 		<flag id="module_ddrext" value="true"/>
-		<flag id="module_exe" value="true"/>
-		<flag id="module_exe.j9" value="true"/>
-		<flag id="module_gc_modron_eprof" value="true"/>
 		<flag id="module_gdb" value="true"/>
 		<flag id="module_gdb_plugin" value="true"/>
 		<flag id="module_gptest" value="true"/>
 		<flag id="module_j9vm" value="true"/>
 		<flag id="module_j9vmtest" value="true"/>
-		<flag id="module_jcl.profile_scar" value="true"/>
-		<flag id="module_jcl.scar" value="true"/>
 		<flag id="module_jextractnatives" value="true"/>
 		<flag id="module_jit_common" value="true"/>
 		<flag id="module_jit_s390" value="true"/>
 		<flag id="module_jit_vm" value="true"/>
-		<flag id="module_jitdebug_common" value="true"/>
 		<flag id="module_jitrt_common" value="true"/>
 		<flag id="module_jitrt_s390" value="true"/>
 		<flag id="module_jniargtests" value="true"/>
@@ -223,7 +212,6 @@
 		<flag id="module_jvmti" value="true"/>
 		<flag id="module_jvmtitst" value="true"/>
 		<flag id="module_lifecycle_tests" value="true"/>
-		<flag id="module_mvmtest" value="true"/>
 		<flag id="module_porttest" value="true"/>
 		<flag id="module_rasdump" value="true"/>
 		<flag id="module_rastrace" value="true"/>
@@ -231,10 +219,7 @@
 		<flag id="module_shared_common" value="true"/>
 		<flag id="module_shared_test" value="true"/>
 		<flag id="module_shared_util" value="true"/>
-		<flag id="module_ute" value="true"/>
-		<flag id="module_utetst" value="true"/>
 		<flag id="module_verbose" value="true"/>
-		<flag id="module_vmall" value="true"/>
 		<flag id="module_zip" value="true"/>
 		<flag id="module_zlib" value="true"/>
 		<flag id="opt_annotations" value="true"/>
@@ -260,7 +245,7 @@
 		<flag id="opt_stringCompression" value="true"/>
 		<flag id="opt_useFfi" value="true"/>
 		<flag id="opt_useFfiOnly" value="true"/>
-		<flag id="opt_valhallaMvt" value="false"/>
+		<flag id="opt_valhallaValueTypes" value="false"/>
 		<flag id="opt_zipSupport" value="true"/>
 		<flag id="opt_zlibCompression" value="true"/>
 		<flag id="opt_zlibSupport" value="true"/>

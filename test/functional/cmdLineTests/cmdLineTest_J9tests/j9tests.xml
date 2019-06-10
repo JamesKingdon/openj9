@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+
+<!--
+Copyright (c) 2019, 2019 IBM Corp. and others
+
+This program and the accompanying materials are made available under
+the terms of the Eclipse Public License 2.0 which accompanies this
+distribution and is available at https://www.eclipse.org/legal/epl-2.0/
+or the Apache License, Version 2.0 which accompanies this distribution and
+is available at https://www.apache.org/licenses/LICENSE-2.0.
+
+This Source Code may also be made available under the following
+Secondary Licenses when the conditions for such availability set
+forth in the Eclipse Public License, v. 2.0 are satisfied: GNU
+General Public License, version 2 with the GNU Classpath
+Exception [1] and GNU General Public License, version 2 with the
+OpenJDK Assembly Exception [2].
+
+[1] https://www.gnu.org/software/classpath/license.html
+[2] http://openjdk.java.net/legal/assembly-exception.html
+
+SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
+-->
+
+<!DOCTYPE suite SYSTEM "cmdlinetester.dtd">
+
+<suite id="J9 Command-Line Option Tests" timeout="600">
+    <variable name="READIPINFOFORRAS" value="-XX:+ReadIPInfoForRAS"/>
+    <variable name="NOREADIPINFOFORRAS" value="-XX:-ReadIPInfoForRAS"/>
+    <variable name="READIPINFOFORRAS_MESSAGE" value="enabled network query to determine host name and IP address for RAS."/>
+    <variable name="NOREADIPINFOFORRAS_MESSAGE" value="disabled network query to determine host name and IP address for RAS."/>
+
+    <variable name="JVM_HEAP_LIMIT" value="-Xmx512m"/>
+    <variable name="ONOUTOFMEMORYERROR_EQUALS" value="-XX:OnOutOfMemoryError="/>
+    <variable name="ONOUTOFMEMORYERROR_JAR" value="-cp $Q$$JARPATH$$Q$ OnOutOfMemoryErrorTest"/>
+    <variable name="JAVALANGOUTOFMEMORYERROR" value="java.lang.OutOfMemoryError:"/>
+
+    <test id="Verify Generate a javacore to STDOUT">
+        <command>$EXE$ -Xdump:java:events=vmstart,file=/STDOUT/</command>
+        <output type="success" caseSensitive="yes" regex="no">TITLE subcomponent dump routine</output>
+        <output type="success" caseSensitive="yes" regex="no">END OF DUMP</output>
+        <output regex="no" type="failure">Command-line option unrecognised</output>
+        <output type="failure" caseSensitive="no" regex="no">Unhandled Exception</output>
+        <output type="failure" caseSensitive="yes" regex="no">Exception:</output>
+    </test>
+
+    <test id="Verify Generate a javacore to STDERR">
+        <command>$EXE$ -Xdump:java:events=vmstart,file=/STDERR/</command>
+        <output type="success" caseSensitive="yes" regex="no">TITLE subcomponent dump routine</output>
+        <output type="success" caseSensitive="yes" regex="no">END OF DUMP</output>
+        <output regex="no" type="failure">Command-line option unrecognised</output>
+        <output type="failure" caseSensitive="no" regex="no">Unhandled Exception</output>
+        <output type="failure" caseSensitive="yes" regex="no">Exception:</output>
+    </test>
+
+    <test id="test -XX:-ReadIPInfoForRAS -XX:+ReadIPInfoForRAS">
+        <command>$EXE$ $NOREADIPINFOFORRAS$ $READIPINFOFORRAS$ -verbose:init -version</command>
+        <output type="success" caseSensitive="yes" regex="no">$READIPINFOFORRAS_MESSAGE$</output>
+        <output type="failure" caseSensitive="yes" regex="no">$NOREADIPINFOFORRAS_MESSAGE$</output>
+    </test>
+
+    <test id="test -XX:+ReadIPInfoForRAS -XX:-ReadIPInfoForRAS">
+        <command>$EXE$ $READIPINFOFORRAS$ $NOREADIPINFOFORRAS$ -verbose:init -version</command>
+        <output type="success" caseSensitive="yes" regex="no">$NOREADIPINFOFORRAS_MESSAGE$</output>
+        <output type="failure" caseSensitive="yes" regex="no">$READIPINFOFORRAS_MESSAGE$</output>
+    </test>
+
+    <test id="test -XX:OnOutOfMemoryError=">
+        <command>$EXE$ $JVM_HEAP_LIMIT$ $ONOUTOFMEMORYERROR_EQUALS$"$EXE$ -version" $ONOUTOFMEMORYERROR_JAR$</command>
+        <output type="success" caseSensitive="yes" regex="no">$JAVALANGOUTOFMEMORYERROR$</output>
+        <output type="required" caseSensitive="yes" regex="yes" javaUtilPattern="yes">java (.)* -version</output>
+        <output type="required" caseSensitive="no" regex="yes" javaUtilPattern="yes">(java|openjdk) version</output>
+    </test>
+</suite>
+

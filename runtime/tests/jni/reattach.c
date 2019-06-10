@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2017 IBM Corp. and others
+ * Copyright (c) 2008, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,12 +17,12 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #include "jnitest_internal.h"
 #include "j9protos.h"
 
-#if defined(AIXPPC) || defined(LINUX) || defined(J9ZOS390)
+#if defined(AIXPPC) || defined(LINUX) || defined(J9ZOS390) || defined(OSX)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,11 +100,11 @@ Java_org_openj9_test_osthread_ReattachAfterExit_createTLSKeyDestructor(JNIEnv *e
 	
 	return JNI_TRUE;
 }
-#else /* defined(AIXPPC) || defined(LINUX) || defined(J9ZOS390) */
+#else /* defined(AIXPPC) || defined(LINUX) || defined(J9ZOS390) || defined(OSX) */
 jboolean JNICALL 
 Java_org_openj9_test_osthread_ReattachAfterExit_createTLSKeyDestructor(JNIEnv *env, jobject obj)
 {
 	/* This is a stub. This test is not applicable for non-pthread platforms. */
 	return JNI_FALSE;
 }
-#endif /* defined(AIXPPC) || defined(LINUX) || defined(J9ZOS390) */
+#endif /* defined(AIXPPC) || defined(LINUX) || defined(J9ZOS390) || defined(OSX) */

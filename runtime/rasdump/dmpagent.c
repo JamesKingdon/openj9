@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 
@@ -37,12 +37,12 @@
 #include <stdlib.h>
 #include <errno.h>
 #endif
-#ifdef LINUX
+#if defined(LINUX) || defined(OSX)
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#endif
+#endif /*  defined(LINUX) || defined(OSX) */
 
 #include "ut_j9dmp.h"
 
@@ -287,15 +287,17 @@ static const J9RASdumpSpec rasDumpSpecs[] =
 		  1, 1,
 #if defined(WIN32)
 		  "windbg -p %pid -c \".setdll %vmbin\\j9windbg\"",
-#elif defined(LINUX)
+#elif defined(LINUX) /* defined(WIN32) */
 		  "gdb -p %pid",
-#elif defined(AIXPPC)
+#elif defined(AIXPPC) /* defined(WIN32) */
 		  "dbx -a %pid",
-#elif defined(J9ZOS390)
+#elif defined(J9ZOS390) /* defined(WIN32) */
 		  "dbx -a %pid",
-#else
+#elif defined(OSX) /* defined(WIN32) */
+		  "lldb -p %pid",
+#else /* defined(WIN32) */
 		  NULL,
-#endif
+#endif /* defined(WIN32) */
 		  NULL,
 		  0,
 		  J9RAS_DUMP_DO_SUSPEND_OTHER_DUMPS,
@@ -338,9 +340,9 @@ static const J9RASdumpSpec rasDumpSpecs[] =
 #endif
 		"Output file",
 		doHeapDump,
-		{ J9RAS_DUMP_ON_EXCEPTION_SYSTHROW,
-		  "java/lang/OutOfMemoryError",
-		  1, 4,
+		{ J9RAS_DUMP_ON_GP_FAULT | J9RAS_DUMP_ON_USER_SIGNAL,
+		  NULL,
+		  1, 0,
 		  "heapdump.%Y" "%m%d.%H" "%M" "%S.%pid.%seq.phd",
 		  "PHD",
 		  500,
@@ -677,7 +679,7 @@ doSystemDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 	const char* cacheDir = NULL;
 	J9RAS* rasStruct = vm->j9ras;
 
-#if defined(J9VM_OPT_SHARED_CLASSES) && defined(LINUX)
+#if defined(J9VM_OPT_SHARED_CLASSES) && (defined(LINUX) || defined(OSX))
 	J9SharedClassJavacoreDataDescriptor sharedClassData;
 	
 	/* set up cacheDir with the Shared Classes Cache file if it is in use. */
@@ -689,7 +691,7 @@ doSystemDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 			}
 		}
 	}
-#endif
+#endif /* defined(J9VM_OPT_SHARED_CLASSES) && (defined(LINUX) || defined(OSX)) */
 
 	reportDumpRequest(privatePortLibrary,context,"System",label);
 	
@@ -821,7 +823,7 @@ doToolDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 				j9mem_free_memory(unicodePath);
 			}
 		}
-#elif (defined(LINUX) && !defined(J9ZTPF)) || defined(AIXPPC)
+#elif (defined(LINUX) && !defined(J9ZTPF)) || defined(AIXPPC) || defined(OSX) /* defined(WIN32) */
 		{
 			IDATA retVal;
 
@@ -842,7 +844,7 @@ doToolDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 				omrthread_sleep(msec);
 			}
 		}
-#elif defined(J9ZOS390)
+#elif defined(J9ZOS390) /* defined(WIN32) */
 		{
 			const char *argv[] = {"/bin/sh", "-c", NULL, NULL};
 			extern const char **environ;
@@ -869,9 +871,9 @@ doToolDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 				omrthread_sleep(msec);
 			}
 		}
-#else
+#else /* defined(WIN32) */
 		j9nls_printf(PORTLIB, J9NLS_INFO | J9NLS_STDERR, J9NLS_DMP_DUMP_NOT_AVAILABLE_STR, "Tool");
-#endif
+#endif /* defined(WIN32) */
 	} else {
 		j9nls_printf(PORTLIB, J9NLS_ERROR | J9NLS_STDERR, J9NLS_DMP_MISSING_EXECUTABLE_STR);
 	}
@@ -885,10 +887,17 @@ doJavaDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 {
 	J9JavaVM *vm = context->javaVM;
 
-	if (makePath(vm, label) == OMR_ERROR_INTERNAL) {
-		/* Nowhere available to write the dump, we are done, makePath() will have issued error message */
-		return OMR_ERROR_INTERNAL;
+	if ((0 == strcmp("-", label)) || (0 == j9_cmdla_stricmp(label, J9RAS_STDOUT_NAME))) {
+		strcpy(label, J9RAS_STDOUT_NAME);
+	} else if (0 == j9_cmdla_stricmp(label, J9RAS_STDERR_NAME)) {
+		strcpy(label, J9RAS_STDERR_NAME);
+	} else {
+		if (makePath(vm, label) == OMR_ERROR_INTERNAL) {
+			/* Nowhere available to write the dump, we are done, makePath() will have issued error message */
+			return OMR_ERROR_INTERNAL;
+		}
 	}
+	
 	runJavadump(label, context, agent);
 
 	return OMR_ERROR_NONE;
@@ -1304,13 +1313,13 @@ fixDumpLabel(J9JavaVM *vm, const J9RASdumpSpec *spec, char **labelPtr, IDATA new
 
 		/* Test whether label is already a full file path, or stderr (i.e. '-'). In those cases we are done, no
 		 * need to fix up the label.
-		 * If the user has specified a path starting with %home or %tenantwd we will add a fully qualified path
+		 * If the user has specified a path starting with %home we will add a fully qualified path
 		 * at dump time.
 		 * Otherwise to detect a full path we check for a path separator as the first character.
-	     * On Windows we also check for <drive letter>:<path separator>. UNIX style forward slash separators are
+		 * On Windows we also check for <drive letter>:<path separator>. UNIX style forward slash separators are
 		 * allowed on Windows, since CMVC 200061.
 		 */
-		if ( path && ((strncmp(path, "%home", strlen("%home") ) == 0) || (strncmp(path, "%tenantwd", strlen("%tenantwd") ) == 0)) ) {
+		if ( path && (strncmp(path, "%home", strlen("%home")) == 0)) {
 			/* This path does not need fixing. */
 #ifdef WIN32
 		} else if ( path && path[0] != '\0' && path[0] != '-' &&
@@ -1339,16 +1348,16 @@ fixDumpLabel(J9JavaVM *vm, const J9RASdumpSpec *spec, char **labelPtr, IDATA new
 				int ok = 0;
 
 				/* Get absolute name */
-#if defined (WIN32)
+#if defined(WIN32)
 				ok = (GetCurrentDirectoryW(J9_MAX_DUMP_PATH, unicodeTemp) != 0);
 				if (ok) {
 					WideCharToMultiByte(OS_ENCODING_CODE_PAGE, OS_ENCODING_WC_FLAGS, unicodeTemp, -1,  prefix, J9_MAX_DUMP_PATH, NULL, NULL);
 				}
-#elif defined(LINUX) || defined(AIXPPC)
+#elif defined(LINUX) || defined(AIXPPC) || defined(OSX) /* defined(WIN32) */
 				ok = (getcwd(prefix, J9_MAX_DUMP_PATH) != 0);
-#elif defined(J9ZOS390)
+#elif defined(J9ZOS390) /* defined(WIN32) */
 				ok = (atoe_getcwd(prefix, J9_MAX_DUMP_PATH) != 0);
-#endif
+#endif /* defined(WIN32) */
 
 				if (ok) {
 					prefix[J9_MAX_DUMP_PATH-1] = '\0';
@@ -1363,7 +1372,7 @@ fixDumpLabel(J9JavaVM *vm, const J9RASdumpSpec *spec, char **labelPtr, IDATA new
 							strncpy(prefix, exePath, sepChar-exePath);
 							prefix[sepChar-exePath] = '\0';
 						}
-						/* Do /not/ delete executable name (system-onwed string). */
+						/* Do /not/ delete executable name (system-owned string). */
 					}
 					else {
 						strcpy(prefix, ".");
@@ -2702,7 +2711,7 @@ createAndRunOneOffDumpAgent(struct J9JavaVM *vm,J9RASdumpContext * context,IDATA
  * state [inout] - State bit flags. Used to maintain state between multiple calls of runDumpAgent. 
  *                 When you've performed all runDumpAgent calls you must call unwindAfterDump passing
  *                 the state variable to make sure all locks are cleaned up. The first time runDumpAgent 
- *                 is called, state should be initialised to 0.
+ *                 is called, state should be initialized to 0.
  * detail    -     Detail string for dump cause
  * timeNow [in] -  Time value as returned from j9time_current_time_millis. Used to timestamp the dumps.
  *

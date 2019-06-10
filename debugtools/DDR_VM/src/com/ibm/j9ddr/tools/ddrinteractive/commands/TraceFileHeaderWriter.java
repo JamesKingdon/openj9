@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010, 2014 IBM Corp. and others
+ * Copyright (c) 2010, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.tools.ddrinteractive.commands;
 
@@ -54,14 +54,14 @@ public class TraceFileHeaderWriter {
 	/**
 	 * This class generates a trace file header. It is intended to be used when
 	 * a core dump has been taken before the JVM has written out any trace, the
-	 * trace header is not initialised until that happens.
+	 * trace header is not initialized until that happens.
 	 * 
 	 * There are a lot of arguments to pass but this data can be obtained from
 	 * the dump and prevents this code needing to exist in 23, 24 and 26
 	 * flavours.
 	 * 
 	 * @param snapTraceFileName the filename to write the trace header to
-	 * @param bigEndian true if the dump came from a big endian sytem.
+	 * @param bigEndian true if the dump came from a big endian system.
 	 * @param cpuCount the number of cpu's on the system the dump came from
 	 * @param wordSize the wordsize of the system the dump came from
 	 * @param bufferSize the size of the trace buffers in the dump

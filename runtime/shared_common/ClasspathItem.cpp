@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "ClasspathItem.hpp"
@@ -56,6 +56,18 @@ ClasspathEntryItem::initialize(const char* path_, U_16 pathLen_, UDATA protocol_
 
 	path = (char*)path_;
 	pathLen = pathLen_;
+	locationPathLen = pathLen_;
+	if (protocol == PROTO_JAR) {
+		if (NULL != path) {
+			char* jarPath = strstr(path,"!/");
+			if (NULL == jarPath) {
+				jarPath = strstr(path,"!\\");
+			}
+			if (NULL != jarPath) {
+				locationPathLen = jarPath - path;
+			}
+		}
+	}
 
 	return 0;
 }
@@ -105,6 +117,19 @@ ClasspathEntryItem::hash(J9InternalVMFunctions* functionTable)
 		return (hashValue = (functionTable->computeHashForUTF8((U_8*)path, pathLen) + protocol));
 	}
 	return hashValue;
+}
+
+const char*
+ClasspathEntryItem::getLocation(U_16* locationPathLen_) const
+{
+	if (locationPathLen_) {
+		*locationPathLen_ = (U_16)locationPathLen;
+	}
+	if ((flags & IS_IN_CACHE_FLAG)==0) {
+		return path;
+	} else {
+		return (((BlockPtr)this) + sizeof(ClasspathEntryItem));
+	}
 }
 
 void
@@ -167,7 +192,7 @@ ClasspathItem::addItem(J9InternalVMFunctions* functionTable, const char* path, U
 	Trc_SHR_CPI_addItem_Entry(pathLen, path, protocol);
 
 	if (entries==itemsAdded) {
-		/* Cannot access verbose level, so this is not surpressed by "silent". However, it's a "should never happen" message. */
+		/* Cannot access verbose level, so this is not suppressed by "silent". However, it's a "should never happen" message. */
 		PORT_ACCESS_FROM_PORT(portlib);
 		CLASSPATHITEM_ERR_TRACE(J9NLS_SHRC_CPI_TOO_MANY_ITEMS);
 		Trc_SHR_CPI_addItem_ExitTooMany();

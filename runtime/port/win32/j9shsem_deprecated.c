@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -59,7 +59,7 @@ j9shsem_deprecated_open (struct J9PortLibrary *portLibrary, const char* cacheDir
 {
 	/* TODO: what happens if setSize == 0? We used to allow the setSize to be 0 so that when the user trying to open
 		an existing semaphore they won't need to specify that. However because semaphore set is not part of Windows API
-		so we are emulating it using seperate name - we need code to find out how large a semaphore set is */
+		so we are emulating it using separate name - we need code to find out how large a semaphore set is */
 	OMRPORT_ACCESS_FROM_J9PORT(portLibrary);
 	char baseFile[J9SH_MAXPATH], mutexName[J9SH_MAXPATH];
 	j9shsem_handle* shsem_handle;
@@ -95,7 +95,7 @@ j9shsem_deprecated_open (struct J9PortLibrary *portLibrary, const char* cacheDir
 		secattr.lpSecurityDescriptor=&secdes;
 		secattr.bInheritHandle = FALSE; 
 
-		/* Initialise the creationMutex */
+		/* Initialize the creationMutex */
 		Trc_PRT_shsem_j9shsem_open_globalMutexCreate();
 		PPG_shsem_creationMutex = CreateMutex(&secattr, FALSE, J9PORT_SHSEM_CREATIONMUTEX);
 		lastError = GetLastError();
@@ -251,7 +251,7 @@ j9shsem_deprecated_wait(struct J9PortLibrary *portLibrary, struct j9shsem_handle
 	rc = WaitForSingleObject(handle->semHandles[semset],timeout);
 	
 	switch(rc) {
-	case WAIT_ABANDONED: /* This means someone has crash but hasn't relase the mutex, we are okay with this */
+	case WAIT_ABANDONED: /* This means someone has crashed but hasn't released the mutex, we are okay with this */
 	case WAIT_OBJECT_0:
 		Trc_PRT_shsem_j9shsem_wait_Exit(0);
 		return 0;

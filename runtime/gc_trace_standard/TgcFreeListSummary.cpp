@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -45,7 +45,7 @@
 
 /*
  * Free List Summary is organized as a array of counters. Each counter represents number of holes in pool with size in particular range.
- * First element represents number of holes smaller then FIRST_ELEMENT_THRESHOLD bytes (but larger then dark metter threshold - 512 bytes default)
+ * First element represents number of holes smaller then FIRST_ELEMENT_THRESHOLD bytes (but larger then dark matter threshold - 512 bytes default)
  * Second element represents number of holes smaller then 2 * FIRST_ELEMENT_THRESHOLD but larger then FIRST_ELEMENT_THRESHOLD.
  * Each next element has a doubled threshold, except last one which represents number of holes larger then previous threshold.
  * The table of thresholds for FIRST_ELEMENT_THRESHOLD = 1024 and number of elements = 22 is below: 

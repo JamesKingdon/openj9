@@ -1,4 +1,4 @@
-@ Copyright (c) 1991, 2017 IBM Corp. and others
+@ Copyright (c) 1991, 2018 IBM Corp. and others
 @
 @ This program and the accompanying materials are made available under
 @ the terms of the Eclipse Public License 2.0 which accompanies this
@@ -16,7 +16,7 @@
 @ [1] https://www.gnu.org/software/classpath/license.html
 @ [2] http://openjdk.java.net/legal/assembly-exception.html
 @
-@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 	.text
 @ Prototype: void unsafePut64(I_64 *address, I_64 value);
 @ Defined in: #Args: 2
@@ -24,7 +24,8 @@
 	.global	unsafePut64
 	.type	unsafePut64, %function
 unsafePut64:
-	strd	r2, [r0]
+	str	r2, [r0]
+	str	r3, [r0, #4]
 	bx	lr
 	.size	unsafePut64, .-unsafePut64
 @ Prototype: void unsafePut32(I_32 *address, I_32 value);

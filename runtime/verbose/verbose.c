@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,14 +17,13 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
-
 
 #include <string.h>
 
 #include "j9.h"
-#include "verbose.h"
+#include "verbose_api.h"
 #include "omrlinkedlist.h"
 #include "VerboseGCInterface.h"
 #ifdef J9VM_INTERP_NATIVE_SUPPORT
@@ -191,12 +190,8 @@ dumpMemorySizes(J9JavaVM *jvm)
 
 		J9SharedClassPreinitConfig updatedWithDefaults = *(jvm->sharedClassPreinitConfig);
 		j9shr_Query_PopulatePreinitConfigDefaults(jvm, &updatedWithDefaults);
-		if (FIND_ARG_IN_VMARGS(EXACT_MEMORY_MATCH, VMOPT_XXSHARED_CACHE_HARD_LIMIT_EQUALS, NULL) >= 0) {
-			dumpQualifiedSize(PORTLIB, updatedWithDefaults.sharedClassCacheSize, "-XX:SharedCacheHardLimit=", J9NLS_VERB_SIZES_XXSHARED_CACHE_HARD_LIMIT_EQUALS);
-			dumpQualifiedSize(PORTLIB, updatedWithDefaults.sharedClassSoftMaxBytes, "-Xscmx", J9NLS_VERB_SIZES_XSCMX_V1);
-		} else {
-			dumpQualifiedSize(PORTLIB, updatedWithDefaults.sharedClassCacheSize, "-Xscmx", J9NLS_VERB_SIZES_XSCMX);
-		}
+		dumpQualifiedSize(PORTLIB, updatedWithDefaults.sharedClassCacheSize, "-XX:SharedCacheHardLimit=", J9NLS_VERB_SIZES_XXSHARED_CACHE_HARD_LIMIT_EQUALS);
+		dumpQualifiedSize(PORTLIB, updatedWithDefaults.sharedClassSoftMaxBytes, "-Xscmx", J9NLS_VERB_SIZES_XSCMX_V1);
 		dumpQualifiedSize(PORTLIB, updatedWithDefaults.sharedClassDebugAreaBytes, "-Xscdmx", J9NLS_VERB_SIZES_XSCDMX);
 		dumpQualifiedSize(PORTLIB, updatedWithDefaults.sharedClassMinAOTSize, "-Xscminaot", J9NLS_VERB_SIZES_XSCMINAOT);
 		dumpQualifiedSize(PORTLIB, updatedWithDefaults.sharedClassMaxAOTSize, "-Xscmaxaot", J9NLS_VERB_SIZES_XSCMAXAOT);
@@ -364,7 +359,7 @@ printClassShape(J9VMThread* vmThread, J9Class* clazz)
 							J9UTF8_LENGTH(signature),
 							NULL, /* defining class return value */
 							NULL, /* romFieldShape return value */
-							J9_RESOLVE_FLAG_NO_THROW_ON_FAIL);
+							J9_LOOK_NO_JAVA);
 							
 						offset /= sizeof(U_32);
 							
@@ -578,7 +573,7 @@ printClass(J9VMThread* vmThread, J9Class* clazz, char* message, UDATA bootLoader
 
 /**
  * parse a set of -verbose: options and update a settings struct.
- * @param options set of null-separated verbose obptions (e.g. "class", "gc", etc.  Terminated by a double null
+ * @param options set of null-separated verbose options (e.g. "class", "gc", etc.  Terminated by a double null
  * @param verboseOptions STructure of flags indicating which verbosity to turn on
  * @return 0 if error, 1 if success
  */
@@ -751,7 +746,7 @@ IDATA J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved) {
 			}
 
 			/* Note - verboseStruct not needed for modron verbose gc */
-			initialiseVerboseFunctionTable(vm);
+			initializeVerboseFunctionTable(vm);
 
 			verbosegclogIndex = FIND_AND_CONSUME_ARG( OPTIONAL_LIST_MATCH, OPT_XVERBOSEGCLOG, NULL );
 			if (verbosegclogIndex >= 0) {
@@ -797,7 +792,7 @@ IDATA J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved) {
 			break;
 
 		case POST_INIT_STAGE:
-			initialiseVerboseFunctionTable(vm);
+			initializeVerboseFunctionTable(vm);
 			break;
 
 		case LIBRARIES_ONUNLOAD :
@@ -1119,7 +1114,7 @@ setVerboseState( J9JavaVM *vm, J9VerboseSettings *verboseOptions, char **errorSt
 		(*vmHooks)->J9HookUnregister(vmHooks, J9HOOK_VM_STACKMAPFRAME_VERIFICATION, verboseStackMapFrameVerification, NULL);
 	}
 	
-	/* Jazz 82615: Register the callback funtions for the error message framework if the VerifyErrorDetails option is specified */
+	/* Jazz 82615: Register the callback functions for the error message framework if the VerifyErrorDetails option is specified */
 	if(VERBOSE_SETTINGS_SET == verboseOptions->verifyErrorDetails) {
 		vm->verboseStruct->getCfrExceptionDetails = generateJ9CfrExceptionDetails;
 		vm->verboseStruct->getRtvExceptionDetails = generateJ9RtvExceptionDetails;
@@ -1273,7 +1268,7 @@ verboseClassVerificationFallback(J9HookInterface** hook, UDATA eventNum, void* e
 }
 
 /*
- * This event callback is triggered before starting the verificaiton of each method.
+ * This event callback is triggered before starting the verification of each method.
  */
 static void
 verboseMethodVerificationStart(J9HookInterface** hook, UDATA eventNum, void* eventData, void* userData)

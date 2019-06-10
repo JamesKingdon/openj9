@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2015 IBM Corp. and others
+ * Copyright (c) 2009, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.corereaders.elf;
 
@@ -39,8 +39,6 @@ import static com.ibm.j9ddr.corereaders.elf.ELFFileReader.NT_AUXV;
 import static com.ibm.j9ddr.corereaders.elf.ELFFileReader.NT_HGPRS;
 import static com.ibm.j9ddr.corereaders.elf.ELFFileReader.NT_PRPSINFO;
 import static com.ibm.j9ddr.corereaders.elf.ELFFileReader.NT_PRSTATUS;
-import static java.util.logging.Level.WARNING;
-import static java.util.logging.Level.FINE;
 import static java.util.logging.Level.FINER;
 
 import java.io.File;
@@ -48,16 +46,13 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.logging.Level;
@@ -500,7 +495,7 @@ public abstract class ELFDumpReader implements ILibraryDependentCore
 			}
 		}
 		
-		// TODO - Sort modules. For the sake of tidyness.
+		// TODO - Sort modules. For the sake of tidiness.
 		_modules.addAll(allModules);
 		ELFFileReader readerForExectuableOnDiskOrAppended = getReaderForModuleOnDiskOrAppended(executableName);
 		_executable = createModuleFromElfReader(executableBaseAddress, executableName, executableELF, readerForExectuableOnDiskOrAppended);
@@ -1215,8 +1210,10 @@ public abstract class ELFDumpReader implements ILibraryDependentCore
 				instructionPointer = maskInstructionPointer(getLinkRegisterFrom(registers));
 			}
 
-			if (0 != instructionPointer && 0 != basePointer	&& isValidAddress(instructionPointer)
-					&& isValidAddress(stackPointer)) {
+			if ((0 != instructionPointer)
+				&& isValidAddress(instructionPointer)
+				&& isValidAddress(stackPointer)
+			) {
 				IMemoryRange range = _process.getRangeForAddress(stackPointer);
 				memoryRanges.add(new MemoryRange(_process.getAddressSpace(), range, "stack"));
 				UnwindTable unwindTable = null;
@@ -1272,7 +1269,7 @@ public abstract class ELFDumpReader implements ILibraryDependentCore
 							unwindTable = unwinder.getUnwindTableForInstructionAddress(instructionPointer);
 							// basePointer = newStackPointer;
 
-						} else {
+						} else if (basePointer != 0) {
 //							 System.err.printf("Using basic unwind for frame %d, ip: 0x%x\n", loops, instructionPointer);
 							// previousBasePointer = basePointer;
 							if( isValidAddress(instructionPointer) ) {
@@ -1283,7 +1280,9 @@ public abstract class ELFDumpReader implements ILibraryDependentCore
 							ptr += _process.bytesPerPointer() * getOffsetToIPFromBP();
 							instructionPointer = maskInstructionPointer(_process.getPointerAt(ptr));
 							unwindTable = unwinder.getUnwindTableForInstructionAddress(instructionPointer);
-							// TODO - if we do tranistion back to unwinding with DWARF we need to get the registers right.
+							// TODO - if we do transition back to unwinding with DWARF we need to get the registers right.
+						} else {
+							logger.log(Level.FINER, "Base pointer is zero");
 						}
 
 //						System.err.printf("Instruction pointer is 0x%x, unwind table is: %s\n", instructionPointer, unwindTable);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /*
@@ -32,7 +32,7 @@
 #endif
 #endif
 
-/* _GNU_SOURCE forces GLIBC_2.0 sscanf/vsscanf/fscanf for RHEL5 compatability */
+/* _GNU_SOURCE forces GLIBC_2.0 sscanf/vsscanf/fscanf for RHEL5 compatibility */
 #if defined(LINUX) && !defined(J9ZTPF)
 #define _GNU_SOURCE
 #endif /* defined(__GNUC__) */
@@ -69,7 +69,7 @@ typedef enum J9RASdumpMatchResult
 static UDATA rasDumpSuspendKey = 0;
 static UDATA rasDumpFirstThread = 0;
 
-/* Postpone GC and thread event hooks until later phases of VM initialisation */
+/* Postpone GC and thread event hooks until later phases of VM initialization. */
 UDATA rasDumpPostponeHooks = \
 	J9RAS_DUMP_ON_CLASS_UNLOAD | \
 	J9RAS_DUMP_ON_GLOBAL_GC | \
@@ -447,16 +447,10 @@ matchesExceptionFilter(J9VMThread *vmThread, J9RASdumpEventData *eventData, UDAT
 			char stackBuffer[256];
 			j9object_t emessage = J9VMJAVALANGTHROWABLE_DETAILMESSAGE(vmThread, *eventData->exceptionRef);
 
-			buf = stackBuffer;
-			if (emessage) {
-				/* length is in jchars. 3x is enough for worst case UTF8 encoding */
-				buflen = J9VMJAVALANGSTRING_LENGTH(vmThread, emessage) * 3;
-				if (buflen > sizeof(stackBuffer)) {
-					buf = (char *)j9mem_allocate_memory(buflen, OMRMEM_CATEGORY_VM);
-				}
+			if (NULL != emessage) {
+				buf = vmThread->javaVM->internalVMFunctions->copyStringToUTF8WithMemAlloc(vmThread, emessage, J9_STR_NULL_TERMINATE_RESULT, "", 0, stackBuffer, 256, &buflen);
 
-				if (buf != NULL) {
-					buflen = vmThread->javaVM->internalVMFunctions->copyStringToUTF8Helper(vmThread, emessage, FALSE, J9_STR_NONE, (U_8*)buf, buflen);
+				if (NULL != buf) {
 					if (wildcardMatch(matchFlag, needleString, needleLength, buf, buflen)) {
 						retCode = J9RAS_DUMP_MATCH;
 					} else {
@@ -465,7 +459,7 @@ matchesExceptionFilter(J9VMThread *vmThread, J9RASdumpEventData *eventData, UDAT
 				}
 			}
 
-			if (buf != NULL && buf != stackBuffer) {
+			if (buf != stackBuffer) {
 				j9mem_free_memory(buf);
 			}
 		}
@@ -592,6 +586,12 @@ prepareForDump(struct J9JavaVM *vm, struct J9RASdumpAgent *agent, struct J9RASdu
 			(state & J9RAS_DUMP_GOT_EXCLUSIVE_VM_ACCESS) == 0 ) {
 
 				if (vmThread) {
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+					if (vmThread->inNative) {
+						vm->internalVMFunctions->internalEnterVMFromJNI(vmThread);
+						newState |= J9RAS_DUMP_GOT_JNI_VM_ACCESS;
+					} else
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 					if ((vmThread->publicFlags & J9_PUBLIC_FLAGS_VM_ACCESS) == 0) {
 						vm->internalVMFunctions->internalAcquireVMAccess(vmThread);
 						newState |= J9RAS_DUMP_GOT_VM_ACCESS;
@@ -719,6 +719,12 @@ unwindAfterDump(struct J9JavaVM *vm, struct J9RASdumpContext *context, UDATA sta
 
 		if (vmThread) {
 			vm->internalVMFunctions->releaseExclusiveVMAccess(vmThread);
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+			if (state & J9RAS_DUMP_GOT_JNI_VM_ACCESS) {
+				vm->internalVMFunctions->internalExitVMToJNI(vmThread);
+				newState &= ~J9RAS_DUMP_GOT_JNI_VM_ACCESS;
+			} else
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 			if (state & J9RAS_DUMP_GOT_VM_ACCESS) {
 				vm->internalVMFunctions->internalReleaseVMAccess(vmThread);
 				newState &= ~J9RAS_DUMP_GOT_VM_ACCESS;
@@ -1154,11 +1160,11 @@ rasDumpEnableHooks(J9JavaVM *vm, UDATA eventFlags)
 
 /**
  * rasDumpFlushHooks() - enable hooks for events that were postponed from the initial dump agent 
- * initialisation. There are now two phases: GC event hooks are enabled at TRACE_ENGINE_INITIALIZED,
+ * initialization. There are now two phases: GC event hooks are enabled at TRACE_ENGINE_INITIALIZED,
  * and thread event hooks are enabled at VM_INITIALIZATION_COMPLETE. See CMVC 199853 and CMVC 200360.
  * 
  * @param[in] vm - pointer to J9JavaVM structure
- * @param[in] stage - VM initialisation stage
+ * @param[in] stage - VM initialization stage
  * @return void
  */
 void 

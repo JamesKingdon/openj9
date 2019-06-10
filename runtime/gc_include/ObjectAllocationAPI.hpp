@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if !defined(OBJECTALLOCATIONAPI_HPP_)
@@ -75,6 +75,9 @@ public:
 	{
 		j9object_t instance = NULL;
 #if defined(J9VM_GC_THREAD_LOCAL_HEAP) || defined(J9VM_GC_SEGREGATED_HEAP)
+		bool initializeLockWord = initializeSlots
+			&& J9_ARE_ANY_BITS_SET(J9CLASS_EXTENDED_FLAGS(clazz), J9ClassReservableLockWordInit);
+
 		/* Calculate the size of the object */
 		UDATA dataSize = clazz->totalInstanceSize;
 		UDATA allocateSize = (dataSize + J9_OBJECT_HEADER_SIZE + _objectAlignmentInBytes - 1) & ~(UDATA)(_objectAlignmentInBytes - 1);
@@ -145,6 +148,10 @@ public:
 			memset(objectHeader + 1, 0, dataSize);
 		}
 
+		if (initializeLockWord) {
+			*J9OBJECT_MONITOR_EA(currentThread, instance) = OBJECT_HEADER_LOCK_RESERVED;
+		}
+
 		if (memoryBarrier) {
 			VM_AtomicSupport::writeBarrier();
 		}
@@ -161,14 +168,13 @@ public:
 		if (0 != size) {
 			/* Contiguous Array */
 
-			UDATA scale = ((J9ROMArrayClass*)(arrayClass->romClass))->arrayShape;
 
 #if !defined(J9VM_ENV_DATA64)
-			if (!sizeCheck || (size < ((U_32)J9_MAXIMUM_INDEXABLE_DATA_SIZE >> scale)))
+			if (!sizeCheck || (size < ((U_32)J9_MAXIMUM_INDEXABLE_DATA_SIZE / J9ARRAYCLASS_GET_STRIDE(arrayClass))))
 #endif /* J9VM_ENV_DATA64 */
 			{
 				/* Calculate the size of the object */
-				UDATA dataSize = ((UDATA)size) << scale;
+				UDATA dataSize = ((UDATA)size) * J9ARRAYCLASS_GET_STRIDE(arrayClass);
 				UDATA allocateSize = (dataSize + sizeof(J9IndexableObjectContiguous) + _objectAlignmentInBytes - 1) & ~(UDATA)(_objectAlignmentInBytes - 1);
 				if (allocateSize < J9_GC_MINIMUM_OBJECT_SIZE) {
 					allocateSize = J9_GC_MINIMUM_OBJECT_SIZE;

@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2016 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -37,9 +37,11 @@
 
 #include "EnvironmentBase.hpp"
 #include "GCExtensions.hpp"
+#include "JVMTIObjectTagTableIterator.hpp"
 #include "ModronTypes.hpp"
 #include "RootScannerTypes.h"
 #include "Task.hpp"
+#include "VMClassSlotIterator.hpp"
 
 class GC_SlotObject;
 class MM_MemoryPool;
@@ -54,7 +56,7 @@ class MM_CollectorLanguageInterfaceImpl;
  * all slots do, etc).
  * 
  * There are two levels of specialization for the scanner, structure walking and handling of elements.
- * Structure walking specialization, where the implementator can override the way in which we walk elements,
+ * Structure walking specialization, where the implementer can override the way in which we walk elements,
  * should be done rarely and in only extreme circumstances.  Handling of elements can be specialized for all
  * elements as well as for specific types of structures.
  * 
@@ -78,6 +80,7 @@ protected:
 	OMR_VM *_omrVM;
 
 	bool _stringTableAsRoot;  /**< Treat the string table as a hard root */
+	bool _jniWeakGlobalReferencesTableAsRoot;	/**< Treat JNI Weak References Table as a hard root */
 	bool _singleThread;  /**< Should the iterator operate in single threaded mode */
 
 	bool _nurseryReferencesOnly;  /**< Should the iterator only scan structures that currently contain nursery references */
@@ -91,6 +94,8 @@ protected:
 	bool _trackVisibleStackFrameDepth; /**< Should the stack walker be told to track the visible frame depth. Default false, should set to true when doing JVMTI walks that report stack slots */
 
 	U_64 _entityStartScanTime; /**< The start time of the scan of the current scanning entity, or 0 if no entity is being scanned.  Defaults to 0. */
+	U_64 _entityIncrementStartTime; /**< Start time of current increment with a scan entity (Metronome may have several increment for each entity) */
+	U_64 _entityIncrementEndTime; /**< End time of the current increment */
 	RootScannerEntity _scanningEntity; /**< The root scanner entity that is currently being scanned. Defaults to RootScannerEntity_None. */ 
 	RootScannerEntity _lastScannedEntity; /**< The root scanner entity that was last scanned. Defaults to RootScannerEntity_None. */
 
@@ -194,8 +199,24 @@ protected:
 		if (_extensions->rootScannerStatsEnabled) {
 			OMRPORT_ACCESS_FROM_OMRVM(_omrVM);
 			_entityStartScanTime = omrtime_hires_clock();	
+			_entityIncrementStartTime = _entityStartScanTime;
 		}
 	}
+	
+	MMINLINE void updateScanStats(uint64_t endTime)
+	{
+		if (_entityIncrementStartTime >= endTime) {
+			/* overflow */
+ 			_env->_rootScannerStats._entityScanTime[_scanningEntity] += 1;
+ 		} else {
+			uint64_t duration = endTime - _entityIncrementStartTime;
+			_env->_rootScannerStats._entityScanTime[_scanningEntity] += duration;
+			if (duration > _env->_rootScannerStats._maxIncrementTime) {
+				_env->_rootScannerStats._maxIncrementTime = duration;
+				_env->_rootScannerStats._maxIncrementEntity = _scanningEntity;
+			}
+		}
+	}	
 	
 	/**
 	 * Sets the currently scanned root entity to None and sets the last scanned root
@@ -206,22 +227,28 @@ protected:
 	reportScanningEnded(RootScannerEntity scannedEntity)
 	{
 		/* Ensures scanning ended for the currently scanned entity. */
-		assume0(_scanningEntity == scannedEntity);
-		_lastScannedEntity = _scanningEntity;
-		_scanningEntity = RootScannerEntity_None;
+		Assert_MM_true(_scanningEntity == scannedEntity);
 		
 		if (_extensions->rootScannerStatsEnabled) {
-			OMRPORT_ACCESS_FROM_OMRVM(_omrVM);
-			U_64 entityEndScanTime = omrtime_hires_clock();
+ 			OMRPORT_ACCESS_FROM_OMRVM(_omrVM);
+ 			uint64_t entityEndScanTime = omrtime_hires_clock();
 			
-			if (_entityStartScanTime >= entityEndScanTime) {
-				_env->_rootScannerStats._entityScanTime[scannedEntity] += 1;
-			} else {
-				_env->_rootScannerStats._entityScanTime[scannedEntity] += entityEndScanTime - _entityStartScanTime;	
-			}
-			
-			_entityStartScanTime = 0;
-		}
+			_env->_rootScannerStats._statsUsed = true;
+			_extensions->rootScannerStatsUsed = true;
+							
+			updateScanStats(entityEndScanTime);
+ 			
+ 			_entityStartScanTime = 0;
+ 			/* In theory, it would be cleaner to reset _entityIncrementStartTime to 0, but sometimes increments could be dis-associated from any entity.
+ 			    For example sync barrier between two entities. Since they can suspend, they will try to report the duration of the increment,
+ 			    but the start point 0 would lead to invalid (too long duration). Hence, we set the start point to the current time, just in case it 
+ 			    is used be non-tracked increments.
+ 			 */
+			_entityIncrementStartTime = entityEndScanTime;
+ 		}
+
+		_lastScannedEntity = _scanningEntity;
+ 		_scanningEntity = RootScannerEntity_None;
 	}
 
 	/**
@@ -231,6 +258,35 @@ protected:
 	void scanModularityObjects(J9ClassLoader * classLoader);
 
 public:
+
+	/** 
+	 * Maintain start/end increment times when scan is suspended. Add the diff (duration) to scan entity time. 
+	 * Also maintain max increment duration and its entity
+	 */	
+	MMINLINE void
+	reportScanningSuspended()
+	{
+		if (_extensions->rootScannerStatsEnabled) {
+			OMRPORT_ACCESS_FROM_OMRVM(_omrVM);
+			_entityIncrementEndTime = omrtime_hires_clock();
+			
+			updateScanStats(_entityIncrementEndTime);
+		}
+	}
+
+	/** 
+	 * Maintain start/end increment times, when scan is resumed.
+	 */	
+	MMINLINE void
+	reportScanningResumed()
+	{
+		if (_extensions->rootScannerStatsEnabled) {
+			OMRPORT_ACCESS_FROM_OMRVM(_omrVM);
+			_entityIncrementStartTime = omrtime_hires_clock();
+			_entityIncrementEndTime = 0;	
+		}
+	}
+
 	MM_RootScanner(MM_EnvironmentBase *env, bool singleThread = false)
 		: MM_BaseVirtual()
 		, _env(env)
@@ -238,6 +294,7 @@ public:
 		, _clij((MM_CollectorLanguageInterfaceImpl *)_extensions->collectorLanguageInterface)
 		, _omrVM(env->getOmrVM())
 		, _stringTableAsRoot(true)
+		, _jniWeakGlobalReferencesTableAsRoot(false)
 		, _singleThread(singleThread)
 		, _nurseryReferencesOnly(false)
 		, _nurseryReferencesPossibly(false)
@@ -249,14 +306,20 @@ public:
 		, _includeJVMTIObjectTagTables(true)
 		, _trackVisibleStackFrameDepth(false)
 		, _entityStartScanTime(0)
+		, _entityIncrementStartTime(0)
+		, _entityIncrementEndTime(0)		
 		, _scanningEntity(RootScannerEntity_None)
 		, _lastScannedEntity(RootScannerEntity_None)
 	{
 		_typeId = __FUNCTION__;
+		
+		OMRPORT_ACCESS_FROM_OMRVM(_omrVM);
+		_entityIncrementStartTime = omrtime_hires_clock();
+
 	}
 
 	/**
-	 * Return codes from root scanner complete phase calls that are allowable by implementators.
+	 * Return codes from root scanner complete phase calls that are allowable by implementers.
 	 */
 	typedef enum {
 		complete_phase_OK = 0,  /**< Continue scanning */
@@ -361,7 +424,7 @@ public:
 	virtual void scanOwnableSynchronizerObjects(MM_EnvironmentBase *env);
 	virtual void scanStringTable(MM_EnvironmentBase *env);
 	void scanJNIGlobalReferences(MM_EnvironmentBase *env);
-	void scanJNIWeakGlobalReferences(MM_EnvironmentBase *env);
+	virtual void scanJNIWeakGlobalReferences(MM_EnvironmentBase *env);
 
     virtual void scanMonitorReferences(MM_EnvironmentBase *env);
     virtual CompletePhaseCode scanMonitorReferencesComplete(MM_EnvironmentBase *env);

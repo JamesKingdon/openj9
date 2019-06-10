@@ -2,7 +2,7 @@
 package com.ibm.oti.shared;
 
 /*******************************************************************************
- * Copyright (c) 2010, 2016 IBM Corp. and others
+ * Copyright (c) 2010, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -20,7 +20,7 @@ package com.ibm.oti.shared;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -46,11 +46,12 @@ public class SharedClassCacheInfo {
 	 * Specifies a Java 8 cache. 
 	 */
 	static final public int JVMLEVEL_JAVA8 = 4;
+	/*[IF Sidecar19-SE]*/
 	/**
-	 * Specifies a Java 9 cache. 
+	 * Specifies a Java 9 cache.
 	 */
 	static final public int JVMLEVEL_JAVA9 = 5;
-
+	/*[ENDIF] Sidecar19-SE */
 	/**
 	 * Specifies a 32-bit cache.
 	 */
@@ -160,7 +161,10 @@ public class SharedClassCacheInfo {
 	}
 	
 	/**
-	 * Gets the JVM level for the shared class cache. 
+	 * Gets the JVM level for the shared class cache.  
+	/*[IF Java10] 
+	 * Starting from Java 10, the JVM LEVEL equals to the java version number on which the share class cache is created.
+	/*[ENDIF]
 	 *
 	 * @return		A JVMLEVEL constant.
 	 */					
@@ -216,7 +220,7 @@ public class SharedClassCacheInfo {
 	}
 	
 	/**
-	 * Get the compresssedRefs mode for the shared class cache. 
+	 * Get the compressedRefs mode for the shared class cache. 
 	 *
 	 * @return		Either {@link SharedClassCacheInfo#COMPRESSED_REFS} or
 	 * 				{@link SharedClassCacheInfo#NON_COMPRESSED_REFS} or

@@ -3,7 +3,7 @@
 package com.ibm.oti.vm;
 
 /*******************************************************************************
- * Copyright (c) 1998, 2017 IBM Corp. and others
+ * Copyright (c) 1998, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -21,7 +21,7 @@ package com.ibm.oti.vm;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 import java.util.*;
@@ -50,10 +50,6 @@ public final class BootstrapClassLoader extends AbstractClassLoader {
 	private static BootstrapClassLoader singleton;
 	private static Method appendToClassPathForInstrumentationMethod = null;
 	private static boolean initAppendMethod = true;
-	/*[IF Sidecar19-SE]*/
-	private Hashtable<String, Integer> packages = new Hashtable<String, Integer>();
-	ThreadLocal<String> definingPackage = new ThreadLocal<String>();
-	/*[ENDIF]*/
 
 /**
  * Prevents this class from being instantiated.
@@ -67,7 +63,7 @@ private BootstrapClassLoader() {
 	types = new int[count];
 	cache = new Object[count];
 	parsedPath = new String[count];
-	VM.initializeClassLoader(this, true, false);
+	VM.initializeClassLoader(this, VM.J9_CLASSLOADER_TYPE_BOOT, false);
 }
 
 /**
@@ -88,30 +84,8 @@ public Class<?> loadClass(String className) throws ClassNotFoundException {
 	/*[PR 111332] synchronization required for JVMTI */
 	/*[PR VMDESIGN 1433] Remove Java synchronization (Prevent redundant loads of the same class) */
 	Class<?> loadedClass = VM.getVMLangAccess().findClassOrNullHelper(className, this);
-	
-	/*[IF Sidecar19-SE]*/
-    if (loadedClass != null) {
-        String packageName = getPackageName(loadedClass);
-        /*[PR CMVC 98313] Avoid deadlock, do not call super.getPackage() in synchronized block */
-        if (packageName != null && super.getPackage(packageName) == null) {
-            int index = VM.getCPIndexImpl(loadedClass);
-            /*[PR CMVC 98059] Only define packages as required to avoid bootstrap problems */
-            addPackage(packageName, index);
-        }
-    }
-    /*[ENDIF]*/
 	return loadedClass;
 }
-
-/*[IF Sidecar19-SE]*/
-private void addPackage(final String packageName, final int index) {
-    synchronized(packages) {
-        if (!packages.containsKey(packageName)) {
-        	packages.put(packageName, new Integer(index));
-        }
-    }
-}
-/*[ENDIF]*/
 
 public static ClassLoader singleton() {
 	if (singleton == null)
@@ -123,50 +97,11 @@ public static ClassLoader singleton() {
 }
 
 protected Package getPackage(String name) {
-	/*[IF Sidecar19-SE]*/
-	/*[PR 126176] Do not create Packages for bootstrap classes unnecessarily */
-	Package result;
-	Integer index = packages.get(name);
-	if (index == null) {
-		return super.getPackage(name);
-	}
-	String inPackage = definingPackage.get();
-	if (name.equals(inPackage)) return null;
-	if (inPackage != null) throw new InternalError();
-	definingPackage.set(name);
-	try {
-		result = definePackage(name, index.intValue());
-		packages.remove(name);
-	} finally {
-		definingPackage.set(null);
-	}
-	return result;
-	/*[ELSE]*/
 	return VM.getVMLangAccess().getSystemPackage(name);
-	/*[ENDIF]*/
 }
 
 protected Package[] getPackages() {
-	/*[IF Sidecar19-SE]*/
-	/*[PR CMVC 94437] do not synchronized on this ClassLoader */
-	/*[PR CMVC 98059] do not recursively call definePackages(), was called from loadClass() */
-	/*[PR 126176] Do not create Packages for bootstrap classes unnecessarily */
-	// Capture packages loaded while calling definePackage().
-	// Also ensure all Hashtable elements are defined since the
-	// Hashtable is being modified by getPackage() while its
-	// being walked
-	while (packages.size() > 0) {
-		Hashtable<String, Integer> packagesClone = (Hashtable<String, Integer>)packages.clone();
-		Enumeration<String> keys = packagesClone.keys();
-		while (keys.hasMoreElements()) {
-			getPackage(keys.nextElement());
-		}
-	}
-	return super.getPackages();
-	/*[ELSE]*/
-	return VM.getVMLangAccess().getSystemPackages();
-	/*[ENDIF]*/
-	
+	return VM.getVMLangAccess().getSystemPackages();	
 }
 
 /*[PR 123807] Design 450 SE.JVMTI: JVMTI 1.1: New ClassLoaderSearch API */
@@ -202,27 +137,6 @@ private void appendToClassPathForInstrumentation(String jarPath) throws Throwabl
 		}
 		// clear the getResources() cache when a jar is appended
 		resourceCacheRef = null;
-		/*[IF Sidecar19-SE]*/
-		ClassLoader sysLoader = getSystemClassLoader(); 
-		if (initAppendMethod) {
-			initAppendMethod = false;
-			try {
-				appendToClassPathForInstrumentationMethod = sysLoader.getClass().getDeclaredMethod("appendToClassPathForInstrumentation", String.class); //$NON-NLS-1$
-				PrivilegedAction<Void> action = new PriviAction(appendToClassPathForInstrumentationMethod);
-				AccessController.doPrivileged(action);
-			} catch (NoSuchMethodException e) {
-				/* 
-				 * User can override the default system loader.
-				 * It should contain appendToClassPathForInstrumentation(), but failure todo so is not fatal.
-				 */
-				appendToClassPathForInstrumentationMethod = null;
-			}
-		}
-
-		if (null != appendToClassPathForInstrumentationMethod) {
-			appendToClassPathForInstrumentationMethod.invoke(sysLoader, jarPath);
-		}
-		/*[ENDIF]*/
 	}
 }
 

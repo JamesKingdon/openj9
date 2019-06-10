@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -65,9 +65,9 @@ j9gc_modron_global_collect(J9VMThread *vmThread)
  * <ul>
  * 	<li>J9MMCONSTANT_IMPLICIT_GC_DEFAULT - collect due to normal GC activity</li>
  *  <li>J9MMCONSTANT_IMPLICIT_GC_AGGRESSIVE - second collect since first collect was insufficient</li>
- * 	<li>J9MMCONSTANT_IMPLICIT_GC_PERCOLATE - collect due to scavanger percolate</li>
- * 	<li>J9MMCONSTANT_IMPLICIT_GC_PERCOLATE_UNLOADING_CLASSES - collect due to scavanger percolate (unloading classes)</li>
- * 	<li>J9MMCONSTANT_IMPLICIT_GC_PERCOLATE_AGGRESSIVE - collect due to aggressive scavanger percolate</li>
+ * 	<li>J9MMCONSTANT_IMPLICIT_GC_PERCOLATE - collect due to scavenger percolate</li>
+ * 	<li>J9MMCONSTANT_IMPLICIT_GC_PERCOLATE_UNLOADING_CLASSES - collect due to scavenger percolate (unloading classes)</li>
+ * 	<li>J9MMCONSTANT_IMPLICIT_GC_PERCOLATE_AGGRESSIVE - collect due to aggressive scavenger percolate</li>
  * 	<li>J9MMCONSTANT_EXPLICIT_GC_SYSTEM_GC - Java code has requested a System.gc()</li>
  *  <li>J9MMCONSTANT_EXPLICIT_GC_NOT_AGGRESSIVE - Java code has requested a non-compacting GC via JVM_GCNoCompact</li>
  *  <li>J9MMCONSTANT_EXPLICIT_GC_NATIVE_OUT_OF_MEMORY - a native out of memory has occurred -- attempt to recover as much native memory as possible</li>
@@ -107,6 +107,16 @@ j9gc_heap_total_memory(J9JavaVM *javaVM)
 	MM_Heap *heap = MM_GCExtensions::getExtensions(javaVM)->getHeap();
 	MM_HeapRegionManager *manager = heap->getHeapRegionManager();
 	return manager->getTotalHeapSize();
+}
+
+UDATA
+j9gc_is_garbagecollection_disabled(J9JavaVM *javaVM)
+{
+	UDATA ret = 0;
+	 if (gc_policy_nogc == MM_GCExtensions::getExtensions(javaVM)->configurationOptions._gcPolicy) {
+		 ret = 1;
+	 }
+	 return ret;
 }
 
 /**
@@ -153,6 +163,9 @@ j9gc_allsupported_memorypools(J9JavaVM *javaVM)
 				memPools |= J9_GC_MANAGEMENT_POOL_TENURED;
 			}
 			break;
+		case J9_GC_POLICY_NOGC :
+			memPools |= J9_GC_MANAGEMENT_POOL_TENURED;
+			break;
 		case J9_GC_POLICY_BALANCED :
 				memPools |= J9_GC_MANAGEMENT_POOL_REGION_OLD;
 				memPools |= J9_GC_MANAGEMENT_POOL_REGION_EDEN;
@@ -190,6 +203,9 @@ j9gc_allsupported_garbagecollectors(J9JavaVM *javaVM)
 	case J9_GC_POLICY_BALANCED :
 		collectors |= J9_GC_MANAGEMENT_COLLECTOR_PGC;
 		collectors |= J9_GC_MANAGEMENT_COLLECTOR_GGC;
+		break;
+	case J9_GC_POLICY_NOGC :
+		collectors |= J9_GC_MANAGEMENT_COLLECTOR_EPSILON;
 		break;
 	default :
 		break;
@@ -256,6 +272,13 @@ j9gc_garbagecollector_name(J9JavaVM *javaVM, UDATA gcID)
 	MM_GCExtensions *extensions = MM_GCExtensions::getExtensions(javaVM);
 	const char *name = NULL;
 	switch (gcID) {
+	case J9_GC_MANAGEMENT_COLLECTOR_EPSILON :
+		if (extensions->_HeapManagementMXBeanBackCompatibilityEnabled) {
+			name = J9_GC_MANAGEMENT_GC_NAME_GLOBAL_OLD;
+		} else {
+			name = J9_GC_MANAGEMENT_GC_NAME_EPSILON;
+		}
+		break;
 	case J9_GC_MANAGEMENT_COLLECTOR_GLOBAL :
 		if (extensions->_HeapManagementMXBeanBackCompatibilityEnabled) {
 			name = J9_GC_MANAGEMENT_GC_NAME_GLOBAL_OLD;
@@ -310,6 +333,7 @@ j9gc_is_managedpool_by_collector(J9JavaVM *javaVM, UDATA gcID, UDATA poolID)
 	case J9_GC_MANAGEMENT_COLLECTOR_PGC :
 	case J9_GC_MANAGEMENT_COLLECTOR_GLOBAL :
 	case J9_GC_MANAGEMENT_COLLECTOR_GGC :
+	case J9_GC_MANAGEMENT_COLLECTOR_EPSILON :
 	default:
 		managedPools = j9gc_allsupported_memorypools(javaVM);
 		break;
@@ -416,6 +440,9 @@ j9gc_get_collector_id(OMR_VMThread *omrVMThread)
 		break;
 	case OMR_GC_CYCLE_TYPE_VLHGC_GLOBAL_GARBAGE_COLLECT :
 		id = J9_GC_MANAGEMENT_COLLECTOR_GGC;
+		break;
+	case OMR_GC_CYCLE_TYPE_EPSILON :
+		id = J9_GC_MANAGEMENT_COLLECTOR_EPSILON;
 		break;
 	default :
 		break;
@@ -643,7 +670,7 @@ j9gc_get_gc_cause(OMR_VMThread *omrVMthread)
 
 /**
  * API for the jit to call to find out the maximum allocation size, including the 
- * object header, that is guarenteed not to overflow the address range.
+ * object header, that is guaranteed not to overflow the address range.
  */
 UDATA
 j9gc_get_overflow_safe_alloc_size(J9JavaVM *javaVM)
@@ -757,6 +784,32 @@ j9gc_allocation_threshold_changed(J9VMThread *currentThread)
 	vmFuncs->J9CancelAsyncEvent(vm, currentThread, key);
 	memoryManagerTLHAsyncCallbackHandler(currentThread, key, (void*)vm);
 #endif /* defined(J9VM_GC_THREAD_LOCAL_HEAP) || defined(J9VM_GC_SEGREGATED_HEAP) */
+}
+
+/**
+ * Set the allocation sampling interval to trigger a J9HOOK_MM_OBJECT_ALLOCATION_SAMPLING event
+ * 
+ * Examples:
+ * 	To trigger an event whenever 4K objects have been allocated:
+ *		j9gc_set_allocation_sampling_interval(vmThread, (UDATA)4096);
+ *	To trigger an event for every object allocation:
+ *		j9gc_set_allocation_sampling_interval(vmThread, (UDATA)0);
+ * The initial MM_GCExtensions::oolObjectSamplingBytesGranularity value is 16M
+ * or set by command line option "-Xgc:allocationSamplingGranularity".
+ * By default, the sampling interval is going to be set to 512 KB.
+ * 
+ * @parm[in] vmThread The current VM Thread
+ * @parm[in] samplingInterval The allocation sampling interval.
+ */
+void 
+j9gc_set_allocation_sampling_interval(J9VMThread *vmThread, UDATA samplingInterval)
+{
+	MM_GCExtensions *extensions = MM_GCExtensions::getExtensions(vmThread->javaVM);
+	if (0 == samplingInterval) {
+		/* avoid (env->_oolTraceAllocationBytes) % 0 which could be undefined. */
+		samplingInterval = 1;
+	}
+	extensions->oolObjectSamplingBytesGranularity = samplingInterval;
 }
 
 /**
@@ -887,8 +940,8 @@ j9gc_notifyGCOfClassReplacement(J9VMThread *vmThread, J9Class *oldClass, J9Class
     }
 
 	/* classes should not be unloaded */
-	Assert_MM_true(!J9_ARE_ANY_BITS_SET(oldClass->classDepthAndFlags, J9_JAVA_CLASS_DYING));
-	Assert_MM_true(!J9_ARE_ANY_BITS_SET(newClass->classDepthAndFlags, J9_JAVA_CLASS_DYING));
+	Assert_MM_true(!J9_ARE_ANY_BITS_SET(oldClass->classDepthAndFlags, J9AccClassDying));
+	Assert_MM_true(!J9_ARE_ANY_BITS_SET(newClass->classDepthAndFlags, J9AccClassDying));
 
 	/*
 	 * class->gcLink slot can be not NULL in two cases:

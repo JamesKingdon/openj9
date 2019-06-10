@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2014 IBM Corp. and others
+ * Copyright (c) 2009, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.j9.stackmap;
 
@@ -396,8 +396,7 @@ public class DebugLocalMap
 					break;
 
 				case RTV_MISC:
-					switch (bc) {
-					case JBathrow:
+					if (bc == JBathrow) {
 						if (! mapData.rootStack.isEmpty()) {
 							pc = mapData.rootStack.pop();
 							mapData.currentLocals = mapData.mapArray[pc];
@@ -407,10 +406,7 @@ public class DebugLocalMap
 							/* else we are done the rootStack -- return */
 							return 0;
 						}
-						break;
-
-					case JBtableswitch:
-					case JBlookupswitch:
+					} else if ((bc == JBtableswitch) || (bc == JBlookupswitch)) {
 						bcIndex = U8Pointer.cast(UDATA.cast(bcIndex).add(4).bitAnd(new UDATA(3).bitNot()));
 						offset = new I32(PARAM_32(bcIndex,0)).intValue();
 						bcIndex = bcIndex.add(4);
@@ -448,7 +444,6 @@ public class DebugLocalMap
 							/* else we are done the rootStack -- return */
 							return 0;
 						}
-						break;
 					}
 					break;
 				}

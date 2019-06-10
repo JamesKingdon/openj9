@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef SCAVENGERROOTCLEARER_HPP_
@@ -61,6 +61,12 @@ public:
 	{
 		_typeId = __FUNCTION__;
 		setNurseryReferencesOnly(true);
+
+		/*
+		 * JNI Weak Global References table can be skipped in Clearable phase
+		 * if it has been scanned as a hard root for Concurrent Scavenger already
+		 */
+		_jniWeakGlobalReferencesTableAsRoot = _extensions->isConcurrentScavengerEnabled();
 	};
 
 	virtual void
@@ -79,9 +85,9 @@ public:
 	virtual void
 	scanSoftReferenceObjects(MM_EnvironmentBase *env)
 	{
-		if (_clij->scavenger_getShouldScavengeSoftReferenceObjects()) {
+		if (_scavenger->getDelegate()->getShouldScavengeSoftReferenceObjects()) {
 			reportScanningStarted(RootScannerEntity_SoftReferenceObjects);
-			scavengeReferenceObjects(MM_EnvironmentStandard::getEnvironment(env), J9_JAVA_CLASS_REFERENCE_SOFT);
+			scavengeReferenceObjects(MM_EnvironmentStandard::getEnvironment(env), J9AccClassReferenceSoft);
 			reportScanningEnded(RootScannerEntity_SoftReferenceObjects);
 		}
 	}
@@ -96,9 +102,9 @@ public:
 	virtual void
 	scanWeakReferenceObjects(MM_EnvironmentBase *env)
 	{
-		if (_clij->scavenger_getShouldScavengeWeakReferenceObjects()) {
+		if (_scavenger->getDelegate()->getShouldScavengeWeakReferenceObjects()) {
 			reportScanningStarted(RootScannerEntity_WeakReferenceObjects);
-			scavengeReferenceObjects(MM_EnvironmentStandard::getEnvironment(env), J9_JAVA_CLASS_REFERENCE_WEAK);
+			scavengeReferenceObjects(MM_EnvironmentStandard::getEnvironment(env), J9AccClassReferenceWeak);
 			reportScanningEnded(RootScannerEntity_WeakReferenceObjects);
 		}
 	}
@@ -109,7 +115,7 @@ public:
 		/* No new objects could have been discovered by soft / weak reference processing,
 		 * but we must complete this phase prior to unfinalized processing to ensure that
 		 * finalizable referents get cleared */
-		if (_clij->scavenger_getShouldScavengeSoftReferenceObjects() || _clij->scavenger_getShouldScavengeWeakReferenceObjects()) {
+		if (_scavenger->getDelegate()->getShouldScavengeSoftReferenceObjects() || _scavenger->getDelegate()->getShouldScavengeWeakReferenceObjects()) {
 			env->_currentTask->synchronizeGCThreads(env, UNIQUE_ID);
 		}
 		return complete_phase_OK;
@@ -120,7 +126,7 @@ public:
 	scanUnfinalizedObjects(MM_EnvironmentBase *env)
 	{
 		/* allow the scavenger to handle this */
-		if (_clij->scavenger_getShouldScavengeUnfinalizedObjects()) {
+		if (_scavenger->getDelegate()->getShouldScavengeUnfinalizedObjects()) {
 			reportScanningStarted(RootScannerEntity_UnfinalizedObjects);
 			scavengeUnfinalizedObjects(MM_EnvironmentStandard::getEnvironment(env));
 			reportScanningEnded(RootScannerEntity_UnfinalizedObjects);
@@ -131,7 +137,7 @@ public:
 	scanUnfinalizedObjectsComplete(MM_EnvironmentBase *env)
 	{
 		CompletePhaseCode result = complete_phase_OK;
-		if (_clij->scavenger_getShouldScavengeUnfinalizedObjects()) {
+		if (_scavenger->getDelegate()->getShouldScavengeUnfinalizedObjects()) {
 			reportScanningStarted(RootScannerEntity_UnfinalizedObjectsComplete);
 			/* ensure that all unfinalized processing is complete before we start marking additional objects */
 			env->_currentTask->synchronizeGCThreads(env, UNIQUE_ID);
@@ -150,9 +156,9 @@ public:
 	virtual void
 	scanPhantomReferenceObjects(MM_EnvironmentBase *env)
 	{
-		if (_clij->scavenger_getShouldScavengePhantomReferenceObjects()) {
+		if (_scavenger->getDelegate()->getShouldScavengePhantomReferenceObjects()) {
 			reportScanningStarted(RootScannerEntity_PhantomReferenceObjects);
-			scavengeReferenceObjects(MM_EnvironmentStandard::getEnvironment(env), J9_JAVA_CLASS_REFERENCE_PHANTOM);
+			scavengeReferenceObjects(MM_EnvironmentStandard::getEnvironment(env), J9AccClassReferencePhantom);
 			reportScanningEnded(RootScannerEntity_PhantomReferenceObjects);
 		}
 	}
@@ -161,7 +167,7 @@ public:
 	scanPhantomReferencesComplete(MM_EnvironmentBase *env)
 	{
 		CompletePhaseCode result = complete_phase_OK;
-		if (_clij->scavenger_getShouldScavengePhantomReferenceObjects()) {
+		if (_scavenger->getDelegate()->getShouldScavengePhantomReferenceObjects()) {
 			reportScanningStarted(RootScannerEntity_PhantomReferenceObjectsComplete);
 			if (env->_currentTask->synchronizeGCThreadsAndReleaseSingleThread(env, UNIQUE_ID)) {
 				env->_cycleState->_referenceObjectOptions |= MM_CycleState::references_clear_phantom;
@@ -204,6 +210,23 @@ public:
 		static_cast<J9JavaVM*>(_omrVM->_language_vm)->internalVMFunctions->objectMonitorDestroyComplete(static_cast<J9JavaVM*>(_omrVM->_language_vm), (J9VMThread *)env->getOmrVMThread()->_language_vmthread);
 		reportScanningEnded(RootScannerEntity_MonitorReferenceObjectsComplete);
 		return complete_phase_OK;
+	}
+
+	virtual void
+	scanJNIWeakGlobalReferences(MM_EnvironmentBase *env)
+	{
+#if defined(OMR_GC_CONCURRENT_SCAVENGER)
+		/*
+		 * Currently Concurrent Scavenger replaces STW Scavenger, so this check is not necessary
+		 * (Concurrent Scavenger is always in progress)
+		 * However Concurrent Scavenger runs might be interlaced with STW Scavenger time to time
+		 * (for example for reducing amount of floating garbage)
+		 */
+		if (!_scavenger->isConcurrentInProgress())
+#endif /* defined(OMR_GC_CONCURRENT_SCAVENGER) */
+		{
+			MM_RootScanner::scanJNIWeakGlobalReferences(env);
+		}
 	}
 
 	virtual void

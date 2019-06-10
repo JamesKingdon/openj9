@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <stdlib.h>
@@ -102,7 +102,7 @@ findLocallyDefinedClass(J9VMThread * vmThread, J9Module * j9module, U_8 * classN
 	Trc_BCU_findLocallyDefinedClass_Entry(mbString, classPathEntryCount);
 	
 	/* Search patch path of the module before looking up in bootclasspath */
-	if (J2SE_VERSION(javaVM) >= J2SE_19) {
+	if (J2SE_VERSION(javaVM) >= J2SE_V11) {
 		if (NULL == module) {
 			if (J9_ARE_NO_BITS_SET(javaVM->runtimeFlags, J9_RUNTIME_JAVA_BASE_MODULE_CREATED)) {
 				module = javaVM->javaBaseModule;
@@ -201,7 +201,7 @@ searchClassInModule(J9VMThread * vmThread, J9Module * j9module, U_8 * className,
 {
 	J9JavaVM *javaVM = vmThread->javaVM;
 	char moduleNameBuf[J9VM_PACKAGE_NAME_BUFFER_LENGTH];
-	char *moduleName = moduleNameBuf;
+	char *moduleName = NULL;
 	BOOLEAN freeModuleName = FALSE;
 	IDATA rc = 1;
 	PORT_ACCESS_FROM_JAVAVM(javaVM);
@@ -213,7 +213,7 @@ searchClassInModule(J9VMThread * vmThread, J9Module * j9module, U_8 * className,
 		moduleName = JAVA_BASE_MODULE;
 	} else {
 		moduleName = J9_VM_FUNCTION(vmThread, copyStringToUTF8WithMemAlloc)(
-			vmThread, j9module->moduleName, J9_STR_NONE, "", moduleNameBuf, J9VM_PACKAGE_NAME_BUFFER_LENGTH);
+			vmThread, j9module->moduleName, J9_STR_NULL_TERMINATE_RESULT, "", 0, moduleNameBuf, J9VM_PACKAGE_NAME_BUFFER_LENGTH, NULL);
 		if (NULL == moduleName) {
 			rc = -1;
 			goto _end;
@@ -472,7 +472,7 @@ convertToOSFilename (J9JavaVM * javaVM, U_8 * dir, UDATA dirLength, U_8 * module
 
 /* 
 	Verify that the internal dynamic loader buffers used to hold the Sun class file are large enough
-	to accomodate @sunClassFileSize bytes.  Grow buffers if neccessary.
+	to accommodate @sunClassFileSize bytes.  Grow buffers if necessary.
 
 	Return 0 on success, non-zero on error.
 */

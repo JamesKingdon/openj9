@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef bcverify_h
@@ -87,10 +87,12 @@ typedef struct J9BCVAlloc {
 	}
 
 #define DROP( x )	\
-	stackTop -= x;
+	stackTop -= x;	\
+	CHECK_STACK_UNDERFLOW
 
 #define POP	\
-	*(--stackTop)
+	*(--stackTop); \
+	CHECK_STACK_UNDERFLOW
 
 #define PUSH( t ) \
 	*stackTop = (UDATA) (t); \
@@ -135,6 +137,25 @@ typedef struct J9BCVAlloc {
 #define CHECK_TEMP_DOUBLE( tempIndex ) \
 	CHECK_TEMP_PAIR( tempIndex , (UDATA) BCV_BASE_TYPE_DOUBLE );
 
+/* The macro below is used for baload and bastore to deal with the case of byte/boolean array type.
+ * The reason for that is as follows:
+ * 1) The existing implementation prevents us from inserting a boolean array type in J9JavaBytecodeArrayTypeTable
+ *    (in which the expected type is determined by J9JavaBytecodeArrayTypeTable[bc - baload or bastore]).
+ * 2) For baload and bastore, there is no way to determine whether the target type (popped out from the stack)
+ *    is byte array (calculated via J9JavaBytecodeArrayTypeTable) or boolean array (not in J9JavaBytecodeArrayTypeTable).
+ *
+ * So we need to ensure the consistency check addresses the cases of boolean array and byte array for baload/bastore.
+ * In such case, the macro can be expended to:
+ * if (baload or bastore == bc),
+ * then inconsistentStack |= (BCV_BASE_ARRAY_TYPE_BYTE != arrayType) && (BCV_BASE_ARRAY_TYPE_BOOL != arrayType));
+ */
+#define CHECK_BOOL_ARRAY(opCode, bc, operandType) \
+	if (opCode == bc) { \
+		inconsistentStack |= ((operandType != arrayType) && (BCV_BASE_ARRAY_TYPE_BOOL != arrayType)); \
+	} else { \
+		inconsistentStack |= (operandType != arrayType); \
+	}
+
 #define	POP_TOS_TYPE( foundType, expectedType ) \
 	foundType = POP; \
 	if (expectedType & BCV_WIDE_TYPE_MASK) { \
@@ -147,7 +168,10 @@ typedef struct J9BCVAlloc {
 	inconsistentStack2 |= (foundType != expectedType);
 	
 #define POP_TOS( baseType )	\
-	inconsistentStack |= (POP != (UDATA) (baseType));
+	{	\
+		UDATA popTemp = POP;	\
+		inconsistentStack |= (popTemp != (UDATA) (baseType)); \
+	}
 
 #define POP_TOS_INTEGER	\
 	POP_TOS( BCV_BASE_TYPE_INT );
@@ -169,10 +193,29 @@ typedef struct J9BCVAlloc {
 	temp1 = POP; \
 	inconsistentStack |= (temp1 == BCV_BASE_TYPE_TOP);
 
-/* Must be 2 singles or a correctly ordered wide pair */
-#define POP_TOS_PAIR( temp1, temp2 )	\
+#define IS_WIDE_TYPE(temp)	\
+	(J9_ARE_ALL_BITS_SET((temp), BCV_BASE_TYPE_LONG) | J9_ARE_ALL_BITS_SET((temp), BCV_BASE_TYPE_DOUBLE))
+
+#define TYPE_PAIR_CHECK(temp1, temp2)	\
+	{ \
+		UDATA isWideType = IS_WIDE_TYPE(temp2); \
+		inconsistentStack |= IS_WIDE_TYPE(temp1); \
+		inconsistentStack |= ((BCV_BASE_TYPE_TOP == (temp1)) ? (!isWideType) : isWideType); \
+	}
+
+/* To ensure these two types on the current stack are 2 singles or a correctly ordered wide pair(long/double),
+ * there are 3 cases that need to be covered:
+ * 1) the second type (temp2) under the first type (temp1) must not be 'top' in any case.
+ * 2) the first type (temp1) must not be long/double in any case.
+ * 3) the type underneath (temp2) is long/double only when the first type (temp1) is 'top';
+ *    otherwise, the type underneath (temp2) must not be long/double.
+ * Note: if the first type (temp1) is not 'top', these two types could be other primitives
+ * (short, int, char, byte, boolean, float, etc) or object references.
+ */
+#define POP_TOS_PAIR(temp1, temp2)	\
 	temp1 = POP; \
-	POP_TOS_SINGLE ( temp2 );
+	POP_TOS_SINGLE(temp2); \
+	TYPE_PAIR_CHECK(temp1, temp2);
 
 #define POP_TOS_BASE_ARRAY( basetype ) \
 	temp1 = POP; \

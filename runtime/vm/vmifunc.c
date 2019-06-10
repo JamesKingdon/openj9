@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -67,49 +67,48 @@ struct VMInterfaceFunctions_ J9VMInterfaceFunctions = {
 /* Initialization function */
 vmiError J9VMI_Initialize(J9JavaVM* vm)
 {
-	J9VMInterface* j9VMI;
-	VMInterface* vmi;
-	HarmonyVMInterface* harmonyVMI;
-	JavaVMInitArgs* vmInitArgs;
-
-	j9VMI = &vm->vmInterface;
+	J9VMInterface* j9VMI = &vm->vmInterface;
 	j9VMI->functions = GLOBAL_TABLE(J9VMInterfaceFunctions);
 	j9VMI->javaVM = vm;
 	j9VMI->portLibrary = vm->portLibrary;
-
-	/* Initialize the Harmony copy of the VMI */
-	harmonyVMI = &vm->harmonyVMInterface;
-	harmonyVMI->functions = GLOBAL_TABLE(J9VMInterfaceFunctions);
-	harmonyVMI->javaVM = vm;
-	harmonyVMI->portLibrary = NULL;
 
 	/* load the zlib */
 	if (0 != initZipLibrary(vm->portLibrary, vm->j2seRootDirectory)) {
 		return VMI_ERROR_INITIALIZATION_FAILED;
 	}
 
-#if defined(J9VM_OPT_HARMONY)
 	/* Acquire the initArgs via VMI */
-	vmi = (VMInterface*)j9VMI;
-	vmInitArgs = (*vmi)->GetInitArgs(vmi);
+#if defined(J9VM_OPT_HARMONY)
+	{ /* Introduce a new scope to keep older compilers happy */
+		JavaVMInitArgs* vmInitArgs = NULL;
+		VMInterface* vmi = NULL;
+		/* Initialize the Harmony copy of the VMI */
+		HarmonyVMInterface *harmonyVMI = &vm->harmonyVMInterface;
+		harmonyVMI->functions = GLOBAL_TABLE(J9VMInterfaceFunctions);
+		harmonyVMI->javaVM = vm;
+		harmonyVMI->portLibrary = NULL;
 
-	/* Locate the Harmony portlib (if possible) */
-	if (NULL != vmInitArgs) {
+		/* Acquire the initArgs via VMI */
+		vmi = (VMInterface*)j9VMI;
+		vmInitArgs = (*vmi)->GetInitArgs(vmi);
 
-		jint count = vmInitArgs->nOptions;
-		JavaVMOption *option = vmInitArgs->options;
+		/* Locate the Harmony portlib (if possible) */
+		if (NULL != vmInitArgs) {
 
-		while (count) {
-			if (!strcmp(option->optionString,"_org.apache.harmony.vmi.portlib")) {
-				harmonyVMI->portLibrary = (struct HyPortLibrary *)option->extraInfo;
-				return VMI_ERROR_NONE;
+			jint count = vmInitArgs->nOptions;
+			JavaVMOption *option = vmInitArgs->options;
+
+			while (count > 0) {
+				if (!strcmp(option->optionString,"_org.apache.harmony.vmi.portlib")) {
+					harmonyVMI->portLibrary = (struct HyPortLibrary *)option->extraInfo;
+					return VMI_ERROR_NONE;
+				}
+				++option;
+				--count;
 			}
-			++option;
-			--count;
 		}
 	}
-
-#endif
+#endif /* J9VM_OPT_HARMONY */
 	return VMI_ERROR_NONE;
 }
 
@@ -224,27 +223,28 @@ vmi_getPortLibrary(VMInterface* vmi)
  *
  * <TABLE>
  * <TR><TD><B>Property Name</B></TD>			<TD><B>Example Value or Description</B></TD></TR>
- * <TR><TD>java.vendor</TD>			<TD>"IBM Corporation"</TD></TR>
- * <TR><TD>java.vendor.url</TD>			<TD>"http://www.ibm.com/"</TD></TR>
- * <TR><TD>java.vm.specification.version</TD>	<TD>"1.0"</TD></TR>
+ * <TR><TD>java.vendor</TD>			<TD>"Eclipse OpenJ9"</TD></TR>
+ * <TR><TD>java.vendor.url</TD>			<TD>"http://www.eclipse.org/openj9"</TD></TR>
+ * <TR><TD>java.specification.version</TD>	<TD>"1.8"</TD></TR>
+ * <TR><TD>java.vm.specification.version</TD>	<TD>"1.8"</TD></TR>
  * <TR><TD>java.vm.specification.vendor</TD>	<TD>"Oracle Corporation"</TD></TR>
  * <TR><TD>java.vm.specification.name</TD>	<TD>"Java Virtual Machine Specification"</TD></TR>
- * <TR><TD>java.vm.version</TD>			<TD>"2.3"</TD></TR>
- * <TR><TD>java.vm.vendor</TD>			<TD>"IBM Corporation"</TD></TR>
- * <TR><TD>java.vm.name	</TD>		<TD>"J9"</TD></TR>
- * <TR><TD>java.vm.info</TD>			<TD>"IBM J9 2.3 Windows XP x86-32  (JIT enabled)
-<BR>J9VM - 20041211_0834_lHdSMR
-<BR>JIT  - dev_level20041210_1800"</TD></TR>
- * <TR><TD>java.compiler</TD>			<TD>"j9jit23"</TD></TR>
- * <TR><TD>java.class.version</TD>		<TD>"49.0"</TD></TR>
+ * <TR><TD>java.vm.version</TD>			<TD>"master-1ca0ab98"</TD></TR>
+ * <TR><TD>java.vm.vendor</TD>			<TD>"Eclipse OpenJ9"</TD></TR>
+ * <TR><TD>java.vm.name	</TD>		<TD>"Eclipse OpenJ9 VM"</TD></TR>
+ * <TR><TD>java.vm.info</TD>			<TD>"JRE 1.8.0 Linux amd64-64-Bit Compressed References 20180601_201 (JIT enabled, AOT enabled)
+<BR>OpenJ9   - 1ca0ab98
+<BR>OMR      - 05d2b8a2
+<BR>JCL      - c2aa0348 based on jdk8u172-b11"</TD></TR>
+ * <TR><TD>java.compiler</TD>			<TD>"j9jit29"</TD></TR>
+ * <TR><TD>java.class.version</TD>		<TD>"52.0"</TD></TR>
  * <TR><TD>java.home</TD>			<TD>the absolute path of the parent directory of the directory containing the vm
 <BR>i.e. for a vm /clear/bin/vm.exe, java.home is /clear</TD></TR>
  * <TR><TD>java.class.path</TD>			<TD>the application class path</TD></TR>
  * <TR><TD>java.library.path</TD>			<TD>the application library path</TD></TR>
  * <TR><TD>&nbsp;</TD><TD>&nbsp;</TD></TR>
- * <TR><TD>com.ibm.oti.system.class.path	<TD>the bootstrap class path</TD></TR>
  * <TR><TD>com.ibm.oti.vm.bootstrap.library.path	<TD>the bootstrap library path</TD></TR>
- * <TR><TD>com.ibm.oti.vm.library.version	<TD>"23"</TD></TR>
+ * <TR><TD>com.ibm.oti.vm.library.version	<TD>"29"</TD></TR>
  * </TABLE>
  *
  * @return a @ref vmiError "VMI error code"

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
@@ -43,6 +43,8 @@
 #include "j9modron.h"
 #include "VM_MethodHandleKinds.h"
 #include "j2sever.h"
+#include "vrfytbl.h"
+#include "bytecodewalk.h"
 
 /* Static J9ITable used as a non-NULL iTable cache value by classes that don't implement any interfaces */
 const J9ITable invalidITable = { (J9Class *) (UDATA) 0xDEADBEEF, 0, (J9ITable *) NULL };
@@ -96,7 +98,6 @@ static jvmtiError jitEventInitialize(J9VMThread * currentThread, jint redefinedC
 static void jitEventAddMethod(J9VMThread * currentThread, J9JVMTIHCRJitEventData * eventData, J9Method * oldMethod, J9Method * newMethod, UDATA equivalent);
 static void jitEventAddClass(J9VMThread * currentThread, J9JVMTIHCRJitEventData * eventData, J9Class * originalRAMClass, J9Class * replacementRAMClass);
 #endif
-static void removeFromSubclassHierarchy(J9JavaVM *javaVM, J9Class *clazzPtr);
 static void swapClassesForFastHCR(J9Class *originalClass, J9Class *newClass);
 
 #undef  J9HSHELP_DEBUG_SANITY_CHECK
@@ -228,7 +229,7 @@ fixJNIFieldID(J9VMThread * currentThread, J9JNIFieldID * fieldID, J9Class * repl
 			J9UTF8_LENGTH(fieldSignature),
 			&declaringClass,
 			(UDATA *) &resolvedField,
-			J9_RESOLVE_FLAG_NO_THROW_ON_FAIL,
+			J9_LOOK_NO_JAVA,
 			NULL);
 		if ((newFieldAddress != NULL) && (J9_CURRENT_CLASS(declaringClass) == replacementRAMClass)) {
 			offset = (UDATA) newFieldAddress - (UDATA) replacementRAMClass->ramStatics;
@@ -248,7 +249,7 @@ fixJNIFieldID(J9VMThread * currentThread, J9JNIFieldID * fieldID, J9Class * repl
 			J9UTF8_LENGTH(fieldSignature),
 			&declaringClass,
 			(UDATA *) &resolvedField,
-			J9_RESOLVE_FLAG_NO_THROW_ON_FAIL);
+			J9_LOOK_NO_JAVA);
 		if ((newFieldOffset != -1) && (declaringClass == replacementRAMClass)) {
 			offset = newFieldOffset;
 			newField = resolvedField;
@@ -315,7 +316,7 @@ fixJNIFieldIDs(J9VMThread * currentThread, J9Class * originalClass, J9Class * re
 }
 
 /*
- * @param currenThread
+ * @param currentThread
  * @param oldMethod
  * @param newMethod
  * @param equivalent
@@ -349,7 +350,6 @@ fixJNIMethodID(J9VMThread *currentThread, J9Method *oldMethod, J9Method *newMeth
 					goto done;
 				}
 			}
-
 
 			oldMethodID = oldJNIIDs[oldMethodIndex];
 
@@ -417,13 +417,7 @@ fixJNIMethodID(J9VMThread *currentThread, J9Method *oldMethod, J9Method *newMeth
 			}
 		}
 		newJNIIDs[getMethodIndex(newMethod)] = oldMethodID;
-
-		if (extensionsUsed) {
-			vmFuncs->initializeMethodID(currentThread, oldMethodID, newMethod);
-		} else {
-			/* update only method, vtable index always remains the same */
-			oldMethodID->method = newMethod;
-		}
+		vmFuncs->initializeMethodID(currentThread, oldMethodID, newMethod);
 	}
 done:
 	return rc;
@@ -550,12 +544,12 @@ areMethodsEquivalent(J9ROMMethod * method1, J9ROMClass * romClass1, J9ROMMethod 
 			/* Bytecode numbers/indices in each method must be identical */
 
 			if (bc != bc2) {
-				/* Allow JBgenericReturn to match any return bytecode */
+				/* Treat all return instructions to JBgenericReturn */
 
-				if ( ((bc >= JBreturn0) && (bc <= JBsyncReturn2)) || (bc == JBreturnFromConstructor) ) {
+				if (RTV_RETURN == (J9JavaBytecodeVerificationTable[bc] >> 8)) {
 					bc = JBgenericReturn;
 				}
-				if ( ((bc2 >= JBreturn0) && (bc2 <= JBsyncReturn2)) || (bc == JBreturnFromConstructor) ) {
+				if (RTV_RETURN == (J9JavaBytecodeVerificationTable[bc2] >> 8)) {
 					bc2 = JBgenericReturn;
 				}
 				if (bc != bc2) {
@@ -697,11 +691,25 @@ fixSubclassHierarchy(J9VMThread * currentThread, J9HashTable * classPairs)
 	UDATA i;
 
 	/*
-	 * Remove all replaced classes from the subclass traversal list.
+	 * Update the subclass traversal list with the replaced classes.
 	 */
 	classPair = hashTableStartDo(classPairs, &hashTableState);
 	while (classPair != NULL) {
-		removeFromSubclassHierarchy(vm, classPair->originalRAMClass);
+		J9Class *replacementClass = classPair->replacementClass.ramClass;
+		if (NULL != replacementClass) {
+			J9Class *originalClass = classPair->originalRAMClass;
+			J9Class *previous = originalClass->subclassTraversalReverseLink;
+			J9Class *next = originalClass->subclassTraversalLink;
+
+			/* Put the new class into the subclass hierarchy */
+			previous->subclassTraversalLink = replacementClass;
+			next->subclassTraversalReverseLink = replacementClass;
+			replacementClass->subclassTraversalReverseLink = previous;
+			replacementClass->subclassTraversalLink = next;
+			/* link this obsolete class to itself so that it won't have dangling pointers into the subclass traversal list */
+			originalClass->subclassTraversalReverseLink = originalClass;
+			originalClass->subclassTraversalLink = originalClass;
+		}
 		classPair = hashTableNextDo(&hashTableState);
 	}
 
@@ -725,8 +733,6 @@ fixSubclassHierarchy(J9VMThread * currentThread, J9HashTable * classPairs)
 	for (i = 0; i < classCount; ++i) {
 		J9Class * replacementClass;
 		J9Class * superclass;
-		J9Class * nextLink;
-		UDATA superclassCount = 0;
 
 		if (array[i]->replacementClass.ramClass) {
 			replacementClass = array[i]->replacementClass.ramClass;
@@ -751,22 +757,13 @@ fixSubclassHierarchy(J9VMThread * currentThread, J9HashTable * classPairs)
 				superclass = result->replacementClass.ramClass;
 			}
 		}
-		
-		/* Update classes->superclass array with possibly updated ramClass address */
-		superclassCount = J9CLASS_DEPTH(superclass);
-		memcpy(replacementClass->superclasses, superclass->superclasses, superclassCount * sizeof(UDATA));
-		replacementClass->superclasses[superclassCount] = superclass;
 
-		/*
-		 printf("super [j9class %p -> %p] <- class [j9class %p]\n",
-		 superclass, superclass->subclassTraversalLink, replacementClass);
-		 */
-
-		nextLink = superclass->subclassTraversalLink;
-		replacementClass->subclassTraversalLink = nextLink;
-		nextLink->subclassTraversalReverseLink = replacementClass;
-		superclass->subclassTraversalLink = replacementClass;
-		replacementClass->subclassTraversalReverseLink = superclass;
+		if (NULL != superclass) {
+			/* Update classes->superclass array with possibly updated ramClass address */
+			UDATA superclassCount = J9CLASS_DEPTH(superclass);
+			memcpy(replacementClass->superclasses, superclass->superclasses, superclassCount * sizeof(UDATA));
+			replacementClass->superclasses[superclassCount] = superclass;
+		}
 	}
 }
 
@@ -794,7 +791,7 @@ fixClassSlot(J9VMThread* currentThread, J9Class** classSlot, J9HashTable *classP
 
 /*
  * For each replaced interface in classPairs, update the iTables of
- * all implementors to point at the new version of the class.
+ * all implementers to point at the new version of the class.
  */
 void
 fixITables(J9VMThread * currentThread, J9HashTable * classPairs)
@@ -936,15 +933,17 @@ static UDATA
 findMethodInVTable(J9Method *method, UDATA *vTable)
 {
 	J9ROMMethod *romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(method);
-	UDATA vTableSize = *vTable;
-	UDATA searchIndex;
+	J9VTableHeader *vTableHeader = (J9VTableHeader *)vTable;
+	J9Method **vTableMethods = J9VTABLE_FROM_HEADER(vTableHeader);
+	UDATA vTableSize = vTableHeader->size;
+	UDATA searchIndex = 0;
 
 	/* Search the vTable for a public method of the correct name. */
-	for (searchIndex = 2; searchIndex <= vTableSize; searchIndex++) {
-		J9Method *vTableMethod = (J9Method *)vTable[searchIndex];
+	for (searchIndex = 0; searchIndex < vTableSize; searchIndex++) {
+		J9Method *vTableMethod = vTableMethods[searchIndex];
 		J9ROMMethod *vTableRomMethod = J9_ROM_METHOD_FROM_RAM_METHOD(vTableMethod);
 
-		if (vTableRomMethod->modifiers & J9_JAVA_PUBLIC) {
+		if (vTableRomMethod->modifiers & J9AccPublic) {
 			if (J9ROMMETHOD_NAME_AND_SIG_IDENTICAL(J9_CLASS_FROM_METHOD(method)->romClass, J9_CLASS_FROM_METHOD(vTableRomMethod)->romClass, romMethod, vTableRomMethod)) {
 				return searchIndex;
 			}
@@ -952,74 +951,6 @@ findMethodInVTable(J9Method *method, UDATA *vTable)
 	}
 
 	return (UDATA)-1;
-}
-
-
-void
-fixITablesForFastHCR(J9VMThread *currentThread, J9HashTable *classPairs)
-{
-	J9JVMTIClassPair *classPair;
-	J9HashTableState hashTableState;
-	UDATA updateITables = FALSE;
-
-	/* This is only necessary if methods were re-ordered in an interface update. */
-	classPair = hashTableStartDo(classPairs, &hashTableState);
-	while (NULL != classPair) {
-		J9ROMClass *romClass = classPair->originalRAMClass->romClass;
-
-		if ((0 != (romClass->modifiers & J9AccInterface)) && (NULL != classPair->methodRemap)) {
-			updateITables = TRUE;
-			break;
-		}
-		classPair = hashTableNextDo(&hashTableState);
-	}
-
-	if (updateITables) {
-		J9JavaVM *vm = currentThread->javaVM;
-		J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
-		J9Class *clazz;
-		J9ClassWalkState classWalkState;
-
-		clazz = vmFuncs->allClassesStartDo(&classWalkState, vm, NULL);
-		while (NULL != clazz) {
-
-			if (!J9_IS_CLASS_OBSOLETE(clazz) && (0 == (clazz->romClass->modifiers & J9AccInterface))) {
-				J9ITable *iTable = (J9ITable *)clazz->iTable;
-				J9ITable *superITable = NULL;
-				UDATA classDepth = J9CLASS_DEPTH(clazz);
-
-				if (0 != classDepth) {
-					 superITable = (J9ITable *) GET_SUPERCLASS(clazz)->iTable;
-				}
-
-				while (superITable != iTable) {
-					J9Class *interfaceClass = iTable->interfaceClass;
-					J9JVMTIClassPair exemplar;
-					J9JVMTIClassPair *result;
-
-					exemplar.originalRAMClass = interfaceClass;
-					result = hashTableFind(classPairs, &exemplar);
-					if ((NULL != result) && (NULL != result->methodRemap)) {
-						UDATA methodIndex;
-						UDATA methodCount = interfaceClass->romClass->romMethodCount;
-						UDATA *vTable = (UDATA *)(clazz + 1);
-						UDATA *iTableMethods = (UDATA *)(iTable + 1);
-
-						for (methodIndex = 0; methodIndex < methodCount; methodIndex++) {
-							UDATA vTableIndex = findMethodInVTable(&interfaceClass->ramMethods[methodIndex], vTable);
-
-							Assert_hshelp_false((UDATA)-1 == vTableIndex);
-							iTableMethods[methodIndex] = (vTableIndex * sizeof(UDATA)) + sizeof(J9Class);
-						}
-					}
-					iTable = iTable->next;
-				}
-			}
-
-			clazz = vmFuncs->allClassesNextDo(&classWalkState);
-		}
-		vmFuncs->allClassesEndDo(&classWalkState);
-	}
 }
 
 
@@ -1164,8 +1095,10 @@ fixVTables_forNormalRedefine(J9VMThread *currentThread, J9HashTable *classPairs,
 	J9JVMTIClassPair * classPair;
 
 	UDATA i;
-	UDATA * oldVTable;
-	UDATA * newVTable;
+	J9VTableHeader * oldVTableHeader;
+	J9VTableHeader * newVTableHeader;
+	J9Method ** oldVTable;
+	J9Method ** newVTable;
 #ifdef J9VM_INTERP_NATIVE_SUPPORT
 	UDATA * newJitVTable;
 	UDATA * oldJitVTable;
@@ -1188,18 +1121,18 @@ fixVTables_forNormalRedefine(J9VMThread *currentThread, J9HashTable *classPairs,
 
 		/* Walk the vtable and replace any old method pointer with a new one (redefined) */
 
-		oldVTable = (UDATA *) ((U_8 *) classPair->originalRAMClass + sizeof(J9Class));
+		oldVTableHeader = J9VTABLE_HEADER_FROM_RAM_CLASS(classPair->originalRAMClass);
 		if (classPair->replacementClass.ramClass) {
-			newVTable = (UDATA *) ((U_8 *) classPair->replacementClass.ramClass + sizeof(J9Class));
+			newVTableHeader = J9VTABLE_HEADER_FROM_RAM_CLASS(classPair->replacementClass.ramClass);
 		} else {
-			newVTable = oldVTable;
+			newVTableHeader = oldVTableHeader;
 		}
-		vTableSize = *oldVTable;
+		vTableSize = oldVTableHeader->size;
 
 #ifdef J9VM_INTERP_NATIVE_SUPPORT
-		oldJitVTable = (UDATA *) ((U_8 *) classPair->originalRAMClass - sizeof(UDATA));
+		oldJitVTable = JIT_VTABLE_START_ADDRESS(classPair->originalRAMClass);
 		if (classPair->replacementClass.ramClass) {
-			newJitVTable = (UDATA *) ((U_8 *) classPair->replacementClass.ramClass - sizeof(UDATA));
+			newJitVTable = JIT_VTABLE_START_ADDRESS(classPair->replacementClass.ramClass);
 		} else {
 			newJitVTable = oldJitVTable;
 		}
@@ -1207,32 +1140,32 @@ fixVTables_forNormalRedefine(J9VMThread *currentThread, J9HashTable *classPairs,
 
 		/* Under fastHCR, fix the vTable in place for the redefined class. */
 		if (fastHCR && (0 != (classPair->flags & J9JVMTI_CLASS_PAIR_FLAG_REDEFINED))) {
-			newVTable = oldVTable;
+			newVTableHeader = oldVTableHeader;
 			newJitVTable = oldJitVTable;
 		}
 
 		Trc_hshelp_fixVTables_Shape(currentThread, vTableSize, getClassName(classPair->originalRAMClass));
 
-		/* Skip the first two slots containing vtable size and the resolve method */
+		oldVTable = J9VTABLE_FROM_HEADER(oldVTableHeader);
+		newVTable = J9VTABLE_FROM_HEADER(newVTableHeader);
 
-		for (i = 2; i <= vTableSize; i++) {
-
+		for (i = 0; i < vTableSize; i++) {
 			/* Given the old method, find the corresponding new method and replace
 			 * the old classes vtable entry (for the old method with the new method) */
 
-			methodPair.oldMethod = (J9Method *) oldVTable[i];
+			methodPair.oldMethod = oldVTable[i];
 
 #ifdef J9VM_INTERP_NATIVE_SUPPORT
 			Trc_hshelp_fixVTables_Search(currentThread, i,
 						classPair->replacementClass.ramClass ? classPair->replacementClass.ramClass : classPair->originalRAMClass,
 						methodPair.oldMethod, getMethodName(methodPair.oldMethod),
-						vm->jitConfig ? oldJitVTable[1 - i] : 0, vm->jitConfig ? newJitVTable[1 - i] : 0);
+						vm->jitConfig ? oldJitVTable[0 - i] : 0, vm->jitConfig ? newJitVTable[0 - i] : 0);
 #endif
 
 			result = hashTableFind(methodPairs, &methodPair);
 			if (result != NULL) {
 				/* Replace the old method pointer with the redefined one */
-				newVTable[i] = (UDATA) result->newMethod;
+				newVTable[i] = result->newMethod;
 				Trc_hshelp_fixVTables_intVTableReplace(currentThread, i);
 
 #ifdef J9VM_JIT_FULL_SPEED_DEBUG
@@ -1246,10 +1179,10 @@ fixVTables_forNormalRedefine(J9VMThread *currentThread, J9HashTable *classPairs,
 						 * We do not need to remap the order here because we're making the newVTable/newJitVTable
 						 * have the same order of the oldVTable/oldJitVTable.
 						 */
-						newJitVTable[1 - i] = oldJitVTable[1 - i];
+						newJitVTable[0 - i] = oldJitVTable[0 - i];
 						Trc_hshelp_fixVTables_jitVTableReplace(currentThread, i);
 					} else {
-						vmFuncs->fillJITVTableSlot(currentThread, &newJitVTable[1 - i], result->newMethod);
+						vmFuncs->fillJITVTableSlot(currentThread, &newJitVTable[0 - i], result->newMethod);
 					}
 				}
 #endif
@@ -1587,12 +1520,13 @@ reresolveHotSwappedConstantPool(J9ConstantPool * ramConstantPool, J9VMThread * c
 					break;
 
 				case J9CPTYPE_INSTANCE_METHOD:
+				case J9CPTYPE_INTERFACE_INSTANCE_METHOD:
 
 					if (ramConstantPool != (J9ConstantPool *) vm->jclConstantPool) {
 						romMethodRef = ((J9ROMMethodRef *) romConstantPool) + i;
 						nas = J9ROMMETHODREF_NAMEANDSIGNATURE(romMethodRef);
 						((J9RAMMethodRef *) ramConstantPool)[i].method = vm->initialMethods.initialSpecialMethod;
-						((J9RAMMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = ((sizeof(J9Class) + sizeof(UDATA)) << 8) +
+						((J9RAMMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = (J9VTABLE_INITIAL_VIRTUAL_OFFSET << 8) +
 							getSendSlotsFromSignature(J9UTF8_DATA(J9ROMNAMEANDSIGNATURE_SIGNATURE(nas)));
 					} else {
 						/* Try to resolve as virtual and as special */
@@ -1605,12 +1539,13 @@ reresolveHotSwappedConstantPool(J9ConstantPool * ramConstantPool, J9VMThread * c
 					break;
 
 				case J9CPTYPE_STATIC_METHOD:
+				case J9CPTYPE_INTERFACE_STATIC_METHOD:
 
 					if (ramConstantPool != (J9ConstantPool *) vm->jclConstantPool) {
 						romMethodRef = ((J9ROMMethodRef *) romConstantPool) + i;
 						nas = J9ROMMETHODREF_NAMEANDSIGNATURE(romMethodRef);
 						/* Set methodIndex to initial virtual method, just as we do in internalRunPreInitInstructions() */
-						((J9RAMStaticMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = ((sizeof(J9Class) + sizeof(UDATA)) << 8) +
+						((J9RAMStaticMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = (J9VTABLE_INITIAL_VIRTUAL_OFFSET << 8) +
 							getSendSlotsFromSignature(J9UTF8_DATA(J9ROMNAMEANDSIGNATURE_SIGNATURE(nas)));
 						((J9RAMStaticMethodRef *) ramConstantPool)[i].method = vm->initialMethods.initialStaticMethod;
 					} else {
@@ -1627,7 +1562,7 @@ reresolveHotSwappedConstantPool(J9ConstantPool * ramConstantPool, J9VMThread * c
 						romMethodRef = ((J9ROMMethodRef *) romConstantPool) + i;
 						nas = J9ROMMETHODREF_NAMEANDSIGNATURE(romMethodRef);
 						((J9RAMInterfaceMethodRef *) ramConstantPool)[i].interfaceClass = 0;
-						((J9RAMInterfaceMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = getSendSlotsFromSignature(J9UTF8_DATA(J9ROMNAMEANDSIGNATURE_SIGNATURE(nas)));
+						((J9RAMInterfaceMethodRef *) ramConstantPool)[i].methodIndexAndArgCount = J9_ITABLE_INDEX_UNRESOLVED | getSendSlotsFromSignature(J9UTF8_DATA(J9ROMNAMEANDSIGNATURE_SIGNATURE(nas)));
 					} else {
 						vmFuncs->resolveInterfaceMethodRef(currentThread, ramConstantPool, i,
 																			resolveFlagsBase | J9_RESOLVE_FLAG_NO_THROW_ON_FAIL);
@@ -1638,7 +1573,7 @@ reresolveHotSwappedConstantPool(J9ConstantPool * ramConstantPool, J9VMThread * c
 				case J9CPTYPE_CLASS:
 					if (((J9RAMClassRef *) ramConstantPool)[i].value != NULL) {
 						J9Class * klass = ((J9RAMClassRef *) ramConstantPool)[i].value;
-						if (J9CLASS_FLAGS(klass) & J9_JAVA_CLASS_HOT_SWAPPED_OUT) {
+						if (J9CLASS_FLAGS(klass) & J9AccClassHotSwappedOut) {
 							J9JVMTIClassPair exemplar;
 							J9JVMTIClassPair * result;
 							exemplar.originalRAMClass = ((J9RAMClassRef *) ramConstantPool)[i].value;
@@ -1658,7 +1593,7 @@ reresolveHotSwappedConstantPool(J9ConstantPool * ramConstantPool, J9VMThread * c
 }
 
 static void
-fixRAMConstantPoolForFastHCR(J9ConstantPool *ramConstantPool, J9HashTable *classHashTable, J9HashTable *methodHashTable)
+fixRAMConstantPoolForFastHCR(J9ConstantPool *ramConstantPool, J9HashTable *classHashTable, J9HashTable *methodHashTable, J9Class *objectClass)
 {
 	J9ROMClass *romClass = ramConstantPool->ramClass->romClass;
 	U_32 *cpShapeDescription = J9ROMCLASS_CPSHAPEDESCRIPTION(romClass);
@@ -1672,6 +1607,7 @@ fixRAMConstantPoolForFastHCR(J9ConstantPool *ramConstantPool, J9HashTable *class
 	for (cpIndex = 0; cpIndex < ramConstantPoolCount; cpIndex++) {
 		switch (J9_CP_TYPE(cpShapeDescription, cpIndex)) {
 			case J9CPTYPE_INSTANCE_METHOD: /* Fall through */
+			case J9CPTYPE_INTERFACE_INSTANCE_METHOD: /* Fall through */
 			case J9CPTYPE_HANDLE_METHOD: {
 				J9RAMMethodRef *methodRef = (J9RAMMethodRef *) &ramConstantPool[cpIndex];
 
@@ -1682,7 +1618,8 @@ fixRAMConstantPoolForFastHCR(J9ConstantPool *ramConstantPool, J9HashTable *class
 				}
 				break;
 			}
-			case J9CPTYPE_STATIC_METHOD: {
+			case J9CPTYPE_STATIC_METHOD: /* Fall through */
+			case J9CPTYPE_INTERFACE_STATIC_METHOD: {
 				J9RAMStaticMethodRef *methodRef = (J9RAMStaticMethodRef *) &ramConstantPool[cpIndex];
 
 				methodPair.oldMethod = methodRef->method;
@@ -1694,24 +1631,37 @@ fixRAMConstantPoolForFastHCR(J9ConstantPool *ramConstantPool, J9HashTable *class
 			}
 			case J9CPTYPE_INTERFACE_METHOD: {
 				J9RAMInterfaceMethodRef *methodRef = (J9RAMInterfaceMethodRef *) &ramConstantPool[cpIndex];
-				UDATA methodIndex = ((methodRef->methodIndexAndArgCount & ~255) >> 8);
-				J9Class *interfaceClass = (J9Class *) methodRef->interfaceClass;
-
-				classPair.originalRAMClass = interfaceClass;
-				classResult = hashTableFind(classHashTable, &classPair);
-				if (NULL != classResult) {
-					J9Class *obsoleteClass = classResult->replacementClass.ramClass;
-
-					if (NULL != obsoleteClass) {
-						J9Method *method = &obsoleteClass->ramMethods[methodIndex];
-
-						methodPair.oldMethod = method;
-						methodResult = hashTableFind(methodHashTable, &methodPair);
-						if (NULL != methodResult) {
-							UDATA argCount = (methodRef->methodIndexAndArgCount & 255);
-							UDATA newMethodIndex = getMethodIndex(methodResult->newMethod);
-
-							methodRef->methodIndexAndArgCount = ((newMethodIndex << 8) | argCount);
+				J9Class *resolvedClass = (J9Class *) methodRef->interfaceClass;
+				/* Don't fix unresolved entries */
+				if (NULL != resolvedClass) {
+					UDATA methodIndexAndArgCount = methodRef->methodIndexAndArgCount;
+					UDATA methodIndex = methodIndexAndArgCount >> J9_ITABLE_INDEX_SHIFT;
+					UDATA newMethodIndex = methodIndex;
+					UDATA tagsAndArgCount = methodIndexAndArgCount & (J9_ITABLE_INDEX_TAG_BITS | 0xFF);
+					/* In fast HCR, both vTable and iTable indices are stable, so only the direct method
+					 * (via RAM method index) case can possibly be affected by method reordering.
+					 */
+					if (J9_ARE_ANY_BITS_SET(methodIndexAndArgCount, J9_ITABLE_INDEX_METHOD_INDEX)) {
+						/* Private interface method or non-vTable Object method */
+						if (J9_ARE_ANY_BITS_SET(methodIndexAndArgCount, J9_ITABLE_INDEX_OBJECT)) {
+							resolvedClass = objectClass;
+						}
+						classPair.originalRAMClass = resolvedClass;
+						classResult = hashTableFind(classHashTable, &classPair);
+						/* If the class was not replaced, no need to update the constant pool */
+						if (NULL != classResult) {
+							J9Class *obsoleteClass = classResult->replacementClass.ramClass;
+							if (NULL != obsoleteClass) {
+								/* If the referenced method was not reordered, no need to update the constant pool */
+								methodPair.oldMethod = obsoleteClass->ramMethods + methodIndex;
+								methodResult = hashTableFind(methodHashTable, &methodPair);
+								if (NULL != methodResult) {
+									J9Method *newMethod = methodResult->newMethod;
+									newMethodIndex = newMethod - J9_CLASS_FROM_METHOD(newMethod)->ramMethods;
+									/* Fix the index in the resolved CP entry, retaining the argCount and tag bits */
+									methodRef->methodIndexAndArgCount = ((newMethodIndex << J9_ITABLE_INDEX_SHIFT) | tagsAndArgCount);
+								}
+							}
 						}
 					}
 				}
@@ -1761,13 +1711,14 @@ fixConstantPoolsForFastHCR(J9VMThread *currentThread, J9HashTable *classPairs, J
 	J9JavaVM *vm = currentThread->javaVM;
 	J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
 	J9Class *clazz = vmFuncs->allClassesStartDo(&state, vm, NULL);
+	J9Class *objectClass = J9VMJAVALANGOBJECT_OR_NULL(currentThread->javaVM);
 
 	while (NULL != clazz) {
 		if (0 != clazz->romClass->ramConstantPoolCount) {
 			/* NOTE: We must fix up the constant pool even if the class is obsolete, as
 			 * this is necessary to invoke new methods from running old methods.
 			 */
-			fixRAMConstantPoolForFastHCR(J9_CP_FROM_CLASS(clazz), classPairs, methodPairs);
+			fixRAMConstantPoolForFastHCR(J9_CP_FROM_CLASS(clazz), classPairs, methodPairs, objectClass);
 		}
 
 		fixRAMSplitTablesForFastHCR(clazz, methodPairs);
@@ -1776,7 +1727,7 @@ fixConstantPoolsForFastHCR(J9VMThread *currentThread, J9HashTable *classPairs, J
 	}
 	vmFuncs->allClassesEndDo(&state);
 
-	fixRAMConstantPoolForFastHCR((J9ConstantPool *) vm->jclConstantPool, classPairs, methodPairs);
+	fixRAMConstantPoolForFastHCR((J9ConstantPool *) vm->jclConstantPool, classPairs, methodPairs, objectClass);
 }
 
 
@@ -1793,6 +1744,7 @@ unresolveAllClasses(J9VMThread * currentThread, J9HashTable * classPairs, J9Hash
 	clazz = vmFuncs->allClassesStartDo(&state, vm, NULL);
 
 	while (clazz != NULL) {
+		U_16 i = 0;
 
 		if (extensionsUsed) {
 
@@ -1811,12 +1763,16 @@ unresolveAllClasses(J9VMThread * currentThread, J9HashTable * classPairs, J9Hash
 			}
 		}
 
-		/* zero out split table entries */
+		/* unresolve split table entries */
 		if (NULL != clazz->staticSplitMethodTable) {
-			memset((void *)clazz->staticSplitMethodTable, 0, clazz->romClass->staticSplitMethodRefCount * sizeof(J9Method *));
+			for (i = 0; i < clazz->romClass->staticSplitMethodRefCount; ++i) {
+				clazz->staticSplitMethodTable[i] = (J9Method*)vm->initialMethods.initialStaticMethod;
+			}
 		}
 		if (NULL != clazz->specialSplitMethodTable) {
-			memset((void *)clazz->specialSplitMethodTable, 0, clazz->romClass->specialSplitMethodRefCount * sizeof(J9Method *));
+			for (i = 0; i < clazz->romClass->specialSplitMethodRefCount; ++i) {
+				clazz->specialSplitMethodTable[i] = (J9Method*)vm->initialMethods.initialSpecialMethod;
+			}
 		}
 
 		clazz = vmFuncs->allClassesNextDo(&state);
@@ -1970,6 +1926,16 @@ copyPreservedValues(J9VMThread * currentThread, J9HashTable * classPairs, UDATA 
 			replacementRAMClass->arrayClass = arrayClass;
 			originalRAMClass->arrayClass = replacementRAMClass;
 			originalRAMClass->classDepthAndFlags |= J9AccClassHotSwappedOut;
+			/* Set the totalInstanceSize in the replaced class to a value so large that it
+			 * can never be allocated (but not so large as to overflow the arithmetic when
+			 * the header size addition and rounding are done).
+			 *
+			 * Do not do this for abstract or interface classes, which can not be
+			 * instantiated (and hence may reuse the totalInstanceSize field as something else).
+			 */
+			if (J9ROMCLASS_ALLOCATE_USES_TOTALINSTANCESIZE(originalRAMClass->romClass)) {
+				originalRAMClass->totalInstanceSize = (UDATA)-256;
+			}
 		}
 		classPair = hashTableNextDo(&hashTableState);
 	}
@@ -2000,7 +1966,7 @@ copyStaticFields(J9VMThread * currentThread, J9Class * originalRAMClass, J9Class
 			J9UTF8_LENGTH(fieldSignature),
 			NULL,
 			NULL,
-			J9_RESOLVE_FLAG_NO_THROW_ON_FAIL,
+			J9_LOOK_NO_JAVA,
 			NULL);
 
 		if (newFieldAddress != NULL) {
@@ -2015,7 +1981,7 @@ copyStaticFields(J9VMThread * currentThread, J9Class * originalRAMClass, J9Class
 				J9UTF8_LENGTH(fieldSignature),
 				NULL,
 				NULL,
-				J9_RESOLVE_FLAG_NO_THROW_ON_FAIL,
+				J9_LOOK_NO_JAVA,
 				NULL);
 
 			/* printf("copyStaticFields:  [%p:0x%08x] to [%p:0x%08x]\n", oldFieldAddress, oldFieldAddress[0], newFieldAddress, newFieldAddress[0]); */
@@ -2089,7 +2055,7 @@ fixReturnsInUnsafeMethods(J9VMThread * currentThread, J9HashTable * classPairs)
     while (classPair != NULL) {
         J9Class * replacementRAMClass = classPair->replacementClass.ramClass;
 
-        if ((replacementRAMClass != NULL) && J9ROMCLASS_IS_UNSAFE(replacementRAMClass->romClass)) {
+        if ((replacementRAMClass != NULL) && J9CLASS_IS_EXEMPT_FROM_VALIDATION(replacementRAMClass)) {
              vmFuncs->fixUnsafeMethods(currentThread, (jclass) &replacementRAMClass->classObject);
         }
         classPair = hashTableNextDo(&hashTableState);
@@ -2128,6 +2094,54 @@ flushClassLoaderReflectCache(J9VMThread * currentThread, J9HashTable * classPair
 	}
 }
 
+
+#if defined(J9VM_OPT_VALHALLA_NESTMATES)
+/**
+ * \brief  Fix any resolved nest members
+ * \ingroup
+ *
+ * @param[in] currentThread
+ * @param[in] classPairs
+ * @return
+ *
+ *	Within Project Valhalla nestmates, a nest member class will resolve a link
+ *	to its nest host class when necessary to verify private access to another
+ *	class within its next class. In order for these access checks to be accurate
+ *	post nest host resolution, any classes that point to the original class def
+ *	as their nest host must be updated to point do the replaced class def instead.
+ *
+ */
+void
+fixNestMembers(J9VMThread * currentThread, J9HashTable * classPairs)
+{
+	J9HashTableState hashTableState = {0};
+	J9JVMTIClassPair *classPair = hashTableStartDo(classPairs, &hashTableState);
+	J9InternalVMFunctions *vmFuncs = currentThread->javaVM->internalVMFunctions;
+
+	while (NULL != classPair) {
+		J9Class *originalRAMClass = classPair->originalRAMClass;
+		J9Class *replacementRAMClass = classPair->replacementClass.ramClass;
+
+		if ((NULL != originalRAMClass) && (NULL != replacementRAMClass)) {
+			J9ClassLoader *classLoader = originalRAMClass->classLoader;
+			J9SRP *nestMembers = J9ROMCLASS_NESTMEMBERS(originalRAMClass->romClass);
+			U_16 nestMemberCount = originalRAMClass->romClass->nestMemberCount;
+			U_16 i = 0;
+
+			for (i = 0; i < nestMemberCount; i++) {
+				J9UTF8 *nestMemberName = NNSRP_GET(nestMembers[i], J9UTF8*);
+				J9Class *nestMember = vmFuncs->hashClassTableAt(classLoader, J9UTF8_DATA(nestMemberName), J9UTF8_LENGTH(nestMemberName));
+				if (NULL != nestMember) {
+					if (nestMember->nestHost == originalRAMClass) {
+						nestMember->nestHost = replacementRAMClass;
+					}
+				}
+			}
+		}
+		classPair = hashTableNextDo(&hashTableState);
+	}
+}
+#endif /* J9VM_OPT_VALHALLA_NESTMATES */
 
 static void
 swapClassesForFastHCR(J9Class *originalClass, J9Class *obsoleteClass)
@@ -2278,7 +2292,7 @@ outOfMemory:
 			/* In non-fastHCR case when class is being redefined, the classLocation of original class
 			 * should now point to redefined class.
 			 * Get the classLocation for the original class, remove it from the hashtable
-			 * and a new classLoation with redefined class as the key.
+			 * and a new classLocation with redefined class as the key.
 			 */
 			J9ClassLocation *classLocation = NULL;
 
@@ -2312,8 +2326,8 @@ outOfMemory:
 		replacementRAMClass->replacedClass = originalRAMClass;
 
 		/* Preserve externally set class flag (by the jit) */
-		if (J9CLASS_FLAGS(originalRAMClass) & J9_JAVA_CLASS_HAS_BEEN_OVERRIDDEN) {
-			replacementRAMClass->classDepthAndFlags |= J9_JAVA_CLASS_HAS_BEEN_OVERRIDDEN;
+		if (J9CLASS_FLAGS(originalRAMClass) & J9AccClassHasBeenOverridden) {
+			replacementRAMClass->classDepthAndFlags |= J9AccClassHasBeenOverridden;
 		}
 
 		/* Replace the class in all classloaders */
@@ -2943,6 +2957,8 @@ verifyClassesAreCompatible(J9VMThread * currentThread, jint class_count, J9JVMTI
 		J9ROMClass * originalROMClass = classPairs[i].originalRAMClass->romClass;
 		J9ROMClass * replacementROMClass = classPairs[i].replacementClass.romClass;
 		jvmtiError rc;
+		J9UTF8 *originalSuperclassName = J9ROMCLASS_SUPERCLASSNAME(originalROMClass);
+		J9UTF8 *replacementSuperclassName = J9ROMCLASS_SUPERCLASSNAME(replacementROMClass);
 
 		/* Verify that the class names match */
 
@@ -2952,7 +2968,13 @@ verifyClassesAreCompatible(J9VMThread * currentThread, jint class_count, J9JVMTI
 
 		/* Verify that the superclass names match */
 
-		if (!utfsAreIdentical(J9ROMCLASS_SUPERCLASSNAME(originalROMClass), J9ROMCLASS_SUPERCLASSNAME(replacementROMClass))) {
+		if (NULL == originalSuperclassName) {
+			if (NULL != replacementSuperclassName) {
+				return JVMTI_ERROR_UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED;							
+			}
+		} else if (NULL == replacementSuperclassName) {
+			return JVMTI_ERROR_UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED;			
+		} else if (!utfsAreIdentical(originalSuperclassName, replacementSuperclassName)) {
 			return JVMTI_ERROR_UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED;
 		}
 
@@ -3026,6 +3048,40 @@ verifyClassesAreCompatible(J9VMThread * currentThread, jint class_count, J9JVMTI
 			return rc;
 		}
 
+#if defined(J9VM_OPT_VALHALLA_NESTMATES)
+		/* Verify that the nestmates attributes - nest host & nest members - are the same */
+		{
+			J9UTF8 *originalNestHostName = J9ROMCLASS_NESTHOSTNAME(originalROMClass);
+			J9UTF8 *replacementNestHostName = J9ROMCLASS_NESTHOSTNAME(replacementROMClass);
+			U_16 nestMemberCount = originalROMClass->nestMemberCount;
+
+			/* Nest hosts must both be null or must both contain the same string */
+			if ((NULL != originalNestHostName) || (NULL != replacementNestHostName)) {
+				if ((NULL == originalNestHostName) || (NULL == replacementNestHostName)) {
+					return JVMTI_ERROR_UNSUPPORTED_REDEFINITION_CLASS_ATTRIBUTE_CHANGED;
+				} else if (!J9UTF8_EQUALS(originalNestHostName, replacementNestHostName)) {
+					return JVMTI_ERROR_UNSUPPORTED_REDEFINITION_CLASS_ATTRIBUTE_CHANGED;
+				}
+			}
+
+			if (nestMemberCount != replacementROMClass->nestMemberCount) {
+				return JVMTI_ERROR_UNSUPPORTED_REDEFINITION_CLASS_ATTRIBUTE_CHANGED;
+			} else if (0 != nestMemberCount) {
+				J9SRP *originalNestMembers = J9ROMCLASS_NESTMEMBERS(originalROMClass);
+				J9SRP *replacementNestMembers = J9ROMCLASS_NESTMEMBERS(replacementROMClass);
+				U_16 i = 0;
+
+				for (i = 0; i < nestMemberCount; i++) {
+					J9UTF8 *originalNestMemberName = NNSRP_GET(originalNestMembers[i], J9UTF8*);
+					J9UTF8 *replacementNestMemberName = NNSRP_GET(replacementNestMembers[i], J9UTF8*);
+					if (!J9UTF8_EQUALS(originalNestMemberName, replacementNestMemberName)) {
+						return JVMTI_ERROR_UNSUPPORTED_REDEFINITION_CLASS_ATTRIBUTE_CHANGED;
+					}
+				}
+			}
+		}
+#endif /* defined(J9VM_OPT_VALHALLA_NESTMATES) */
+
 		if (0 != classUsesExtensions) {
 			classPairs[i].flags |= J9JVMTI_CLASS_PAIR_FLAG_USES_EXTENSIONS;
 			*extensionsUsed = 1;
@@ -3068,27 +3124,14 @@ verifyClassesCanBeReplaced(J9VMThread * currentThread, jint class_count, const j
 /*
  * Can't replace:
  * - primitive or array classes
- * - Object
  * - J9VMInternals
  * - sun.misc.Unsafe Anonymous classes
+ * - Object (in extended HCR mode)
  */
 jboolean
 classIsModifiable(J9JavaVM * vm, J9Class * clazz)
 {
-	jboolean rc = JNI_TRUE;
-
-	if (J9ROMCLASS_IS_PRIMITIVE_OR_ARRAY(clazz->romClass)) {
-		rc = JNI_FALSE;
-	} else if (0 == J9CLASS_DEPTH(clazz)) {
-		/* clazz is Object */
-		rc = JNI_FALSE;
-	} else if (clazz == J9VMJAVALANGJ9VMINTERNALS_OR_NULL(vm)) {
-		rc = JNI_FALSE;
-	} else if ((J2SE_VERSION(vm) >= J2SE_19) && J9_ARE_ALL_BITS_SET(clazz->classFlags, J9ClassIsAnonymous)) {
-		rc = JNI_FALSE;
-	}
-
-	return rc;
+	return !J9ROMCLASS_IS_UNMODIFIABLE(clazz->romClass);
 }
 
 jvmtiError
@@ -3116,7 +3159,7 @@ reloadROMClasses(J9VMThread * currentThread, jint class_count, const jvmtiClassD
 		 * For example, redefined class: sun.reflect.GeneratedMethodAccessor* (unsafe)
 		 * that has a superclass sun.reflect.MethodAccessorImpl */
 
-		if (J9ROMCLASS_IS_UNSAFE(originalRAMClass->romClass)) {
+		if (J9CLASS_IS_EXEMPT_FROM_VALIDATION(originalRAMClass)) {
 			options = options | J9_FINDCLASS_FLAG_UNSAFE;
 		}
 		loadData.classLoader = originalRAMClass->classLoader;
@@ -3218,12 +3261,12 @@ verifyNewClasses(J9VMThread * currentThread, jint class_count, J9JVMTIClassPair 
 	}
 
 	/* CMVC 192547 : bytecode verification is usually done at runtime verification phase during ram class initialisation,
-	 * but since we're retransforming a class and the ram class is already initialised, manually run bytecode verification on
+	 * but since we're retransforming a class and the ram class is already initialized, manually run bytecode verification on
 	 * all the newly created ROM classes.
 	 */
 	for (i = 0; i < class_count; ++i) {
 		/* Do not run bytecode verification on unsafe classes */
-		if (!J9ROMCLASS_IS_UNSAFE(classPairs[i].replacementClass.romClass)) {
+		if (!J9CLASS_IS_EXEMPT_FROM_VALIDATION(classPairs[i].originalRAMClass)) {
 			IDATA result = 0;
 
 			verifyData->classLoader = classPairs[i].originalRAMClass->classLoader;
@@ -3275,11 +3318,17 @@ compareClassDepth(const void *leftPair, const void *rightPair)
 		return -1;
 	}
 
-	/* Make sure interfaces sort earlier than normal classes */
+	/* Make sure interfaces sort earlier than normal classes, other than Object */
 
 	if (left->romClass->modifiers & J9AccInterface) {
+		if (0 == rightDepth) {
+			return 1;
+		}
 		return -1;
 	} else if (right->romClass->modifiers & J9AccInterface) {
+		if (0 == leftDepth) {
+			return -1;
+		}
 		return 1;
 	}
 
@@ -3609,13 +3658,13 @@ hshelpUTRegister(J9JavaVM *vm)
  *
  * @param[in]     currentThread
  * @param[in]     jitEventData       event data describing redefined classes
- * @param[in]     extensionsEnabled  specifies if the extensions are enabled, allways true if FSD is on
+ * @param[in]     extensionsEnabled  specifies if the extensions are enabled, always true if FSD is on
  * @return none
  *
  * Notify the JIT of the changes. Enabled extensions mean that the JIT has
  * been initialized in FSD mode. We need to dump the whole code cache in such a case.
  * If the extensions have NOT been enabled we take the smarter code path and ask the
- * jit to patch the compiled code to accound for the redefined classes.
+ * jit to patch the compiled code to account for the redefined classes.
  */
 void
 jitClassRedefineEvent(J9VMThread * currentThread, J9JVMTIHCRJitEventData * jitEventData, UDATA extensionsEnabled)
@@ -3630,21 +3679,6 @@ jitClassRedefineEvent(J9VMThread * currentThread, J9JVMTIHCRJitEventData * jitEv
 			jitConfig->jitHotswapOccurred(currentThread);
 		}
 	}
-}
-
-
-static void
-removeFromSubclassHierarchy(J9JavaVM *javaVM, J9Class *clazzPtr)
-{
-	J9Class* nextLink = clazzPtr->subclassTraversalLink;
-	J9Class* reverseLink = clazzPtr->subclassTraversalReverseLink;
-	
-	reverseLink->subclassTraversalLink = nextLink;
-	nextLink->subclassTraversalReverseLink = reverseLink;
-	
-	/* link this obsolete class to itself so that it won't have dangling pointers into the subclass traversal list */
-	clazzPtr->subclassTraversalLink = clazzPtr;
-	clazzPtr->subclassTraversalReverseLink = clazzPtr;
 }
 
 #endif /* J9VM_INTERP_HOT_CODE_REPLACEMENT */ /* End File Level Build Flags */

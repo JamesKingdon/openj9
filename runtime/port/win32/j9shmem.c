@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -105,7 +105,7 @@ j9shmem_open(struct J9PortLibrary *portLibrary, const char* cacheDirName, uintpt
 		secattr.lpSecurityDescriptor=&secdes;
 		secattr.bInheritHandle = FALSE; 
 
-		/* Initialise the creationMutex */
+		/* Initialize the creationMutex */
 		Trc_PRT_shmem_j9shmem_open_globalMutexCreate();
 		PPG_shmem_creationMutex = CreateMutex(&secattr, FALSE, J9PORT_SHMEM_CREATIONMUTEX);
 		lastError = GetLastError();
@@ -421,7 +421,7 @@ j9shmem_stat(struct J9PortLibrary *portLibrary, const char* cacheDirName, uintpt
 	sharedMemoryFullPath = getSharedMemoryPathandFileName(portLibrary, cacheDirName, name);
 
 	/* Convert the filename from UTF8 to Unicode */
-	unicodePath = port_convertFromUTF8(OMRPORTLIB, sharedMemoryFullPath, unicodeBuffer, UNICODE_BUFFER_SIZE);
+	unicodePath = port_file_get_unicode_path(OMRPORTLIB, sharedMemoryFullPath, unicodeBuffer, UNICODE_BUFFER_SIZE);
 	if (NULL == unicodePath) {
 		omrmem_free_memory(sharedMemoryFullPath);
 		Trc_PRT_shmem_j9shmem_stat_unicodePathNull();
@@ -439,7 +439,7 @@ j9shmem_stat(struct J9PortLibrary *portLibrary, const char* cacheDirName, uintpt
 	}
 		
 	if ((NULL == memHandle) || (INVALID_HANDLE_VALUE==memHandle)) {
-		Trc_PRT_shmem_j9shmem_stat_Exit2(sharedMemoryFullPath);
+		Trc_PRT_shmem_j9shmem_stat_Exit2_V2(sharedMemoryFullPath, GetLastError());
 		omrmem_free_memory(sharedMemoryFullPath);
 		return -1;
 	}
@@ -647,7 +647,7 @@ createMappedFile(struct J9PortLibrary* portLibrary, const char* cacheDirName , s
 		Trc_PRT_shmem_createMappedFile_fileCreateSucceeded();
 
 		/* Convert the filename from UTF8 to Unicode */
-		unicodePath = port_convertFromUTF8(OMRPORTLIB, shareMemoryFileName, unicodeBuffer, UNICODE_BUFFER_SIZE);
+		unicodePath = port_file_get_unicode_path(OMRPORTLIB, shareMemoryFileName, unicodeBuffer, UNICODE_BUFFER_SIZE);
 		if (NULL != unicodePath) {
 			/* MoveFileEx allows us to delete the share cache after the next reboot */
 			MoveFileExW(unicodePath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
@@ -775,10 +775,11 @@ getModifiedSharedMemoryPathandFileName(struct J9PortLibrary* portLibrary, const 
 }
 
 intptr_t
-j9shmem_getDir(struct J9PortLibrary* portLibrary, const char* ctrlDirName, BOOLEAN appendBaseDir, char* shmemdir, uintptr_t bufLength)
+j9shmem_getDir(struct J9PortLibrary* portLibrary, const char* ctrlDirName, uint32_t flags, char* shmemdir, uintptr_t bufLength)
 {
 	OMRPORT_ACCESS_FROM_J9PORT(portLibrary);
 	int32_t rc;
+	BOOLEAN appendBaseDir = J9_ARE_ALL_BITS_SET(flags, J9SHMEM_GETDIR_APPEND_BASEDIR);
 
 	Trc_PRT_j9shmem_getDir_Entry();
 
@@ -786,12 +787,12 @@ j9shmem_getDir(struct J9PortLibrary* portLibrary, const char* ctrlDirName, BOOLE
 		if (appendBaseDir) {
 			if (omrstr_printf(shmemdir, bufLength, "%s\\%s", ctrlDirName, J9SH_BASEDIR) == bufLength - 1) {
 				Trc_PRT_j9shmem_getDir_ExitFailedOverflow();
-				return -1;
+				return J9PORT_ERROR_SHMEM_GET_DIR_BUF_OVERFLOW;
 			}
 		} else {
 			if (omrstr_printf(shmemdir, bufLength, "%s\\", ctrlDirName) == bufLength - 1) {
 				Trc_PRT_j9shmem_getDir_ExitFailedOverflow();
-				return -1;
+				return J9PORT_ERROR_SHMEM_GET_DIR_BUF_OVERFLOW;
 			}
 		}
 	} else {
@@ -800,7 +801,7 @@ j9shmem_getDir(struct J9PortLibrary* portLibrary, const char* ctrlDirName, BOOLE
 		appdatadir = omrmem_allocate_memory((J9SH_MAXPATH+1) * 2, OMRMEM_CATEGORY_PORT_LIBRARY);
 		if (NULL == appdatadir) {
 			Trc_PRT_j9shmem_getDir_ExitNoMemory();
-			return -1;
+			return J9PORT_ERROR_SHMEM_NOSPACE;
 		}
 
 		/* The sequence for which we look for the shared memory directory:
@@ -812,12 +813,12 @@ j9shmem_getDir(struct J9PortLibrary* portLibrary, const char* ctrlDirName, BOOLE
 			if (appendBaseDir) {
 				if (omrstr_printf(shmemdir, bufLength, "%ls\\%s", appdatadir, J9SH_BASEDIR) == bufLength - 1) {
 					Trc_PRT_j9shmem_getDir_ExitFailedOverflow();
-					return -1;
+					return J9PORT_ERROR_SHMEM_GET_DIR_BUF_OVERFLOW;
 				}
 			} else {
 				if (omrstr_printf(shmemdir, bufLength, "%ls\\", appdatadir) == bufLength - 1) {
 					Trc_PRT_j9shmem_getDir_ExitFailedOverflow();
-					return -1;
+					return J9PORT_ERROR_SHMEM_GET_DIR_BUF_OVERFLOW;
 				}
 			}
 		} else {
@@ -837,12 +838,12 @@ j9shmem_getDir(struct J9PortLibrary* portLibrary, const char* ctrlDirName, BOOLE
 			if (appendBaseDir) {
 				if (omrstr_printf(shmemdir, bufLength, "%s\\%s", appdatadir, J9SH_BASEDIR) == bufLength - 1) {
 					Trc_PRT_j9shmem_getDir_ExitFailedOverflow();
-					return -1;
+					return J9PORT_ERROR_SHMEM_GET_DIR_BUF_OVERFLOW;
 				}
 			} else {
 				if (omrstr_printf(shmemdir, bufLength, "%s\\", appdatadir) == bufLength - 1) {
 					Trc_PRT_j9shmem_getDir_ExitFailedOverflow();
-					return -1;
+					return J9PORT_ERROR_SHMEM_GET_DIR_BUF_OVERFLOW;
 				}
 			}
 		}

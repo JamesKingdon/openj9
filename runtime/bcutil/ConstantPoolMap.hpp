@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /*
@@ -34,9 +34,9 @@
 
 #include "BuildResult.hpp"
 #include "ClassFileOracle.hpp"
+#include "ROMClassCreationContext.hpp"
 
 class BufferManager;
-class ROMClassCreationContext;
 
 /*
  * The ConstantPoolMap class handles mapping from class file constant pool indices
@@ -96,6 +96,7 @@ public:
 		virtual void visitString(U_16 cfrCPIndex) = 0;
 		virtual void visitMethodType(U_16 cfrCPIndex, U_16 forMethodHandleInvocation) = 0;
 		virtual void visitMethodHandle(U_16 kind, U_16 cfrCPIndex) = 0;
+		virtual void visitConstantDynamic(U_16 bsmIndex, U_16 cfrCPIndex, U_32 primitiveFlag) = 0;
 		virtual void visitSingleSlotConstant(U_32 slot1) = 0;
 		virtual void visitDoubleSlotConstant(U_32 slot1, U_32 slot2) = 0;
 		virtual void visitFieldOrMethod(U_16 classRefCPIndex, U_16 nameAndSignatureCfrCPIndex) = 0;
@@ -226,8 +227,13 @@ public:
 		 * See Jazz103 Design 40047.
 		 */
 		return (isMarked(cfrCPIndex, INVOKE_STATIC)
-				&& (isMarked(cfrCPIndex, INVOKE_INTERFACE)
-					|| isMarked(cfrCPIndex, INVOKE_SPECIAL)));
+				&& (_context->alwaysSplitBytecodes()
+					|| isMarked(cfrCPIndex, INVOKE_INTERFACE)
+					|| isMarked(cfrCPIndex, INVOKE_SPECIAL)
+#if defined(J9VM_OPT_VALHALLA_NESTMATES)
+					|| isMarked(cfrCPIndex, INVOKE_VIRTUAL)
+#endif /* J9VM_OPT_VALHALLA_NESTMATES */
+				));
 	}
 
 	bool isSpecialSplit(U_16 cfrCPIndex) const
@@ -238,7 +244,12 @@ public:
 		 * See Jazz103 Design 40047.
 		 */
 		return (isMarked(cfrCPIndex, INVOKE_SPECIAL)
-				&& isMarked(cfrCPIndex, INVOKE_INTERFACE));
+				&& (_context->alwaysSplitBytecodes()
+					|| isMarked(cfrCPIndex, INVOKE_INTERFACE)
+#if defined(J9VM_OPT_VALHALLA_NESTMATES)
+					|| isMarked(cfrCPIndex, INVOKE_VIRTUAL)
+#endif /* J9VM_OPT_VALHALLA_NESTMATES */
+				));
 	}
 
 	bool hasStaticSplitTable() const { return _staticSplitEntryCount != 0; }
@@ -262,6 +273,10 @@ public:
 	void markClassAsUsedByMultiANewArray(U_16 classCfrCPIndex) { mark(classCfrCPIndex, MULTI_ANEW_ARRAY); }
 	void markClassAsUsedByANewArray(U_16 classCfrCPIndex)      { mark(classCfrCPIndex, ANEW_ARRAY); }
 	void markClassAsUsedByNew(U_16 classCfrCPIndex)            { mark(classCfrCPIndex, NEW); }
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+	void markClassAsUsedByDefaultValue(U_16 classCfrCPIndex)    { mark(classCfrCPIndex, DEFAULT_VALUE); }
+	void markFieldRefAsUsedByWithField(U_16 fieldRefCfrCPIndex) { mark(fieldRefCfrCPIndex, WITH_FIELD); }
+#endif
 
 	void markFieldRefAsUsedByGetStatic(U_16 fieldRefCfrCPIndex) { mark(fieldRefCfrCPIndex, GET_STATIC); }
 	void markFieldRefAsUsedByPutStatic(U_16 fieldRefCfrCPIndex) { mark(fieldRefCfrCPIndex, PUT_STATIC); }
@@ -347,6 +362,10 @@ public:
 		GET_STATIC = SPLIT1,
 		PUT_FIELD = SPLIT1,
 		GET_FIELD = SPLIT1,
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+		DEFAULT_VALUE = SPLIT1,
+		WITH_FIELD = SPLIT1,
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 		NEW = SPLIT1,
 		INVOKE_HANDLEGENERIC = SPLIT5,
 		INVOKE_HANDLEEXACT = SPLIT5,

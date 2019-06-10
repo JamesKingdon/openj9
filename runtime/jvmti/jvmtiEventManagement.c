@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "jvmtiHelpers.h"
@@ -49,10 +49,10 @@ jvmtiSetEventCallbacks(jvmtiEnv* env,
 			JVMTI_ERROR(JVMTI_ERROR_ILLEGAL_ARGUMENT);
 		}
 
-		/* Assume jvmtiEventCallbacks always reflects the largest possible callback table (most current version) */
+		/* Ignore any callbacks which exceed the size of the table of the latest known version in this VM */
 
 		if (size_of_callbacks > sizeof(jvmtiEventCallbacks)) {
-			JVMTI_ERROR(JVMTI_ERROR_ILLEGAL_ARGUMENT);
+			size_of_callbacks = sizeof(jvmtiEventCallbacks);
 		}
 
 		size_of_callbacks /= sizeof(void *);
@@ -149,7 +149,13 @@ jvmtiSetEventNotificationMode(jvmtiEnv* env,
 				case  JVMTI_EVENT_VM_OBJECT_ALLOC:
 					ENSURE_CAPABILITY(env, can_generate_vm_object_alloc_events);
 					break;
- 
+
+#if JAVA_SPEC_VERSION >= 11
+				case  JVMTI_EVENT_SAMPLED_OBJECT_ALLOC:
+					ENSURE_CAPABILITY(env, can_generate_sampled_object_alloc_events);
+					break;
+#endif /* JAVA_SPEC_VERSION >= 11 */
+
 				case JVMTI_EVENT_NATIVE_METHOD_BIND:
 					ENSURE_CAPABILITY(env, can_generate_native_method_bind_events);
 					break;
@@ -190,7 +196,7 @@ jvmtiSetEventNotificationMode(jvmtiEnv* env,
 		rc = setEventNotificationMode(j9env, currentThread, mode, event_type, event_thread, J9JVMTI_LOWEST_EVENT, J9JVMTI_HIGHEST_EVENT);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	TRACE_JVMTI_RETURN(jvmtiSetEventNotificationMode);
@@ -254,7 +260,7 @@ jvmtiGenerateEvents(jvmtiEnv* env,
 			}
 
 			vm->internalVMFunctions->releaseExclusiveVMAccess(currentThread);
-			vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+			vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 
 			/* Wait for the events to be reported */
 

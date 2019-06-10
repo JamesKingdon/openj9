@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 /*
  * A simple test JVMTI agent that can exercise the JVM appropriately with the features
@@ -40,7 +40,7 @@
 jboolean jvmti11 = JNI_FALSE;
 JavaVM * globalVM;
 J9PortLibrary * PORTLIB;
-UDATA portlibInitialised = 0; /* 0=No   1=Yes,from VM   2=Yes,created from scratch */
+UDATA portlibInitialized = 0; /* 0=No   1=Yes,from VM   2=Yes,created from scratch */
 jvmtiEnv * globalJvmtiEnv;
 char *testcaseArguments;
 
@@ -59,12 +59,12 @@ Agent_OnUnload(JavaVM * vm)
 static void 
 ensurePortLibrarySetup(JavaVM *vm) 
 {
-    if (portlibInitialised!=0) {
+    if (portlibInitialized!=0) {
     	return;
     }
 	if (vm!=NULL && ((J9JavaVM *) vm)->reserved1_identifier == (void*)J9VM_IDENTIFIER) {
 		PORTLIB = ((J9JavaVM *) vm)->portLibrary;
-		portlibInitialised = 1;
+		portlibInitialized = 1;
 	} else {
 		J9PortLibraryVersion portLibraryVersion;
 		I_32 rc;
@@ -80,7 +80,7 @@ ensurePortLibrarySetup(JavaVM *vm)
 			j9tty_printf(PORTLIB, "Agent: Failed to start port library (%d)\n", rc);
 			return;
 		}
-		portlibInitialised = 2;
+		portlibInitialized = 2;
 	}
 }
 	
@@ -132,7 +132,7 @@ done:
 
 	if (rc == JNI_OK) {
 		globalJvmtiEnv = jvmti_env;
-	} else if (portlibInitialised==2) {
+	} else if (portlibInitialized==2) {
 		j9port_shutdown_library();
 	}
 

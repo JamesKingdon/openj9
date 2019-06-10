@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -71,6 +71,7 @@ j9shsem_params_init(struct J9PortLibrary *portLibrary, struct J9PortShSemParamet
  	params->controlFileDir = NULL; /* Directory in which to create control files (SysV semaphores only */
  	params->proj_id = 1; /* parameter used with semName to generate semaphore key */
  	params->deleteBasefile = 1; /* set to 0 to retain the basefile when destroying the semaphore. */
+ 	params->global = 0; /* global is used on Windows only */
  	return 0;
 }
 
@@ -221,7 +222,7 @@ j9shsem_wait(struct J9PortLibrary *portLibrary, struct j9shsem_handle* handle, u
 }
 /**
  * reading the value of the semaphore in the set. This function
- * uses no synchronisation prmitives
+ * uses no synchronisation primitives
   * 
  * @pre caller has to deal with synchronisation issue.
  *
@@ -265,7 +266,7 @@ j9shsem_getVal(struct J9PortLibrary *portLibrary, struct j9shsem_handle* handle,
 /**
  * 
  * setting the value of the semaphore specified in semset. This function
- * uses no synchronisation prmitives
+ * uses no synchronisation primitives
  * 
  * @pre Caller has to deal with synchronisation issue.
  * 
@@ -382,7 +383,7 @@ j9shsem_destroy (struct J9PortLibrary *portLibrary, struct j9shsem_handle **hand
 			 ours to delete. However, given the dir permissions, we can still unlink it. Therefore, try an operation for which we need
 			 to own the file. If it succeeds, that means we own it and can go ahead and unlink it. */
 			Trc_PRT_shsem_j9shsem_destroy_Debug2((*handle)->semid, myerrno);
-			rc = chown((*handle)->baseFile, -1, getegid()); /* Completely benign - done anyway when the file is created */
+			rc = omrfile_chown((*handle)->baseFile, OMRPORT_FILE_IGNORE_ID, getegid()); /* Completely benign - done anyway when the file is created */
 		} else {
 			Trc_PRT_shsem_j9shsem_destroy_Debug2((*handle)->semid, myerrno);
 			rc = -1;
@@ -475,7 +476,7 @@ ensureBaseFile(struct J9PortLibrary *portLibrary, char *filename)
 	omrfile_close(fd);
 
 	Trc_PRT_shsem_createbaseFile_Event1(filename, gid);
-	rc = chown(filename, -1, gid);
+	rc = omrfile_chown(filename, OMRPORT_FILE_IGNORE_ID, gid);
 	Trc_PRT_shsem_createbaseFile_Event2(rc, errno);
 
 	Trc_PRT_shsem_createbaseFile_Exit();

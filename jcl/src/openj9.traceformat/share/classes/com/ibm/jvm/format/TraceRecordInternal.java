@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar18-SE]*/
 /*******************************************************************************
- * Copyright (c) 2000, 2016 IBM Corp. and others
+ * Copyright (c) 2000, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jvm.format;
 
@@ -111,7 +111,7 @@ final public class TraceRecordInternal extends TraceRecord {
                       break;
                   }
                   entry = entry - (longEntryLength + longEntryID*256);
-                  longEntryTraceIDs.push(new Integer(Util.constructTraceID(buffer,entry+1)));
+                  longEntryTraceIDs.push(Integer.valueOf(Util.constructTraceID(buffer,entry+1)));
                   buffer[entry+1] = 0;
                   buffer[entry+2] = 0;
                   buffer[entry+3] = (byte)longEntryID;
@@ -181,7 +181,7 @@ final public class TraceRecordInternal extends TraceRecord {
         offset = entry;  // this is the first ( oldest) entry in this Record
         currentTimeStamp = upperWord.shiftLeft(32).or(Util.constructUnsignedLong(buffer, entry + TIMESTAMP_OFFSET, Util.INT));
         //currentTimeStamp = Util.constructUnsignedLong(buffer, entry + TIMESTAMP_OFFSET, Util.INT);
-        //Util.Debug.println("TraceBuffer: oldest offest = " + offset + " timeStamp = " + currentTimeStamp);
+        //Util.Debug.println("TraceBuffer: oldest offset = " + offset + " timeStamp = " + currentTimeStamp);
         //Util.printDump(buffer,bufferSize - headerSize);
         return;
     }
@@ -219,4 +219,3 @@ final public class TraceRecordInternal extends TraceRecord {
     }
 
 }
-

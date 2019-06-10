@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -248,7 +248,7 @@ MM_MarkingSchemeRootClearer::scanUnfinalizedObjectsComplete(MM_EnvironmentBase *
 		/* ensure that all unfinalized processing is complete before we start marking additional objects */
 		env->_currentTask->synchronizeGCThreads(env, UNIQUE_ID);
 		/* TODO: consider relaxing completeMarking into completeScan (which will skip over 'complete class marking' step).
-		 * This is to avoid potentianlly unnecessery sync point in class marking step. The class marking step that we do after
+		 * This is to avoid potentially unnecessary sync point in class marking step. The class marking step that we do after
 		 * phantom processing might be sufficient.
 		 */
 		_markingScheme->completeMarking(env);

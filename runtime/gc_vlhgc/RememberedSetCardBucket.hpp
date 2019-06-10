@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if !defined(REMEMBEREDSETCARDBUCKET_HPP)
@@ -32,13 +32,13 @@
 #include "EnvironmentVLHGC.hpp"
 #include "GCExtensions.hpp"
 
-#if defined (J9VM_GC_COMPRESSED_POINTERS)
+#if defined (OMR_GC_COMPRESSED_POINTERS)
 /* Compresses a heap address by shifting right by CARD_SIZE_SHIFT */
 typedef U_32 MM_RememberedSetCard; 
 #else
 /* Just a heap address */
 typedef UDATA MM_RememberedSetCard;
-#endif /* J9VM_GC_COMPRESSED_POINTERS */
+#endif /* OMR_GC_COMPRESSED_POINTERS */
 
 class MM_RememberedSetCardList;
 
@@ -107,7 +107,7 @@ public:
 	/**
 	 * If current buffer is full or bucket is empty,
 	 * add a card to a new buffer.
-	 * Handle various misc scenarios when unable to alocate new buffer
+	 * Handle various misc scenarios when unable to allocate new buffer
 	 * or list is already overflowed.
 	 * @param card  card to be remembered
 	 */
@@ -133,7 +133,7 @@ public:
 
 	/**
 	 * Set a list as being overflowed.
-	 * This releases all the buffers from the curent bucket (but not from other buckets of the list).
+	 * This releases all the buffers from the current bucket (but not from other buckets of the list).
 	 * The list may be anyone (the owner of the current bucket or any other).
 	 * @param listToOverflow RSCL to overflow
 	 */
@@ -146,7 +146,7 @@ public:
 	void compact(MM_EnvironmentVLHGC *env);
 
 	/**
-	 * Is bucket Empty (it is sufficent to check if the current buffer is empty)
+	 * Is bucket Empty (it is sufficient to check if the current buffer is empty)
 	 * return true if empty
 	 */
 	bool isEmpty(MM_EnvironmentVLHGC *env) {

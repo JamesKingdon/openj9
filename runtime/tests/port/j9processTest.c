@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -290,7 +290,7 @@ setTestProcessGroupSignalHandler(struct J9PortLibrary *portLibrary)
  		rc = 0;
  	}
 #else /* defined(WIN32) */
- 	U_32 setAsyncRC = J9PORT_SIG_ERROR;
+ 	I_32 setAsyncRC = J9PORT_SIG_ERROR;
 	setAsyncRC = j9sig_set_async_signal_handler(processGroupSignalHandler, NULL, J9PORT_SIG_FLAG_SIGQUIT);
 	if (J9PORT_SIG_ERROR == setAsyncRC) {
 		rc = -1;
@@ -887,7 +887,7 @@ j9process_fireAndForgetImpl(struct J9PortLibrary *portLibrary, const char *testN
  * Verify port library process management.
  * 
  * Fire & Forget:
- * - Execute the differens scenarios of this test (processSuccess, processCrash, etc.)
+ * - Execute the different scenarios of this test (processSuccess, processCrash, etc.)
  * 
  * @param[in] portLibrary The port library under test
  * 
@@ -911,7 +911,7 @@ j9process_fireAndForget(struct J9PortLibrary *portLibrary)
 	}
 	/* Don't delete executable name (command[0]); system-owned. */
 
-/* TODO fix this test, result incorect where executing this test case after the dump tests */
+/* TODO fix this test, result incorrect where executing this test case after the dump tests */
 #if 0	
 	command[0] = "fake_pltest";
 	command[1] = "";
@@ -973,7 +973,7 @@ j9process_fireAndWaitForImpl(struct J9PortLibrary *portLibrary, const char *test
  * Verify port library process management.
  * 
  * Fire and WaitFor - Runtime.exec (Blocking)
- * - Execute the differens scenarios of this test (processSuccess, processCrash, etc.)
+ * - Execute the different scenarios of this test (processSuccess, processCrash, etc.)
  * 
  * @param[in] portLibrary The port library under test
  * 
@@ -1063,7 +1063,7 @@ j9process_fireAndCheckIfCompleteImpl(struct J9PortLibrary *portLibrary, const ch
  * Verify port library process management.
  * 
  * Fire and Check if Complete - Runtime.exe (Non-Blocking)
- * - Execute the differens scenarios of this test (processSuccess, processCrash, etc.)
+ * - Execute the different scenarios of this test (processSuccess, processCrash, etc.)
  * 
  * @param[in] portLibrary The port library under test
  * 
@@ -1158,7 +1158,7 @@ j9process_fireAndTerminateImpl(struct J9PortLibrary *portLibrary, const char *te
  * Verify port library process management.
  * 
  * Fire and Terminate - Hang
- * - Execute the differens scenarios of this test (processSuccess, processCrash, etc.)
+ * - Execute the different scenarios of this test (processSuccess, processCrash, etc.)
  * 
  * @param[in] portLibrary The port library under test
  * 
@@ -1444,7 +1444,7 @@ j9process_envTest(struct J9PortLibrary *portLibrary)
  * Verify port library process management.
  *
  * Fire, Write and Read
- * - Execute the differens scenarios of this test (processSuccess, processCrash, etc.)
+ * - Execute the different scenarios of this test (processSuccess, processCrash, etc.)
  *
  * @param[in] portLibrary The port library under test
  *
@@ -1715,7 +1715,7 @@ j9process_testCloseScenarioImpl(struct J9PortLibrary *portLibrary, const char *t
  * Verify port library process management.
  *
  * Fire & Forget:
- * - Execute the differens scenarios of this test (processSuccess, processCrash, etc.)
+ * - Execute the different scenarios of this test (processSuccess, processCrash, etc.)
  *
  * @param[in] portLibrary The port library under test
  *
@@ -2230,12 +2230,14 @@ j9process_runTests(struct J9PortLibrary *portLibrary, char *argv0, char* j9proce
 		rc |= j9process_testRedirect(portLibrary);
 #if !defined(WIN32)
 		rc |= j9process_testCreateInNewProcessGroupUnix(portLibrary);
-#if !(defined(J9ZOS390) || defined(LINUX))
-		/* z/OS: writes extra characters to the console in the build environment when a process catches a SIGQUIT
-		 * Linux: in certain linux distros the /bin/sh command receives the SIGQUIT, see PR 56109 
+#if !(defined(J9ZOS390) || defined(LINUX) || defined(OSX))
+		/* z/OS: writes extra characters to the console in the build environment when a process catches a SIGQUIT.
+		 * Linux: in certain Linux distros the /bin/sh command receives a SIGQUIT signal, see PR 56109.
+		 * OSX: make, tee and other test framework processes receive a SIGQUIT signal, which causes the test
+		 *      framework to crash. See https://github.com/eclipse/openj9/issues/4520.
 		 */
 		rc |= j9process_testNewProcessGroupByTriggeringSignal(portLibrary);
-#endif /* !defined(J9ZOS390) */
+#endif /* !(defined(J9ZOS390) || defined(LINUX) || defined(OSX)) */
 #endif	/* !defined(WIN32) */
 		rc |= j9process_envTest(portLibrary);
 	}

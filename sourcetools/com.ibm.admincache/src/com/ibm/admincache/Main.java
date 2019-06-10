@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2017 IBM Corp. and others
+ * Copyright (c) 2006, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 
@@ -41,7 +41,7 @@
  * Modified on November 15th, 2005 by Marius Lut
  * - add mandatory option -outPath
  * - delete the old logic dealing with backup orig files
- * - add logic that accomodates relative/canonical full path file name
+ * - add logic that accommodates relative/canonical full path file name
  *   passed to jxeinajar
  * - fix the searchPath option problems
  * - if the input file is .zip file make the output file extension .zip too

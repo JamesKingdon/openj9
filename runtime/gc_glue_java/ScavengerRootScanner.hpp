@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef SCAVENGERROOTSCANNER_HPP_
@@ -38,6 +38,7 @@
 #include "ReferenceObjectBuffer.hpp"
 #include "RootScanner.hpp"
 #include "Scavenger.hpp"
+#include "ScavengerDelegate.hpp"
 #include "ScavengerRootClearer.hpp"
 #include "ScavengerThreadRescanner.hpp"
 #include "StackSlotValidator.hpp"
@@ -56,6 +57,7 @@ class MM_ScavengerRootScanner : public MM_RootScanner
 private:
 	MM_Scavenger *_scavenger;
 	MM_ScavengerRootClearer _rootClearer;
+	MM_ScavengerDelegate *_scavengerDelegate;
 
 protected:
 
@@ -66,7 +68,7 @@ public:
 	 */
 private:
 #if defined(J9VM_GC_FINALIZATION)
-	void startUnfinalizedProcessing(MM_EnvironmentStandard *env);
+	void startUnfinalizedProcessing(MM_EnvironmentBase *env);
 	void scavengeFinalizableObjects(MM_EnvironmentStandard *env);
 #endif /* defined(J9VM_GC_FINALIZATION) */
 
@@ -77,9 +79,18 @@ public:
 		: MM_RootScanner(env)
 		, _scavenger(scavenger)
 		, _rootClearer(env, scavenger)
+		, _scavengerDelegate(scavenger->getDelegate())
 	{
 		_typeId = __FUNCTION__;
 		setNurseryReferencesOnly(true);
+
+		/*
+		 * In the case of Concurrent Scavenger JNI Weak Global References required to be scanned as a hard root.
+		 * The reason for this VM uses elements of table without calling a Read Barrier,
+		 * so JNI Weak Global References table should be treated as a hard root until VM code is fixed
+		 * and Read Barrier is called for each single object.
+		 */
+		_jniWeakGlobalReferencesTableAsRoot = _extensions->isConcurrentScavengerEnabled();
 	};
 
 	/*
@@ -138,7 +149,7 @@ public:
 	{
 		reportScanningStarted(RootScannerEntity_FinalizableObjects);
 		/* synchronization can be expensive so skip it if there's no work to do */
-		if (_clij->scavenger_getShouldScavengeFinalizableObjects()) {
+		if (_scavengerDelegate->getShouldScavengeFinalizableObjects()) {
 			if (env->_currentTask->synchronizeGCThreadsAndReleaseSingleThread(env, UNIQUE_ID)) {
 				scavengeFinalizableObjects(MM_EnvironmentStandard::getEnvironment(env));
 				env->_currentTask->releaseSynchronizedGCThreads(env);
@@ -167,13 +178,36 @@ public:
 		Assert_GC_true_with_message(env, env->getGCEnvironment()->_referenceObjectBuffer->isEmpty(), "Non-empty reference buffer in MM_EnvironmentBase* env=%p\n", env);
 	}
 
+	virtual void
+	scanJNIWeakGlobalReferences(MM_EnvironmentBase *env)
+	{
+#if defined(OMR_GC_CONCURRENT_SCAVENGER)
+		/*
+		 * Currently Concurrent Scavenger replaces STW Scavenger, so this check is not necessary
+		 * (Concurrent Scavenger is always in progress)
+		 * However Concurrent Scavenger runs might be interlaced with STW Scavenger time to time
+		 * (for example for reducing amount of floating garbage)
+		 */
+		if (_scavenger->isConcurrentInProgress())
+#endif /* defined(OMR_GC_CONCURRENT_SCAVENGER) */
+		{
+			MM_RootScanner::scanJNIWeakGlobalReferences(env);
+		}
+	}
+	
+	virtual void scanRoots(MM_EnvironmentBase *env) 
+	{
+		MM_RootScanner::scanRoots(env);
+		
+		startUnfinalizedProcessing(env);
+	}
+
 	void
 	scavengeRememberedSet(MM_EnvironmentStandard *env)
 	{
 		reportScanningStarted(RootScannerEntity_ScavengeRememberedSet);
 		_scavenger->scavengeRememberedSet(env);
 		reportScanningEnded(RootScannerEntity_ScavengeRememberedSet);
-		startUnfinalizedProcessing(env);
 	}
 
 	void

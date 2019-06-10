@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
@@ -208,7 +208,7 @@ openNativeLibrary(J9JavaVM* vm, J9ClassLoader * classLoader, const char * libNam
 		char classPathSeparator = (char) j9sysinfo_get_classpathSeparator();
 		J9VMSystemProperty *classpathSeparatorProperty = NULL;
 
-		/* update with value overriden by proxy if appropriate */
+		/* update with value overridden by proxy if appropriate */
 		getSystemProperty(vm, "path.separator", &classpathSeparatorProperty);
 		if (classpathSeparatorProperty != NULL) {
 			classPathSeparator = classpathSeparatorProperty->value[0];
@@ -278,7 +278,7 @@ openNativeLibrary(J9JavaVM* vm, J9ClassLoader * classLoader, const char * libNam
 #endif
 
 	/* No library path specified, just add the extension and try that */
-	/* temp fix.  Remove the second openFunc call once apps like javah have bootLibrayPaths */
+	/* temp fix.  Remove the second openFunc call once apps like javah have bootLibraryPaths */
 	result = openFunction(userData, classLoader, libName, (char *)libName, libraryPtr, errorBuffer, bufferLength, lazy);
 	if(result == J9NATIVELIB_LOAD_ERR_NOT_FOUND) {
 		result = openFunction(userData, classLoader, libName, (char *)libName, libraryPtr, errorBuffer, bufferLength, lazy | J9PORT_SLOPEN_DECORATE);
@@ -579,16 +579,16 @@ classLoaderRegisterLibrary(void *voidVMThread, J9ClassLoader *classLoader, const
 	}
 	newNativeLibrary->linkMode = J9NATIVELIB_LINK_MODE_UNINITIALIZED;
 
-	/* Try linking statically for J2SE versions 1.8 and above. */
-	if ((J2SE_VERSION(javaVM) >= J2SE_18) && (J9NATIVELIB_LOAD_OK == rc) && !loadWasIntercepted) {
+	/* Try linking statically */
+	if ((J9NATIVELIB_LOAD_OK == rc) && !loadWasIntercepted) {
 		/* Open a handle to the executable that launched this jvm instance.
 		 * Certain platforms require executable name for opening a handle to it. If this cannot
 		 * be found, fall back to plain old dynamic linking.
 		 */
 		if (0 == j9sysinfo_get_executable_name(NULL, &executableName)) {
 			slOpenResult = j9sl_open_shared_library(executableName,
-													&newNativeLibrary->handle,
-													(flags | J9PORT_SLOPEN_OPEN_EXECUTABLE));
+						&newNativeLibrary->handle,
+						(flags | J9PORT_SLOPEN_OPEN_EXECUTABLE));
 			if (J9PORT_SL_FOUND == slOpenResult) {
 				nameLength = J9STATIC_ONLOAD_LENGTH + strlen(logicalName) + 1;
 				onloadRtnName = j9mem_allocate_memory(nameLength, J9MEM_CATEGORY_CLASSES);
@@ -607,11 +607,17 @@ classLoaderRegisterLibrary(void *voidVMThread, J9ClassLoader *classLoader, const
 				 */
 				j9str_printf(PORTLIB, onloadRtnName, nameLength, "%s%s", J9STATIC_ONLOAD, logicalName);
 				RELEASE_CLASS_LOADER_BLOCKS_MUTEX(javaVM);
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+				exitVMToJNI(vmThread);
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 				jniVersion = (*newNativeLibrary->send_lifecycle_event)(vmThread,
 																	   newNativeLibrary,
 																	   onloadRtnName,
 																	   (UDATA)-1);
-				releaseVMAccessInJNI(vmThread);
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+				enterVMFromJNI(vmThread);
+				releaseVMAccess(vmThread);
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 
 				/* If JNI version returned is 1.8 (or above), JNI_OnLoad_L /was/ found and 
 				 * invoked, successfully. 
@@ -694,11 +700,18 @@ classLoaderRegisterLibrary(void *voidVMThread, J9ClassLoader *classLoader, const
 		 * already been linked statically (as JNI_OnLoad_L would have been invoked by now). 
 		 */
 		if (J9NATIVELIB_LOAD_OK == rc) {
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+			exitVMToJNI(vmThread);
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 			jniVersion = (*newNativeLibrary->send_lifecycle_event)(vmThread,
 																   newNativeLibrary,
 																   J9DYNAMIC_ONLOAD,
 																   JNI_VERSION_1_1);
-			releaseVMAccessInJNI(vmThread);
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+			enterVMFromJNI(vmThread);
+			releaseVMAccess(vmThread);
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
+
 			if ((FALSE == jniVersionIsValid(jniVersion)) || (NULL != vmThread->currentException)) {
 				char msgBuffer[MAXIMUM_MESSAGE_LENGTH];
 

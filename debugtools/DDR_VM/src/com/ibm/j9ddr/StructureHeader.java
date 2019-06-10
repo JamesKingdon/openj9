@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2013, 2015 IBM Corp. and others
+ * Copyright (c) 2013, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr;
 
@@ -218,9 +218,9 @@ public class StructureHeader {
 	public int[] getBlobVersionArray() {
 		int[] data = new int[4];
 		data[0] = blobVersion & 0xFF;
-		data[1] = (blobVersion & 0xFF00) >> 8;
-		data[2] = (blobVersion & 0xFF0000) >> 16;
-		data[3] = (blobVersion & 0xFF0000) >> 24;
+		data[1] = (blobVersion >> 8) & 0xFF;
+		data[2] = (blobVersion >> 16) & 0xFF;
+		data[3] = (blobVersion >> 24) & 0xFF;
 		return data;
 	}
 

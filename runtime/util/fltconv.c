@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #include <stdio.h>
 #include <math.h>
@@ -277,8 +277,11 @@ jfloat
 helperCConvertIntegerToFloat(I_32 src)
 {
 	jfloat tmpDst;
-	
-#if defined USE_NATIVE_CAST
+
+#if defined(USE_NATIVE_CAST) || defined(ARM)
+	/* Enabling native cast for ARM avoids a compiler bug in
+	 * gcc-linaro-4.9.4-2017.01
+	 */
 	tmpDst = (jfloat)src;
 #else
 	{
@@ -424,6 +427,11 @@ fltconv_indexLeadingOne32(U_32 u32val)
 		leading = 7;
 		mask = 0x00000080;
 	}
+	/* WARNING This loop will busy hang when compiled with
+	 * gcc-linaro-4.9.4-2017.01 for armhf if the match should happen on
+	 * the first iteration. The loop exit condition is moved to the end of
+	 * the loop and doesn't execute before the first shift of mask.
+	 */
 	while((mask & u32val) == 0) {
 		mask >>= 1;
 		leading--;
@@ -433,5 +441,3 @@ fltconv_indexLeadingOne32(U_32 u32val)
 
 
 #endif /* J9VM_INTERP_FLOAT_SUPPORT */ /* End File Level Build Flags */
-
-

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2014, 2014 IBM Corp. and others
+ * Copyright (c) 2014, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,13 +17,12 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.corereaders.elf.unwind;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.ByteBuffer;
 
 import javax.imageio.stream.ImageInputStream;
 
@@ -93,9 +92,9 @@ public class FDE {
 //			System.err.printf("Reading %d bytes of initial instructions\n", callFrameInstructions.length);
 			cfiStream.read(callFrameInstructions, 0, callFrameInstructions.length);
 //			System.err.printf("Call frame instructions: %s\n", byteArrayToHexString(callFrameInstructions));
-			// Advance to finish on a word boundry.
+			// Advance to finish on a word boundary.
 			int remainder = (int)(cfiStream.getStreamPosition() % this.unwind.process.bytesPerPointer());
-//			System.err.printf("Skipping %d bytes to end on word boundry\n", remainder);
+//			System.err.printf("Skipping %d bytes to end on word boundary\n", remainder);
 			cfiStream.read(new byte[remainder], 0, remainder); // TODO shouldn't need to skip but printing 0 nicely
 			// confirms we ended up in the right place.
 		}

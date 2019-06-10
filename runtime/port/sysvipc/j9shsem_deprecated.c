@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -1077,25 +1077,35 @@ openSemaphore(struct J9PortLibrary *portLibrary, intptr_t fd, char *baseFile, j9
 				goto failDontUnlink;
 			}
 		} else {
-#if defined (__GNUC__) || defined (AIXPPC) || defined(J9ZTPF)
-#if defined (__GNUC__) && !defined(J9ZTPF)
+#if defined(__GNUC__) || defined(AIXPPC) || defined(J9ZTPF)
+#if defined(OSX)
+			/*Use _key for OSX*/
+			if (buf.sem_perm._key != controlinfo->ftok_key)
+#elif defined(AIXPPC)
+			/*Use .key for AIXPPC*/
+			if (buf.sem_perm.key != controlinfo->ftok_key)
+#elif defined(J9ZTPF)
+			/*Use .key for z/TPF */
+			if (buf.key != controlinfo->ftok_key)
+#elif defined(__GNUC__)
 			/*Use .__key for __GNUC__*/
 			if (buf.sem_perm.__key != controlinfo->ftok_key)
 #endif
-#if defined (AIXPPC)
-			/*Use .key for AIXPPC*/
-			if (buf.sem_perm.key != controlinfo->ftok_key)
-#endif
-#if defined(J9ZTPF)
-            /*Use .key for z/TPF */
-			if (buf.key != controlinfo->ftok_key)
-#endif
 			{
+#if defined (J9OS_I5)
+ 				/* The statement 'buf.sem_perm.key != controlinfo->common.ftok_key' will never fail on IBM i platform,
+ 				 * as the definition of structure ipc_perm is different:
+ 				 *  'key' field doesn't exists in structure ipc_perm on IBM i and the value of 'key' always zero.
+ 				 *  Simply log the error here, and then ignore it to avoid more incorrect messages
+ 				 */
+ 				Trc_PRT_shsem_j9shsem_opensemaphore_Msg("The <key,id> pair in our control file is not valid, but we ignore it here to avoid more incorrect messages.");
+#else /* defined (J9OS_I5) */
 				Trc_PRT_shsem_j9shsem_opensemaphore_Msg("The <key,id> pair in our control file is no longer valid.");
 				/* Clear any stale portlibrary error code */
 				clearPortableError(portLibrary);
 				rc = J9PORT_ERROR_SHSEM_OPFAILED_SEM_KEY_MISMATCH;
 				goto fail;
+#endif /* defined (J9OS_I5) */
 			}
 #endif
 #if defined (J9ZOS390)

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2016 IBM Corp. and others
+ * Copyright (c) 2009, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9port.h"
@@ -91,6 +91,9 @@ Java_com_ibm_tools_attach_target_IPC_getTempDirImpl(JNIEnv *env, jclass clazz)
 			} else {
 				conversionBuffer = NULL; /* string is bogus */
 			}
+		} else if (conversionResult < 0) {
+			Trc_JCL_stringConversionFailed(env, charResult, conversionResult);
+			conversionBuffer = NULL; /* string conversion failed */
 		}
 		if (NULL != conversionBuffer) {
 			result =  (*env)->NewStringUTF(env, (char*)conversionBuffer);
@@ -117,7 +120,7 @@ Java_com_ibm_tools_attach_target_IPC_chmod(JNIEnv *env, jclass clazz, jstring pa
 {
 	PORT_ACCESS_FROM_VMC( ((J9VMThread *) env) );
 
-	jint result = JNI_OK;
+	jint result = JNI_ERR;
 	const char *pathUTF;
 
 	pathUTF = (*env)->GetStringUTFChars(env, path, NULL);
@@ -127,8 +130,6 @@ Java_com_ibm_tools_attach_target_IPC_chmod(JNIEnv *env, jclass clazz, jstring pa
 			Trc_JCL_attach_chmod(env, pathUTF, mode, result);
 		}
 		(*env)->ReleaseStringUTFChars(env, path, pathUTF);
-	} else {
-		result = JNI_ERR;
 	}
 	return result;
 }
@@ -286,7 +287,7 @@ Java_com_ibm_tools_attach_target_IPC_createFileWithPermissionsImpl(JNIEnv *env, 
 	const char *pathUTF = (*env)->GetStringUTFChars(env, path, NULL);
 
 	if (NULL != pathUTF) {
-		IDATA fd = j9file_open(pathUTF, EsOpenCreate | EsOpenWrite | EsOpenTruncate, mode);
+		IDATA fd = j9file_open(pathUTF, EsOpenCreateNew | EsOpenWrite | EsOpenTruncate , mode);
 		if (-1 == fd) {
 			status = JNI_ERR;
 		} else {
@@ -359,7 +360,7 @@ Java_com_ibm_tools_attach_target_IPC_setupSemaphore(JNIEnv *env, jclass clazz, j
  */
 
 static jint JNICALL
-openSemaphore(JNIEnv *env, jclass clazz, jstring ctrlDirName, jstring semaName, struct j9shsem_handle** semaphore)
+openSemaphore(JNIEnv *env, jclass clazz, jstring ctrlDirName, jstring semaName, BOOLEAN global, struct j9shsem_handle** semaphore)
 {
 
 	PORT_ACCESS_FROM_VMC((J9VMThread *) env );
@@ -377,6 +378,10 @@ openSemaphore(JNIEnv *env, jclass clazz, jstring ctrlDirName, jstring semaName, 
 		openParams.controlFileDir = ctrlDirNameUTF;
 		openParams.proj_id = 0xa1;
 		openParams.deleteBasefile = 0;
+		if (global) {
+			openParams.global = 1;
+		}
+
 		status = (jint) j9shsem_open(semaphore, &openParams);
 		Trc_JCL_attach_openSemaphore(env, semaNameUTF, ctrlDirNameUTF, status);
 	} else {
@@ -405,7 +410,7 @@ Java_com_ibm_tools_attach_target_IPC_openSemaphore(JNIEnv *env, jclass clazz, js
 	J9JavaVM* javaVM = ((J9VMThread*) env)->javaVM;
 
 	Trc_JCL_attach_openSemaphoreEntry(env);
-	rc = openSemaphore(env, clazz, ctrlDirName, semaName, &(javaVM->attachContext.semaphore));
+	rc = openSemaphore(env, clazz, ctrlDirName, semaName, TRUE, &(javaVM->attachContext.semaphore));
 
 	if ((J9PORT_INFO_SHSEM_OPENED == rc) || (J9PORT_INFO_SHSEM_OPENED_STALE == rc) || (J9PORT_INFO_SHSEM_CREATED == rc)) {
 		rc = JNI_OK;
@@ -419,10 +424,11 @@ Java_com_ibm_tools_attach_target_IPC_openSemaphore(JNIEnv *env, jclass clazz, js
  * @param ctrlDirName path to directory holding the semaphore files
  * @param semaName name of the notification semaphore for this process
  * @param numberOfPosts the number of times to increment the semaphore
+ * @param global use the global semaphore namespace (Windows only)
  * @return JNI_OK on success, j9shsem_open or close status otherwise
  */
 jint JNICALL
-Java_com_ibm_tools_attach_target_IPC_notifyVm(JNIEnv *env, jclass clazz, jstring ctrlDirName, jstring semaName, jint numberOfPosts)
+Java_com_ibm_tools_attach_target_IPC_notifyVm(JNIEnv *env, jclass clazz, jstring ctrlDirName, jstring semaName, jint numberOfPosts, jboolean global)
 {
 
 	PORT_ACCESS_FROM_VMC( ((J9VMThread *) env) );
@@ -431,7 +437,7 @@ Java_com_ibm_tools_attach_target_IPC_notifyVm(JNIEnv *env, jclass clazz, jstring
 	struct j9shsem_handle* semaphore;
 
 	Trc_JCL_attach_notifyVmEntry(env);
-	status = openSemaphore(env, clazz, ctrlDirName, semaName, &semaphore);
+	status = openSemaphore(env, clazz, ctrlDirName, semaName, global, &semaphore);
 	if ((J9PORT_INFO_SHSEM_OPENED == status) || (J9PORT_INFO_SHSEM_OPENED_STALE == status)) {
 		while (numberOfPosts > 0) {
 			status = (jint) j9shsem_post(semaphore, 0, J9PORT_SHSEM_MODE_DEFAULT);
@@ -455,7 +461,7 @@ Java_com_ibm_tools_attach_target_IPC_notifyVm(JNIEnv *env, jclass clazz, jstring
  * @return JNI_OK on success, j9shsem_open or close status otherwise
  */
 jint JNICALL
-Java_com_ibm_tools_attach_target_IPC_cancelNotify(JNIEnv *env, jclass clazz, jstring ctrlDirName, jstring semaName, jint numberOfDecrements)
+Java_com_ibm_tools_attach_target_IPC_cancelNotify(JNIEnv *env, jclass clazz, jstring ctrlDirName, jstring semaName, jint numberOfDecrements, jboolean global)
 {
 
 	PORT_ACCESS_FROM_VMC( ((J9VMThread *) env) );
@@ -464,7 +470,7 @@ Java_com_ibm_tools_attach_target_IPC_cancelNotify(JNIEnv *env, jclass clazz, jst
 	struct j9shsem_handle* semaphore;
 
 	Trc_JCL_attach_cancelNotifyVmEntry(env);
-	status = openSemaphore(env, clazz, ctrlDirName, semaName, &semaphore);
+	status = openSemaphore(env, clazz, ctrlDirName, semaName, global, &semaphore);
 	if ((J9PORT_INFO_SHSEM_OPENED == status) || (J9PORT_INFO_SHSEM_OPENED_STALE == status)) {
 		while (numberOfDecrements > 0) {
 			status = (jint) j9shsem_wait(semaphore, 0, J9PORT_SHSEM_MODE_NOWAIT);
@@ -570,19 +576,17 @@ Java_com_ibm_tools_attach_target_IPC_getProcessId(JNIEnv *env, jclass clazz)
 }
 
 /**
+ * Indicate if a specific process exists. Non-positive process IDs and processes owned by
+ * other users return an error.
  * @param pid process ID
  * @return positive value if the process exists, 0 if the process does not exist, otherwise negative error code
  */
 jint JNICALL
 Java_com_ibm_tools_attach_target_IPC_processExistsImpl(JNIEnv *env, jclass clazz, jlong pid)
 {
-
 	PORT_ACCESS_FROM_VMC( ((J9VMThread *) env) );
-
-	jint rc;
-
 	/* PID value was upcast from a UDATA to jlong. */
-	rc =  (jint) j9sysinfo_process_exists((UDATA) pid);
+	jint rc = (pid > 0) ? (jint) j9sysinfo_process_exists((UDATA) pid) : -1;
 	Trc_JCL_attach_processExists(env, pid, rc);
 	return rc;
 }

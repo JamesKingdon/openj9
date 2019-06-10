@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /* #define J9VM_DBG */
@@ -117,11 +117,11 @@ allocateVMThread(J9JavaVM * vm, omrthread_t osThread, UDATA privateFlags, void *
 		/* Create the vmThread */
 		void *startOfMemoryBlock = NULL;
 		UDATA vmThreadAllocationSize = J9VMTHREAD_ALIGNMENT + ROUND_TO(sizeof(UDATA), vm->vmThreadSize);
-#if defined(J9VM_INTERP_SMALL_MONITOR_SLOT)
-		startOfMemoryBlock = (void *)j9mem_allocate_memory32(vmThreadAllocationSize, OMRMEM_CATEGORY_THREADS);
-#else
-		startOfMemoryBlock = (void *)j9mem_allocate_memory(vmThreadAllocationSize, OMRMEM_CATEGORY_THREADS);
-#endif
+		if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm)) {
+			startOfMemoryBlock = (void *)j9mem_allocate_memory32(vmThreadAllocationSize, OMRMEM_CATEGORY_THREADS);
+		} else {
+			startOfMemoryBlock = (void *)j9mem_allocate_memory(vmThreadAllocationSize, OMRMEM_CATEGORY_THREADS);
+		}
 		if (NULL == startOfMemoryBlock) {
 			goto fail;
 		}
@@ -177,6 +177,10 @@ allocateVMThread(J9JavaVM * vm, omrthread_t osThread, UDATA privateFlags, void *
 		newThread->segregatedAllocationCache = (J9VMGCSegregatedAllocationCacheEntry *)(((UDATA)newThread) + J9_VMTHREAD_SEGREGATED_ALLOCATION_CACHE_OFFSET);
 	}
 
+#if defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS)
+	newThread->compressObjectReferences = J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm);
+#endif /* defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS) */
+
 #ifdef J9VM_OPT_JAVA_OFFLOAD_SUPPORT
 	newThread->invokedCalldisp = FALSE;
 #endif
@@ -210,6 +214,17 @@ allocateVMThread(J9JavaVM * vm, omrthread_t osThread, UDATA privateFlags, void *
 	newThread->mgmtWaitedStart = JNI_FALSE;
 #endif
 
+#ifdef OMR_GC_CONCURRENT_SCAVENGER
+	/* Initialize fields used by Concurrent Scavenger */
+	newThread->readBarrierRangeCheckBase = UDATA_MAX;
+	newThread->readBarrierRangeCheckTop = 0;
+#ifdef OMR_GC_COMPRESSED_POINTERS
+	/* No need for a runtime check here - it would just waste cycles */
+	newThread->readBarrierRangeCheckBaseCompressed = U_32_MAX;
+	newThread->readBarrierRangeCheckTopCompressed = 0;
+#endif /* OMR_GC_COMPRESSED_POINTERS */
+#endif /* OMR_GC_CONCURRENT_SCAVENGER */
+
 	/* Attach the thread to OMR */
 	if (JNI_OK != attachVMThreadToOMR(vm, newThread, osThread)) {
 		goto fail;
@@ -239,6 +254,10 @@ allocateVMThread(J9JavaVM * vm, omrthread_t osThread, UDATA privateFlags, void *
 	/* If an exclusive access request is in progress, mark this thread */
 
 	omrthread_monitor_enter(vm->exclusiveAccessMutex);
+	/* The new thread does not have VM access, so there's no need to set any not_counted
+	 * bits, as the thread will block attempting to acquire VM access, and will not release
+	 * VM access for the duration of the exclusive.
+	 */
 	if (J9_XACCESS_NONE != vm->exclusiveAccessState) {
 		setHaltFlag(newThread, J9_PUBLIC_FLAGS_HALT_THREAD_EXCLUSIVE);
 	}
@@ -365,14 +384,14 @@ void threadCleanup(J9VMThread * vmThread, UDATA forkedByVM)
 {
 	J9JavaVM * vm = vmThread->javaVM;
 
+	enterVMFromJNI(vmThread);
 	/* Inform ThreadGroup about any uncaught exception.  Tiny VMs do not have ThreadGroup, so they just dump the exception. */
 	if (vmThread->currentException) {
-		enterVMFromJNI(vmThread);
-		handleUncaughtException(vmThread, 0, 0, 0, 0);
+		handleUncaughtException(vmThread);
 		/* Safe to call this whether handleUncaughtException clears the exception or not */
 		internalExceptionDescribe(vmThread);
-		releaseVMAccess(vmThread);
 	}
+	releaseVMAccess(vmThread);
 	
 	/* Mark this thread as dead */
 	setEventFlag(vmThread, J9_PUBLIC_FLAGS_STOPPED);
@@ -390,7 +409,7 @@ void threadCleanup(J9VMThread * vmThread, UDATA forkedByVM)
 	omrthread_monitor_exit(vmThread->publicFlagsMutex);
 #endif
 
-	/* Increment zombie thread counter - indicates threads which have notified java of their death, but have not deallocated their vmThread and exitted their thread proc */
+	/* Increment zombie thread counter - indicates threads which have notified java of their death, but have not deallocated their vmThread and exited their thread proc */
 
 	omrthread_monitor_enter(vm->vmThreadListMutex);
 	++(vm->zombieThreadCount);
@@ -398,8 +417,8 @@ void threadCleanup(J9VMThread * vmThread, UDATA forkedByVM)
 
 	/* Do the java dance to indicate thread death */
 
-	enterVMFromJNI(vmThread);
-	cleanUpAttachedThread(vmThread, 0, 0, 0, 0);
+	acquireVMAccess(vmThread);
+	cleanUpAttachedThread(vmThread);
 	releaseVMAccess(vmThread);
 	
 #if defined(OMR_GC_CONCURRENT_SCAVENGER) && defined(J9VM_ARCH_S390)
@@ -544,7 +563,17 @@ threadParseArguments(J9JavaVM *vm, char *optArg)
 #endif /* defined(OMR_THR_YIELD_ALG) */
 	
 #if defined(LINUX)
-	/* if Completely Fair Scheduler is detected, and sched_compat_yield=0, default to -Xthr:minimizeUserCPU */
+	/* Check the sched_compat_yield setting for the versions of the Completely Fair Scheduler (CFS) which
+	 * have broken the thread_yield behavior. If running in CFS and sched_compat_yield=0, the CPU yielding
+	 * behavior is moderated to act as though CFS is not enabled by increasing the yield count to 270 in
+	 * the three-tier spinlock loops.
+	 *
+	 * sched_compat_yield=1 uses the aggressive CPU yielding behavior of some versions of the O(1)
+	 * scheduler and uses the default yield counts (= 45).
+	 *
+	 * Newer Linux versions no longer support the sched_compat_yield flag since the thread_yield behavior
+	 * is restored to something stable.
+	 */
 	if ('0' == j9util_sched_compat_yield_value(vm)) {
 #if defined(OMR_THR_YIELD_ALG)
 		**(UDATA**)omrthread_global("yieldAlgorithm") = J9THREAD_LIB_YIELD_ALGORITHM_INCREASING_USLEEP;
@@ -597,11 +626,21 @@ threadParseArguments(J9JavaVM *vm, char *optArg)
 #if defined(OMR_THR_THREE_TIER_LOCKING)
 	omrthread_lib_clear_flags(J9THREAD_LIB_FLAG_SECONDARY_SPIN_OBJECT_MONITORS_ENABLED | J9THREAD_LIB_FLAG_FAST_NOTIFY);
 #if defined(OMR_THR_SPIN_WAKE_CONTROL)
- 	if (cpus < OMRTHREAD_MINIMUM_SPIN_THREADS) {
- 		**(UDATA**)omrthread_global("maxSpinThreads") = OMRTHREAD_MINIMUM_SPIN_THREADS;
- 	} else {
-		**(UDATA**)omrthread_global("maxSpinThreads") = cpus;
- 	}
+	{
+		UDATA maxSpinThreadsLocal = 0;
+		if (cpus < OMRTHREAD_MINIMUM_SPIN_THREADS) {
+			maxSpinThreadsLocal = OMRTHREAD_MINIMUM_SPIN_THREADS;
+		} else if (cpus <= 4) {
+			maxSpinThreadsLocal = cpus;
+		} else if (cpus <= 16) {
+			maxSpinThreadsLocal = cpus/2;
+		} else if (cpus <= 64) {
+			maxSpinThreadsLocal = cpus/3;
+		} else {
+			maxSpinThreadsLocal = cpus/4;
+		}
+		**(UDATA**)omrthread_global("maxSpinThreads") = maxSpinThreadsLocal;
+	}
  	**(UDATA**)omrthread_global("maxWakeThreads") = OMRTHREAD_MINIMUM_WAKE_THREADS;
 #endif /* defined(OMR_THR_SPIN_WAKE_CONTROL) */
 #endif /* defined(OMR_THR_THREE_TIER_LOCKING) */
@@ -751,9 +790,6 @@ threadParseArguments(J9JavaVM *vm, char *optArg)
   		if (try_scan(&scan_start, "maxSpinThreads=")) {
   			UDATA maxSpinThreads = 0;
   			if (scan_udata(&scan_start, &maxSpinThreads)) {
-  				goto _error;
-  			}
-  			if (maxSpinThreads < OMRTHREAD_MINIMUM_SPIN_THREADS) {
   				goto _error;
   			}
   			**(UDATA**)omrthread_global("maxSpinThreads") = maxSpinThreads;
@@ -1353,11 +1389,11 @@ allocateJavaStack(J9JavaVM * vm, UDATA stackSize, J9JavaStack * previousStack)
 	 */
 
 	mallocSize = J9_STACK_OVERFLOW_AND_HEADER_SIZE + (stackSize + sizeof(UDATA)) + vm->thrStaggerMax;
-#if defined (J9VM_GC_COMPRESSED_POINTERS)
-	stack = (J9JavaStack*)j9mem_allocate_memory32(mallocSize, OMRMEM_CATEGORY_THREADS_RUNTIME_STACK);
-#else
-	stack = (J9JavaStack*)j9mem_allocate_memory(mallocSize, OMRMEM_CATEGORY_THREADS_RUNTIME_STACK);
-#endif
+	if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm)) {
+		stack = (J9JavaStack*)j9mem_allocate_memory32(mallocSize, OMRMEM_CATEGORY_THREADS_RUNTIME_STACK);
+	} else {
+		stack = (J9JavaStack*)j9mem_allocate_memory(mallocSize, OMRMEM_CATEGORY_THREADS_RUNTIME_STACK);
+	}
 	if (stack != NULL) {
 		/* for hyperthreading platforms, make sure that stacks are relatively misaligned */
 		UDATA end = ((UDATA) stack) + J9_STACK_OVERFLOW_AND_HEADER_SIZE + stackSize;
@@ -1406,11 +1442,11 @@ freeJavaStack(J9JavaVM * vm, J9JavaStack * stack)
 {
 	PORT_ACCESS_FROM_JAVAVM(vm);
 
-#if defined (J9VM_GC_COMPRESSED_POINTERS)
-	j9mem_free_memory32(stack);			
-#else
-	j9mem_free_memory(stack);
-#endif
+	if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm)) {
+		j9mem_free_memory32(stack);			
+	} else {
+		j9mem_free_memory(stack);
+	}
 }
 
 
@@ -1486,6 +1522,9 @@ void printThreadInfo(J9JavaVM *vm, J9VMThread *self, char *toFile, BOOLEAN allTh
 	char fileName[EsMaxPath];
 	J9PortLibrary* privatePortLibrary = vm->portLibrary;
 	int releaseAccess = 0;
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+	int exitVM = 0;
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 	BOOLEAN exclusiveRequestedLocally = FALSE;
 
 	if ( !vm->mainThread ) {
@@ -1498,6 +1537,12 @@ void printThreadInfo(J9JavaVM *vm, J9VMThread *self, char *toFile, BOOLEAN allTh
 
 	if(J9_XACCESS_NONE == vm->exclusiveAccessState) {
 		if (NULL != self) {
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+			if (self->inNative) {
+				internalEnterVMFromJNI(self);
+				exitVM = 1;
+			} else
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 			if ( 0 == (self->publicFlags & J9_PUBLIC_FLAGS_VM_ACCESS) ) {
 				internalAcquireVMAccess(self);
 				releaseAccess = 1;
@@ -1562,6 +1607,11 @@ void printThreadInfo(J9JavaVM *vm, J9VMThread *self, char *toFile, BOOLEAN allTh
 	if(exclusiveRequestedLocally) {
 		if (self) {
 			releaseExclusiveVMAccess(self);
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+			if ( exitVM ) {
+				internalExitVMToJNI(self);
+			} else
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 			if ( releaseAccess ) {
 				internalReleaseVMAccess(self);
 			}
@@ -1687,95 +1737,6 @@ static void trace_printf(struct J9PortLibrary *portLib, IDATA tracefd, char * fo
 #endif /* J9VM_('RAS_DUMP_AGENTS' 'INTERP_SIG_QUIT_THREAD') */
 
 
-/*
- * The current thread must have vm access when calling this function.
- *
- * Note: While the current thread has another thread halted, it must not do anything to modify
- * it's own stack, including the creation of JNI local refs, pushObjectInSpecialFrame, or the
- * running of any java code.
- */
-
-void
-haltThreadForInspection(J9VMThread * currentThread, J9VMThread * vmThread)
-{
-
-_tryAgain:
-
-	Assert_VM_mustHaveVMAccess(currentThread);
-
-	/* Inspecting the current thread does not require any halting */
-	if (currentThread != vmThread) {
-		omrthread_monitor_enter(vmThread->publicFlagsMutex);
-
-		/* increment the inspection count but don't try to short circuit -- the thread might not actually be halted yet */
-		vmThread->inspectionSuspendCount += 1;
-
-		/* Now halt the thread for inspection */
-		setHaltFlag(vmThread, J9_PUBLIC_FLAGS_HALT_THREAD_INSPECTION);
-
-		/* If the thread doesn't have VM access and it not queued for exclusive we can proceed immediately */
-		if (vmThread->publicFlags & (J9_PUBLIC_FLAGS_VM_ACCESS | J9_PUBLIC_FLAGS_QUEUED_FOR_EXCLUSIVE)) {
-			/* Release VM access while waiting */
-			/* (We must release the other thread's publicFlagsMutex to avoid deadlock here) */
-			omrthread_monitor_exit(vmThread->publicFlagsMutex);
-			internalReleaseVMAccess(currentThread);
-			omrthread_monitor_enter(vmThread->publicFlagsMutex);
-
-			while (vmThread->publicFlags & (J9_PUBLIC_FLAGS_VM_ACCESS | J9_PUBLIC_FLAGS_QUEUED_FOR_EXCLUSIVE)) {
-				omrthread_monitor_wait(vmThread->publicFlagsMutex);
-			}
-			omrthread_monitor_exit(vmThread->publicFlagsMutex);
-
-			/* Thread is halted - reacquire VM access */
-	
-			omrthread_monitor_enter(currentThread->publicFlagsMutex);
-			internalAcquireVMAccessNoMutexWithMask(currentThread, J9_PUBLIC_FLAGS_HALT_THREAD_ANY - J9_PUBLIC_FLAGS_HALT_THREAD_INSPECTION);
-			omrthread_monitor_exit(currentThread->publicFlagsMutex);
-
-			/* If currentThread is being halted, cancel vmThread's pending inspection request */
-			if (J9_PUBLIC_FLAGS_HALT_THREAD_INSPECTION == (currentThread->publicFlags & J9_PUBLIC_FLAGS_HALT_THREAD_INSPECTION)) {
-				resumeThreadForInspection(currentThread, vmThread);
-				goto _tryAgain;
-			}
-
-		} else {
-			/* the thread doesn't have VM access so we don't need to wait for it */
-			omrthread_monitor_exit(vmThread->publicFlagsMutex);
-		}
-	}
-
-	Assert_VM_mustHaveVMAccess(currentThread);
-}
-
-/* Note that VM access is released and reacquired by this call - direct object pointers must not be held across this call */
-
-void
-resumeThreadForInspection(J9VMThread * currentThread, J9VMThread * vmThread)
-{
-	/* Inspecting the current thread does not require any halting */
-
-	if (currentThread != vmThread) {
-		/* Ignore resumes for threads which have not been suspended for inspection */
-
-		omrthread_monitor_enter(vmThread->publicFlagsMutex);
-		if (vmThread->inspectionSuspendCount != 0) {
-			if (--vmThread->inspectionSuspendCount == 0) {
-				clearHaltFlag(vmThread, J9_PUBLIC_FLAGS_HALT_THREAD_INSPECTION);
-			}
-		}
-		omrthread_monitor_exit(vmThread->publicFlagsMutex);
-
-		/* was the current thread running with partial VM access? */
-		/* (It is safe to read the publicFlags without a mutex since we're only really interested if it was set before we acquired VM access) */
-		if (currentThread->publicFlags & J9_PUBLIC_FLAGS_HALT_THREAD_INSPECTION) {
-			/* reacquire full VM access */
-			internalReleaseVMAccess(currentThread);
-			internalAcquireVMAccess(currentThread);
-		}
-	}
-}
-
-
 j9object_t
 createCachedOutOfMemoryError(J9VMThread * currentThread, j9object_t threadObject)
 {
@@ -1831,12 +1792,11 @@ startJavaThread(J9VMThread * currentThread, j9object_t threadObject, UDATA priva
 
 	privateFlags &= ~J9_PRIVATE_FLAGS_NO_EXCEPTION_IN_START_JAVA_THREAD;
 
+#ifndef J9VM_IVE_RAW_BUILD /* J9VM_IVE_RAW_BUILD is not enabled by default */
 	/* Any attempt to start a Thread makes it illegal to attempt to start it again.
 	 * Oracle class libraries don't have the 'started' field */
-	if (J2SE_SHAPE(vm) != J2SE_SHAPE_RAW) {
-		J9VMJAVALANGTHREAD_SET_STARTED(currentThread, threadObject, TRUE);
-	}
-
+	J9VMJAVALANGTHREAD_SET_STARTED(currentThread, threadObject, TRUE);
+#endif /* !J9VM_IVE_RAW_BUILD */
 	
 	/* Save objects on the stack in case we GC */
 
@@ -1909,7 +1869,7 @@ startJavaThreadInternal(J9VMThread * currentThread, UDATA privateFlags, UDATA os
 	omrthread_t osThread;
 	j9object_t cachedOutOfMemoryError;
 	j9object_t threadObject;
-	char *threadName;
+	char *threadName = NULL;
 	
 	/* Fork the OS thread */
 
@@ -1951,27 +1911,18 @@ startJavaThreadInternal(J9VMThread * currentThread, UDATA privateFlags, UDATA os
 	}
 
 	/* Create the UTF8 string with the thread name */
-		
 	threadObject = PEEK_OBJECT_IN_SPECIAL_FRAME(currentThread, 3);
-	if (J2SE_SHAPE(vm) == J2SE_SHAPE_RAW) {
-		PORT_ACCESS_FROM_JAVAVM(vm);
+#ifdef J9VM_IVE_RAW_BUILD /* J9VM_IVE_RAW_BUILD is not enabled by default */
+	{
 		j9object_t unicodeChars = J9VMJAVALANGTHREAD_NAME(currentThread, threadObject);
-		UDATA unicodeLength = getStringUTF8Length(currentThread, unicodeChars) * 2 + 1;
-		threadName = (char*)j9mem_allocate_memory(unicodeLength, OMRMEM_CATEGORY_THREADS);
-		if (NULL != threadName) {
-			memset(threadName, 0, unicodeLength);
-			if (UDATA_MAX == copyStringToUTF8Helper(
-				currentThread, unicodeChars, TRUE, J9_STR_NONE, (U_8 *)threadName, unicodeLength)
-			) {
-				j9mem_free_memory(threadName);
-				threadName = NULL;
-			}
+		if (NULL != unicodeChars) {
+			threadName = copyStringToUTF8WithMemAlloc(currentThread, unicodeChars, J9_STR_NULL_TERMINATE_RESULT, "", 0, NULL, 0, NULL);
 		}
-	} else {
-		j9object_t nameObject = J9VMJAVALANGTHREAD_NAME(currentThread, threadObject);
-		threadName = getVMThreadNameFromString(currentThread, nameObject);
 	}
-	if(threadName == NULL) {
+#else /* J9VM_IVE_RAW_BUILD */
+	threadName = getVMThreadNameFromString(currentThread, J9VMJAVALANGTHREAD_NAME(currentThread, threadObject));
+#endif /* J9VM_IVE_RAW_BUILD */
+	if (threadName == NULL) {
 		Trc_VM_startJavaThread_failedVMThreadAlloc(currentThread);
 		omrthread_cancel(osThread);
 		return J9_THREAD_START_FAILED_VMTHREAD_ALLOC;
@@ -2037,10 +1988,10 @@ setFailedToForkThreadException(J9VMThread *currentThread, IDATA retVal, omrthrea
 	PORT_ACCESS_FROM_VMC(currentThread);
 
 	errorMessage = j9nls_lookup_message(J9NLS_DO_NOT_PRINT_MESSAGE_TAG | J9NLS_DO_NOT_APPEND_NEWLINE,
-			J9NLS_VM_THREAD_CREATE_FAILED_WITH_ERRNO2, NULL);
+			J9NLS_VM_THREAD_CREATE_FAILED_WITH_32BIT_ERRNO2, NULL);
 
 	if (errorMessage) {
-		bufLen = j9str_printf(PORTLIB, NULL, 0, errorMessage, retVal, os_errno, os_errno, os_errno2, os_errno2);
+		bufLen = j9str_printf(PORTLIB, NULL, 0, errorMessage, retVal, os_errno, os_errno, (U_32)(UDATA)os_errno2);
 		if (bufLen > 0) {
 			buf = j9mem_allocate_memory(bufLen, OMRMEM_CATEGORY_VM);
 			if (buf) {
@@ -2131,7 +2082,7 @@ javaProtectedThreadProc(J9PortLibrary* portLibrary, void * entryarg)
 
 		{
 			/* Start running the thread */
-			runJavaThread(vmThread, 0, 0, 0, 0);
+			runJavaThread(vmThread);
 		}
 
 #ifdef J9VM_OPT_DEPRECATED_METHODS
@@ -2207,7 +2158,7 @@ findObjectDeadlockedThreads(J9VMThread *currentThread,
 	IDATA deadCount = -1;
 	J9VMThread *vmThread;
 	J9HashTable *hashTable;
-	struct ThreadChain *thrChain;
+	ThreadChain *thrChain;
 	UDATA visit = 0;
 	IDATA i, index;
 	j9object_t *deadlockedThreads = NULL;
@@ -2234,7 +2185,7 @@ findObjectDeadlockedThreads(J9VMThread *currentThread,
 	}
 
 	/* Allocate the destination array */
-	thrChain = (struct ThreadChain *)j9mem_allocate_memory(threadCount * sizeof(struct ThreadChain), OMRMEM_CATEGORY_VM);
+	thrChain = (ThreadChain *)j9mem_allocate_memory(threadCount * sizeof(ThreadChain), OMRMEM_CATEGORY_VM);
 	if (NULL == thrChain) {
 		goto findDeadlock_fail;
 	}

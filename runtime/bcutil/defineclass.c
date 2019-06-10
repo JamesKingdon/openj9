@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <stdlib.h>
@@ -33,6 +33,7 @@
 #include "bcutil_api.h"
 #include "bcutil_internal.h"
 #include "SCQueryFunctions.h"
+#include "j9jclnls.h"
 
 #if (defined(J9VM_OPT_DYNAMIC_LOAD_SUPPORT))  /* File Level Build Flags */
 
@@ -41,7 +42,12 @@ static J9ROMClass * createROMClassFromClassFile (J9VMThread *currentThread, J9Lo
 static void throwNoClassDefFoundError (J9VMThread* vmThread, J9LoadROMClassData * loadData);
 static void reportROMClassLoadEvents (J9VMThread* vmThread, J9ROMClass* romClass, J9ClassLoader* classLoader);
 static J9Class* checkForExistingClass (J9VMThread* vmThread, J9LoadROMClassData * loadData);
-static UDATA callDynamicLoader(J9JavaVM * vm, J9LoadROMClassData *loadData, U_8 * intermediateClassData, UDATA intermediateClassDataLength, UDATA translationFlags, UDATA classFileBytesReplacedByRIA, UDATA classFileBytesReplacedByRCA, J9TranslationLocalBuffer *localBuffer);
+static UDATA callDynamicLoader(J9VMThread* vmThread, J9LoadROMClassData *loadData, U_8 * intermediateClassData, UDATA intermediateClassDataLength, UDATA translationFlags, UDATA classFileBytesReplacedByRIA, UDATA classFileBytesReplacedByRCA, J9TranslationLocalBuffer *localBuffer);
+
+static BOOLEAN hasSamePackageName(J9ROMClass *anonROMClass, J9ROMClass *hostROMClass);
+static char* createErrorMessage(J9VMThread *vmStruct, J9ROMClass *anonROMClass, J9ROMClass *hostROMClass, const char* errorMsg);
+static void setIllegalArgumentExceptionHostClassAnonClassHaveDifferentPackages(J9VMThread *vmStruct, J9ROMClass *anonROMClass, J9ROMClass *hostROMClass);
+static void freeAnonROMClass(J9JavaVM *vm, J9ROMClass *romClass);
 
 #define GET_CLASS_LOADER_FROM_ID(vm, classLoader) ((classLoader) != NULL ? (classLoader) : (vm)->systemClassLoader)
 
@@ -67,7 +73,8 @@ internalDefineClass(
 	J9ROMClass* orphanROMClass = NULL;
 	J9ROMClass* romClass = NULL;
 	J9Class* result = NULL;
-	J9LoadROMClassData loadData;
+	J9LoadROMClassData loadData = {0};
+	BOOLEAN isAnonFlagSet = J9_ARE_ALL_BITS_SET(options, J9_FINDCLASS_FLAG_ANON);
 
 	/* This trace point is obsolete. It is retained only because j9vm test depends on it.
 	 * Once j9vm tests are fixed, it would be marked as Obsolete in j9bcu.tdf
@@ -99,7 +106,7 @@ internalDefineClass(
 	loadData.freeFunction = NULL;
 	loadData.romClass = existingROMClass;
 
-	if (0 == (options & J9_FINDCLASS_FLAG_NO_CHECK_FOR_EXISTING_CLASS)) {
+	if (J9_ARE_NO_BITS_SET(options, J9_FINDCLASS_FLAG_NO_CHECK_FOR_EXISTING_CLASS)) {
 		/* For non-bootstrap classes, this check is done in jcldefine.c:defineClassCommon(). */
 		if (checkForExistingClass(vmThread, &loadData) != NULL) {
 			Trc_BCU_internalDefineClass_Exit(vmThread, className, NULL);
@@ -107,8 +114,8 @@ internalDefineClass(
 		}
 	}
 
-	if (J9_ARE_NO_BITS_SET(options, J9_FINDCLASS_FLAG_ANON)) {
-		/* See if there's already an orphan romClass available */
+	if (!isAnonFlagSet) {
+		/* See if there's already an orphan romClass available - still own classTableMutex at this point */
 		if (NULL != classLoader->romClassOrphansHashTable) {
 			orphanROMClass = romClassHashTableFind(classLoader->romClassOrphansHashTable, className, classNameLength);
 			if (NULL != orphanROMClass) {
@@ -134,19 +141,38 @@ internalDefineClass(
 		romClass = createROMClassFromClassFile(vmThread, &loadData, localBuffer);
 	}
 	if (romClass) {
+		/* Host class can only be set for anonymous classes, which are defined by Unsafe.defineAnonymousClass.
+		 * For other cases, host class is set to NULL.
+		 */
+		if ((NULL != hostClass) && (J2SE_VERSION(vm) >= J2SE_V11)) {
+			J9ROMClass *hostROMClass = hostClass->romClass;
+			/* This error-check should only be done for anonymous classes. */
+			Trc_BCU_Assert_True(isAnonFlagSet);
+			/* From Java 9 and onwards, set IllegalArgumentException when host class and anonymous class have different packages. */
+			if (!hasSamePackageName(romClass, hostROMClass)) {
+				omrthread_monitor_exit(vm->classTableMutex);
+				setIllegalArgumentExceptionHostClassAnonClassHaveDifferentPackages(vmThread, romClass, hostROMClass);
+				freeAnonROMClass(vm, romClass);
+				goto done;
+			}
+		}
+
 		/* report the ROM load events */
 		reportROMClassLoadEvents(vmThread, romClass, classLoader);
 
 		/* localBuffer should not be NULL */
 		Trc_BCU_Assert_True(NULL != localBuffer);
 
-		result = vm->internalVMFunctions->internalCreateRAMClassFromROMClass(vmThread, classLoader, romClass, options,
+		result = J9_VM_FUNCTION(vmThread, internalCreateRAMClassFromROMClass)(vmThread, classLoader, romClass, options,
 				NULL, loadData.protectionDomain, NULL, (IDATA)localBuffer->entryIndex, (IDATA)localBuffer->loadLocationType, NULL, hostClass);
 		if (NULL == result) {
 			/* ramClass creation failed - remember the orphan romClass for next time */
 			if (orphanROMClass != romClass) {
-				J9HashTable *hashTable = classLoader->romClassOrphansHashTable;
+				J9HashTable *hashTable = NULL;
 
+				/* All access to the orphan table must be done while holding classTableMutex */
+				omrthread_monitor_enter(vm->classTableMutex);
+				hashTable = classLoader->romClassOrphansHashTable;
 				if (NULL == hashTable) {
 					hashTable = romClassHashTableNew(vm, 16);
 					classLoader->romClassOrphansHashTable = hashTable;
@@ -163,14 +189,27 @@ internalDefineClass(
 						romClassHashTableAdd(hashTable, romClass);
 					}
 				}
+				omrthread_monitor_exit(vm->classTableMutex);
 			}
 		} else if (NULL != orphanROMClass) {
+			J9ROMClass *tableEntry = NULL;
 			/* ramClass creation succeeded - the orphanROMClass is no longer an orphan */
 			Trc_BCU_romClassOrphansHashTableDelete(vmThread, classNameLength, className, orphanROMClass);
-			romClassHashTableDelete(classLoader->romClassOrphansHashTable, orphanROMClass);
+			/* All access to the orphan table must be done while holding classTableMutex.
+			 * Ensure the entry is still in the table before removing it.
+			 */
+			omrthread_monitor_enter(vm->classTableMutex);
+			tableEntry = romClassHashTableFind(classLoader->romClassOrphansHashTable, className, classNameLength);
+			if (tableEntry == orphanROMClass) {
+				romClassHashTableDelete(classLoader->romClassOrphansHashTable, orphanROMClass);
+			} else {
+				Trc_BCU_internalDefineClass_orphanNotFound(vmThread, orphanROMClass, tableEntry);
+			}
+			omrthread_monitor_exit(vm->classTableMutex);
 		}
 	}
 
+done:
 	Trc_BCU_internalDefineClass_Exit(vmThread, className, result);
 
 	return result;
@@ -195,11 +234,11 @@ throwNoClassDefFoundError(J9VMThread* vmThread, J9LoadROMClassData * loadData)
 
 		Trc_BCU_throwNoClassDefFoundError_ErrorBuf(vmThread, errorBuf);
 
-		vm->internalVMFunctions->setCurrentExceptionUTF(vmThread, J9VMCONSTANTPOOL_JAVALANGNOCLASSDEFFOUNDERROR, (char *) errorBuf);
+		J9_VM_FUNCTION(vmThread, setCurrentExceptionUTF)(vmThread, J9VMCONSTANTPOOL_JAVALANGNOCLASSDEFFOUNDERROR, (char *) errorBuf);
 
 		j9mem_free_memory(errorBuf);
 	} else {
-		vm->internalVMFunctions->setCurrentException(vmThread, J9VMCONSTANTPOOL_JAVALANGNOCLASSDEFFOUNDERROR, NULL);
+		J9_VM_FUNCTION(vmThread, setCurrentException)(vmThread, J9VMCONSTANTPOOL_JAVALANGNOCLASSDEFFOUNDERROR, NULL);
 	}
 
 	Trc_BCU_throwNoClassDefFoundError_Exit(vmThread);
@@ -481,30 +520,39 @@ internalLoadROMClass(J9VMThread * vmThread, J9LoadROMClassData *loadData, J9Tran
 		/* Disable static verification for the bootstrap loader if Xfuture not present */
 		if ((vm->systemClassLoader == loadData->classLoader)
 		&& ((NULL == vm->bytecodeVerificationData) || (0 == (vm->bytecodeVerificationData->verificationFlags & J9_VERIFY_BOOTCLASSPATH_STATIC)))
-		&& ((NULL == vm->sharedCacheAPI) || (0 == (vm->sharedCacheAPI->xShareClassesPresent)))
+		&& (NULL == vm->sharedClassConfig)
 		) {
 			translationFlags &= ~BCT_StaticVerification;
 		}
 	}
 
-	/* Determine allowed class file version */
+	if (J9_ARE_ANY_BITS_SET(vm->runtimeFlags, J9_RUNTIME_ALWAYS_SPLIT_BYTECODES)) {
+		translationFlags |= BCT_AlwaysSplitBytecodes;
+	}
+	if (J9_ARE_ANY_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_PREVIEW)) {
+		translationFlags |= BCT_EnablePreview;
+	}
 
+	if (J9_ARE_ALL_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_VALHALLA)) {
+		translationFlags |= BCT_ValueTypesEnabled;
+	}
+
+	/* Determine allowed class file version */
 #ifdef J9VM_OPT_SIDECAR
-	/* Jazz 107424: update the max class version number on 2.9 to v53.0 class files */
-	if (J2SE_VERSION(vm) >= J2SE_19) {
-		translationFlags |= BCT_Java9MajorVersionShifted;
+	if (J2SE_VERSION(vm) >= J2SE_V13) {
+		translationFlags |= BCT_Java13MajorVersionShifted;
+	} else if (J2SE_VERSION(vm) >= J2SE_V12) {
+		translationFlags |= BCT_Java12MajorVersionShifted;
+	} else if (J2SE_VERSION(vm) >= J2SE_V11) {
+		translationFlags |= BCT_Java11MajorVersionShifted;
 	} else if (J2SE_VERSION(vm) >= J2SE_18) {
 		translationFlags |= BCT_Java8MajorVersionShifted;
-	} else if (J2SE_VERSION(vm) >= J2SE_17) {
-		translationFlags |= BCT_Java7MajorVersionShifted;
-	} else if (J2SE_VERSION(vm) >= J2SE_16) {
-		translationFlags |= BCT_Java6MajorVersionShifted;
 	}
 #endif
 
 	/* TODO toss tracepoint?? Trc_BCU_internalLoadROMClass_AttemptExisting(vmThread, segment, romAvailable, bytesRequired); */
 	/* Attempt dynamic load */
-	result = callDynamicLoader(vm, loadData, intermediateClassData, intermediateClassDataLength, translationFlags, classFileBytesReplacedByRIA, classFileBytesReplacedByRCA, localBuffer);
+	result = callDynamicLoader(vmThread, loadData, intermediateClassData, intermediateClassDataLength, translationFlags, classFileBytesReplacedByRIA, classFileBytesReplacedByRCA, localBuffer);
 
 	/* Free the class file bytes if necessary */
 doneFreeMem:
@@ -609,8 +657,9 @@ done:
 }
 
 static UDATA
-callDynamicLoader(J9JavaVM * vm, J9LoadROMClassData *loadData, U_8 * intermediateClassData, UDATA intermediateClassDataLength, UDATA translationFlags, UDATA classFileBytesReplacedByRIA, UDATA classFileBytesReplacedByRCA, J9TranslationLocalBuffer *localBuffer)
+callDynamicLoader(J9VMThread *vmThread, J9LoadROMClassData *loadData, U_8 * intermediateClassData, UDATA intermediateClassDataLength, UDATA translationFlags, UDATA classFileBytesReplacedByRIA, UDATA classFileBytesReplacedByRCA, J9TranslationLocalBuffer *localBuffer)
 {
+	J9JavaVM * vm = vmThread->javaVM;
 	BOOLEAN createIntermediateROMClass = FALSE;
 	UDATA result = BCT_ERR_NO_ERROR;
 	U_8 *intermediateData = NULL;
@@ -704,6 +753,18 @@ callDynamicLoader(J9JavaVM * vm, J9LoadROMClassData *loadData, U_8 * intermediat
 			classFileBytesReplacedByRIA | classFileBytesReplacedByRCA,
 			FALSE, /* isIntermediateROMClass */
 			localBuffer);
+
+	/* The module of a class transformed by a JVMTI agent needs access to unnamed modules */
+	if ((J2SE_VERSION(vm) >= J2SE_V11)
+		&& (classFileBytesReplacedByRIA || classFileBytesReplacedByRCA)
+		&& (NULL != loadData->romClass)
+	) {
+		J9Module *module = J9_VM_FUNCTION(vmThread, findModuleForPackage)(vmThread, loadData->classLoader,
+				loadData->className, (U_32) packageNameLength(loadData->romClass));
+		if (NULL != module) {
+			module->isLoose = TRUE;
+		}
+	}
 
 	if (J9_ARE_ANY_BITS_SET(vm->extendedRuntimeFlags, J9_EXTENDED_RUNTIME_RECREATE_CLASSFILE_ONLOAD)) {
 		if (BCT_ERR_NO_ERROR == result) {
@@ -842,10 +903,10 @@ createROMClassFromClassFile(J9VMThread *currentThread, J9LoadROMClassData *loadD
 		/*Trc_BCU_internalLoadROMClass_NoMemory(vmThread);*/
 	} else {
 		if (errorUTF == NULL) {
-			vm->internalVMFunctions->setCurrentException(currentThread, exceptionNumber, NULL);
+			J9_VM_FUNCTION(currentThread, setCurrentException)(currentThread, exceptionNumber, NULL);
 		} else {
 			PORT_ACCESS_FROM_JAVAVM(vm);
-			vm->internalVMFunctions->setCurrentExceptionUTF(currentThread, exceptionNumber, (const char*)errorUTF);
+			J9_VM_FUNCTION(currentThread, setCurrentExceptionUTF)(currentThread, exceptionNumber, (const char*)errorUTF);
 			j9mem_free_memory(errorUTF);
 		}
 	}
@@ -859,6 +920,121 @@ classCouldPossiblyBeShared(J9VMThread * vmThread, J9LoadROMClassData * loadData)
 {
 	J9JavaVM * vm = vmThread->javaVM;
 	return ((0 != (loadData->classLoader->flags & J9CLASSLOADER_SHARED_CLASSES_ENABLED)) && !j9shr_Query_IsCacheFull(vm));
+}
+
+/* Return TRUE if anonClass and hostClass have the same package name.
+ * If anonymous class has no package name, then consider it to be part
+ * of host class's package. Return TRUE if anonymous class has no
+ * package name. Otherwise, return FALSE.
+ */
+static BOOLEAN
+hasSamePackageName(J9ROMClass *anonROMClass, J9ROMClass *hostROMClass) {
+	BOOLEAN rc = FALSE;
+	const UDATA anonClassPackageNameLength = packageNameLength(anonROMClass);
+
+	if (0 == anonClassPackageNameLength) {
+		rc = TRUE;
+	} else {
+		const U_8 *anonClassName = J9UTF8_DATA(J9ROMCLASS_CLASSNAME(anonROMClass));
+		const U_8 *hostClassName = J9UTF8_DATA(J9ROMCLASS_CLASSNAME(hostROMClass));
+		const UDATA hostClassPackageNameLength = packageNameLength(hostROMClass);
+		if (J9UTF8_DATA_EQUALS(anonClassName, anonClassPackageNameLength, hostClassName, hostClassPackageNameLength)) {
+			rc = TRUE;
+		}
+	}
+
+	return rc;
+}
+
+/* Create error message with host class and anonymous class. */
+static char*
+createErrorMessage(J9VMThread *vmStruct, J9ROMClass *anonROMClass, J9ROMClass *hostROMClass, const char* errorMsg) {
+	PORT_ACCESS_FROM_VMC(vmStruct);
+	char *buf = NULL;
+
+	if (NULL != errorMsg) {
+		UDATA bufLen = 0;
+		const J9UTF8 *anonClassName = J9ROMCLASS_CLASSNAME(anonROMClass);
+		const J9UTF8 *hostClassName = J9ROMCLASS_CLASSNAME(hostROMClass);
+		const U_8 *hostClassNameData = J9UTF8_DATA(hostClassName);
+		const U_8 *anonClassNameData = J9UTF8_DATA(anonClassName);
+		const UDATA hostClassNameLength = J9UTF8_LENGTH(hostClassName);
+
+		/* Anonymous class name has trailing digits. Example - "test/DummyClass/00000000442F098".
+		 * The code below removes the trailing digits, "/00000000442F098", from the anonymous class name.
+		 */
+		IDATA anonClassNameLength = J9UTF8_LENGTH(anonClassName) - 1;
+		for (; anonClassNameLength >= 0; anonClassNameLength--) {
+			if (anonClassNameData[anonClassNameLength] == '/') {
+				break;
+			}
+		}
+
+		bufLen = j9str_printf(PORTLIB, NULL, 0, errorMsg,
+						hostClassNameLength, hostClassNameData,
+						anonClassNameLength, anonClassNameData);
+		if (bufLen > 0) {
+			buf = j9mem_allocate_memory(bufLen, OMRMEM_CATEGORY_VM);
+			if (NULL != buf) {
+				j9str_printf(PORTLIB, buf, bufLen, errorMsg,
+						hostClassNameLength, hostClassNameData,
+						anonClassNameLength, anonClassNameData);
+			}
+		}
+	}
+
+	return buf;
+}
+
+/* From Java 9 and onwards, set IllegalArgumentException when host class and anonymous class have different packages. */
+static void
+setIllegalArgumentExceptionHostClassAnonClassHaveDifferentPackages(J9VMThread *vmStruct, J9ROMClass *anonROMClass, J9ROMClass *hostROMClass) {
+	PORT_ACCESS_FROM_VMC(vmStruct);
+	const J9JavaVM *vm = vmStruct->javaVM;
+
+	/* Construct error string */
+	const char *errorMsg = j9nls_lookup_message(J9NLS_DO_NOT_PRINT_MESSAGE_TAG | J9NLS_DO_NOT_APPEND_NEWLINE, J9NLS_JCL_HOSTCLASS_ANONCLASS_DIFFERENT_PACKAGES, NULL);
+	char *buf = createErrorMessage(vmStruct, anonROMClass, hostROMClass, errorMsg);
+	J9_VM_FUNCTION(vmStruct, setCurrentExceptionUTF)(vmStruct, J9VMCONSTANTPOOL_JAVALANGILLEGALARGUMENTEXCEPTION, buf);
+	j9mem_free_memory(buf);
+}
+
+/* Free the memory segment corresponding to the anonymous ROM class. */
+static void
+freeAnonROMClass(J9JavaVM *vm, J9ROMClass *romClass) {
+	if (NULL != romClass) {
+		omrthread_monitor_t segmentMutex = vm->classMemorySegments->segmentMutex;
+		omrthread_monitor_enter(segmentMutex);
+		{
+			J9MemorySegment **previousSegmentPointerROM = &vm->anonClassLoader->classSegments;
+			J9MemorySegment *segmentROM = *previousSegmentPointerROM;
+			BOOLEAN foundMemorySegment = FALSE;
+
+			/* Walk all anonymous classloader's ROM memory segments. If ROM class
+			 * is allocated there it would be one per segment.
+			 */
+			while (NULL != segmentROM) {
+				J9MemorySegment *nextSegmentROM = segmentROM->nextSegmentInClassLoader;
+				if (J9_ARE_ALL_BITS_SET(segmentROM->type, MEMORY_TYPE_ROM_CLASS)
+					&& ((J9ROMClass *)segmentROM->heapBase == romClass)
+				) {
+					foundMemorySegment = TRUE;
+					/* Found memory segment corresponding to the ROM class. Remove
+					 * this memory segment from the list.
+					 */
+					*previousSegmentPointerROM = nextSegmentROM;
+					/* Free memory segment corresponding to the ROM class. */
+					J9_VM_FUNCTION_VIA_JAVAVM(vm, freeMemorySegment)(vm, segmentROM, 1);
+					break;
+				}
+				previousSegmentPointerROM = &segmentROM->nextSegmentInClassLoader;
+				segmentROM = nextSegmentROM;
+			}
+			/* Memory segment should always be found if the ROM class exists. */
+			Trc_BCU_Assert_True(foundMemorySegment);
+		}
+		omrthread_monitor_exit(segmentMutex);
+	}
 }
 
 #endif /* J9VM_OPT_DYNAMIC_LOAD_SUPPORT */ /* End File Level Build Flags */

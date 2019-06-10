@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2017 IBM Corp. and others
+ * Copyright (c) 2011, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "BalloonAgent.hpp"
@@ -50,7 +50,7 @@ Agent_OnUnload(JavaVM * vm)
  * callback invoked by JVMTI when the agent is loaded
  * @param vm       [in] jvm that can be used by the agent
  * @param options  [in] options specified on command line for agent
- * @param reserver [in/out] reserved for future use
+ * @param reserved [in/out] reserved for future use
  */
 jint JNICALL
 Agent_OnLoad(JavaVM * vm, char * options, void * reserved)
@@ -63,7 +63,7 @@ Agent_OnLoad(JavaVM * vm, char * options, void * reserved)
  * callback invoked when an attach is made on the jvm
  * @param vm       [in] jvm that can be used by the agent
  * @param options  [in] options specified on command line for agent
- * @param reserver [in/out] reserved for future use
+ * @param reserved [in/out] reserved for future use
  */
 jint JNICALL
 Agent_OnAttach(JavaVM * vm, char * options, void * reserved)

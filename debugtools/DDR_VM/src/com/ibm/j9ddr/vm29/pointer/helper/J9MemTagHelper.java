@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010, 2014 IBM Corp. and others
+ * Copyright (c) 2010, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.pointer.helper;
 
@@ -72,9 +72,8 @@ public class J9MemTagHelper
 	 */
 	public static IDATA j9mem_check_tags(VoidPointer memoryPointer, long headerEyecatcher, long footerEyecatcher) throws J9MemTagCheckError 
 	{
-		J9MemTagPointer headerTagAddress, footerTagAddress = J9MemTagPointer.NULL;
-
-		headerTagAddress = j9mem_get_header_tag(memoryPointer);
+		J9MemTagPointer headerTagAddress = j9mem_get_header_tag(memoryPointer);
+		J9MemTagPointer footerTagAddress = J9MemTagPointer.NULL;
 
 		try {
 			footerTagAddress = j9mem_get_footer_tag(headerTagAddress);
@@ -266,8 +265,9 @@ public class J9MemTagHelper
 	
 	public static UDATA ROUNDED_FOOTER_OFFSET(UDATA number) 
 	{
-		UDATA a = (number.add(ROUNDING_GRANULARITY - 1)).add(J9MemTag.SIZEOF);
-		UDATA b = new UDATA(ROUNDING_GRANULARITY - 1).bitNot();
+		UDATA mask = new UDATA(ROUNDING_GRANULARITY - 1);
+		UDATA a = mask.add(number).add(J9MemTag.SIZEOF);
+		UDATA b = mask.bitNot();
 		return a.bitAnd(b);
 	}
 	
@@ -294,7 +294,7 @@ public class J9MemTagHelper
 
 		public J9MemTagPointer getMemTag()
 		{
-			return  memTag;
+			return memTag;
 		}
 	}
 }

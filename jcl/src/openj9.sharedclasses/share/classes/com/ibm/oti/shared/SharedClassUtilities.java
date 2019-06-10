@@ -2,7 +2,7 @@
 package com.ibm.oti.shared;
 
 /*******************************************************************************
- * Copyright (c) 2010, 2017 IBM Corp. and others
+ * Copyright (c) 2010, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -20,10 +20,11 @@ package com.ibm.oti.shared;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 import java.util.*;
+import com.ibm.oti.shared.SharedClassesNamedPermission.SharedPermissions;
 
 /**
  * SharedClassUtilities provides APIs to get information about all shared class caches in a directory and
@@ -107,8 +108,16 @@ public class SharedClassUtilities {
 	 * 					If shared classes is disabled for this JVM (that is -Xshareclasses:none is present).
 	 * @throws		IllegalArgumentException
 	 * 					If <code>flags</code> is not a valid value.
+	 * @throws		SecurityException
+	 * 					If a security manager is enabled and the calling thread does not
+	 * 					have SharedClassesNamedPermission("getSharedCacheInfo")
 	 */
 	static public List<SharedClassCacheInfo> getSharedCacheInfo(String cacheDir, int flags, boolean useCommandLineValues) {
+		SecurityManager sm = System.getSecurityManager();
+		if (sm != null) {
+			sm.checkPermission(SharedPermissions.getSharedCacheInfo);
+		}
+		
 		int retVal;
 		/*[MSG "K0553", "parameter {0} has invalid value"]*/
 		if (flags != NO_FLAGS) {
@@ -169,8 +178,16 @@ public class SharedClassUtilities {
 	 * 					If shared classes is disabled for this JVM (that is -Xshareclasses:none is present).
 	 * @throws		IllegalArgumentException
 	 * 					If <code>cacheType<code> is not a valid value.
+	 * @throws		SecurityException
+	 * 					If a security manager is enabled and the calling thread does not
+	 * 					have SharedClassesNamedPermission("destroySharedCache")
 	 */
 	static public int destroySharedCache(String cacheDir, int cacheType, String cacheName, boolean useCommandLineValues) {
+		SecurityManager sm = System.getSecurityManager();
+		if (sm != null) {
+			sm.checkPermission(SharedPermissions.destroySharedCache);
+		}
+
 		int retVal = -1;
 		
 		/*

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef JVMINIT_H
@@ -96,6 +96,7 @@ extern "C" {
 #define GET_PRC_VALUE 7
 #define GET_COMPOUND 8
 #define GET_COMPOUND_OPTS 9
+#define GET_DBL_VALUE 10
 
 #define OPTION_OK 0
 #define OPTION_MALFORMED -1
@@ -113,7 +114,7 @@ extern "C" {
 #define FIND_NEXT_ARG_IN_VMARGS_FORWARD(match, optionName, optionValue, lastArgIndex) vm->internalVMFunctions->findArgInVMArgs(vm->portLibrary, vm->vmArgsArray, ((match | ((lastArgIndex+1) << STOP_AT_INDEX_SHIFT)) | SEARCH_FORWARD), optionName, optionValue, FALSE)
 #define FIND_AND_CONSUME_ARG_FORWARD(match, optionName, optionValue) vm->internalVMFunctions->findArgInVMArgs(vm->portLibrary, vm->vmArgsArray, (match | SEARCH_FORWARD), optionName, optionValue, TRUE)
 
-/* REMOVE - FOR BACKWARDS COMPATABILITY */
+/* REMOVE - FOR BACKWARDS COMPATIBILITY */
 #define FIND_AND_CONSUME_ARG2(match, optionName, optionValue) vm->internalVMFunctions->findArgInVMArgs(vm->portLibrary, vm->vmArgsArray, match, optionName, optionValue, TRUE)
 #define VMARGS_OPTION(element) vm->vmArgsArray->actualVMArgs->options[element].optionString
 #define GET_OPTION_VALUE2(element, delimChar, resultPtr) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, element, GET_OPTION, resultPtr, 0, delimChar, 0, NULL)
@@ -124,10 +125,11 @@ extern "C" {
 #define GET_OPTION_VALUES(element, delimChar, sepChar, buffer, bufSize) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, element, GET_OPTIONS, buffer, bufSize, delimChar, sepChar, NULL)
 #define GET_COMPOUND_VALUE(element, delimChar, buffer, bufSize) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, element, GET_COMPOUND, buffer, bufSize, delimChar, 0, NULL)
 #define GET_COMPOUND_VALUES(element, delimChar, sepChar, buffer, bufSize) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, element, GET_COMPOUND_OPTS, buffer, bufSize, delimChar, sepChar, NULL)
-#define GET_MEMORY_VALUE(element, optname, result) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, element, GET_MEM_VALUE, (char **)&optname, 0, 0, 0, &result)
-#define GET_INTEGER_VALUE(element, optname, result) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, element, GET_INT_VALUE, (char **)&optname, 0, 0, 0, &result)
-#define GET_PERCENT_VALUE(element, optname, result) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, element, GET_PRC_VALUE,(char **) &optname, 0, 0, 0, &result)
-#define GET_OPTION_OPTION(element, delimChar, delimChar2, resultPtr) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, element, GET_OPTION_OPT, resultPtr, 0, delimChar, delimChar2, NULL)
+#define GET_MEMORY_VALUE(element, optname, result) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, (element), GET_MEM_VALUE, (char **)&(optname), 0, 0, 0, &(result))
+#define GET_INTEGER_VALUE(element, optname, result) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, (element), GET_INT_VALUE, (char **)&(optname), 0, 0, 0, &(result))
+#define GET_PERCENT_VALUE(element, optname, result) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, (element), GET_PRC_VALUE,(char **) &(optname), 0, 0, 0, &(result))
+#define GET_OPTION_OPTION(element, delimChar, delimChar2, resultPtr) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, (element), GET_OPTION_OPT, (resultPtr), 0, (delimChar), (delimChar2), NULL)
+#define GET_DOUBLE_VALUE(element, optname, result) vm->internalVMFunctions->optionValueOperations(vm->portLibrary, vm->vmArgsArray, (element), GET_DBL_VALUE, (char **) &(optname), 0, 0, 0, &(result))
 #define HAS_MAPPING(args, element) (args->j9Options[element].mapping!=NULL)
 #define MAPPING_FLAGS(args, element) (args->j9Options[element].mapping->flags)
 #define MAPPING_J9NAME(args, element) (args->j9Options[element].mapping->j9Name)
@@ -261,8 +263,12 @@ enum INIT_STAGE {
 #define VMOPT_XMSO "-Xmso"
 #define VMOPT_XMSCL "-Xmscl"
 #define VMOPT_XMXCL "-Xmxcl"
+#define VMOPT_XMX "-Xmx"
+#define VMOPT_XMS "-Xms"
 #define VMOPT_XDUMP  "-Xdump"
 #define VMOPT_XDUMP_NONE  "-Xdump:none"
+#define VMOPT_XDUMP_DIRECTORY_EQUALS  "-Xdump:directory="
+#define VMOPT_XDUMP_TOOL_OUTOFMEMORYERROR_EXEC_EQUALS "-Xdump:tool:events=systhrow,filter=java/lang/OutOfMemoryError,exec="
 #define VMOPT_XARGENCODING "-Xargencoding"
 #define VMOPT_XARGENCODINGCOLON "-Xargencoding:"
 #define VMOPT_XARGENCODINGUTF8 "-Xargencoding:utf8"
@@ -304,6 +310,8 @@ enum INIT_STAGE {
 #define VMOPT_XXVM_IGNOREUNRECOGNIZED "-XXvm:ignoreUnrecognized"
 #define VMOPT_XXIGNOREUNRECOGNIZEDVMOPTIONSENABLE "-XX:+IgnoreUnrecognizedVMOptions"
 #define VMOPT_XXIGNOREUNRECOGNIZEDVMOPTIONSDISABLE "-XX:-IgnoreUnrecognizedVMOptions"
+#define VMOPT_XXIGNOREUNRECOGNIZEDXXCOLONOPTIONSENABLE "-XX:+IgnoreUnrecognizedXXColonOptions"
+#define VMOPT_XXIGNOREUNRECOGNIZEDXXCOLONOPTIONSDISABLE "-XX:-IgnoreUnrecognizedXXColonOptions"
 #define VMOPT_X142BOOSTGCTHRPRIO "-X142BoostGCThrPrio"
 #define VMOPT_XREALTIME "-Xrealtime"
 #define VMOPT_XNORTSJ "-Xnortsj"
@@ -321,6 +329,8 @@ enum INIT_STAGE {
 #define VMOPT_XXDEBUGINTERPRETER "-XX:+DebugInterpreter"
 #define VMOPT_XXNOHANDLESIGXFSZ "-XX:-HandleSIGXFSZ"
 #define VMOPT_XXHANDLESIGXFSZ "-XX:+HandleSIGXFSZ"
+#define VMOPT_XXHEAPDUMPONOOM "-XX:+HeapDumpOnOutOfMemoryError"
+#define VMOPT_XXNOHEAPDUMPONOOM "-XX:-HeapDumpOnOutOfMemoryError"
 
 #define VMOPT_XSOFTREFTHRESHOLD "-XSoftRefThreshold"
 #define VMOPT_XAGGRESSIVE "-Xaggressive"
@@ -349,6 +359,7 @@ enum INIT_STAGE {
 #define VMOPT_OPT_XXNOINTERLEAVEMEMORY "-XX:-InterleaveMemory"
 #define VMOPT_OPT_XXINTERLEAVEMEMORY "-XX:+InterleaveMemory"
 #define VMOPT_ROMMETHODSORTTHRESHOLD_EQUALS "-XX:ROMMethodSortThreshold="
+#define VMOPT_VALUEFLATTENINGTHRESHOLD_EQUALS "-XX:ValueTypeFlatteningThreshold="
 #define VMOPT_XXREDUCECPUMONITOROVERHEAD "-XX:+ReduceCPUMonitorOverhead"
 #define VMOPT_XXNOREDUCECPUMONITOROVERHEAD "-XX:-ReduceCPUMonitorOverhead"
 #define VMOPT_XXENABLECPUMONITOR "-XX:+EnableCPUMonitor"
@@ -357,6 +368,17 @@ enum INIT_STAGE {
 #define VMOPT_XXDISABLEOSRSAFEPOINT "-XX:-OSRSafePoint"
 #define VMOPT_XXENABLEOSRSAFEPOINTFV "-XX:+OSRSafePointFV"
 #define VMOPT_XXDISABLEOSRSAFEPOINTFV "-XX:-OSRSafePointFV"
+#define VMOPT_XXENABLEJITWATCH "-XX:+JITInlineWatches"
+#define VMOPT_XXDISABLEJITWATCH "-XX:-JITInlineWatches"
+#define VMOPT_XXENABLEALWAYSSPLITBYTECODES "-XX:+AlwaysSplitBytecodes"
+#define VMOPT_XXDISABLEALWAYSSPLITBYTECODES "-XX:-AlwaysSplitBytecodes"
+#define VMOPT_XXENABLEPOSITIVEHASHCODE "-XX:+PositiveIdentityHash"
+#define VMOPT_XXDISABLEPOSITIVEHASHCODE "-XX:-PositiveIdentityHash"
+
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+#define VMOPT_XXENABLEVALHALLA "-XX:+EnableValhalla"
+#define VMOPT_XXDISABLEVALHALLA "-XX:-EnableValhalla"
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 
 #define VMOPT_XX_NOSUBALLOC32BITMEM "-XXnosuballoc32bitmem"
 
@@ -373,8 +395,8 @@ enum INIT_STAGE {
 
 #define VMOPT_TUNE_VIRTUALIZED "-Xtune:virtualized"
 
-#define VMOPT_XXSTRINGCOMPRESSION "-XX:+StringCompression"
-#define VMOPT_XXNOSTRINGCOMPRESSION "-XX:-StringCompression"
+#define VMOPT_XXCOMPACTSTRINGS "-XX:+CompactStrings"
+#define VMOPT_XXNOCOMPACTSTRINGS "-XX:-CompactStrings"
 
 #define VMOPT_XXSHARECLASSESENABLEBCI "-XX:ShareClassesEnableBCI"
 #define VMOPT_XXSHARECLASSESDISABLEBCI "-XX:ShareClassesDisableBCI"
@@ -399,9 +421,6 @@ enum INIT_STAGE {
 #define VMOPT_XLP_CODECACHE "-Xlp:codecache:"
 #define VMOPT_XTLHPREFETCH "-XtlhPrefetch"
 
-#define VMOPT_XDBG_COLON "-Xdbg:"
-#define VMOPT_XDIAGNOSTICSCOLLECTOR "-Xdiagnosticscollector"
-
 #define VMOPT_XXALLOWNONVIRTUALCALLS "-XX:+AllowNonVirtualCalls"
 #define VMOPT_XXDONTALLOWNONVIRTUALCALLS "-XX:-AllowNonVirtualCalls"
 
@@ -418,6 +437,19 @@ enum INIT_STAGE {
 
 #define VMOPT_XXENABLEHCR "-XX:+EnableHCR"
 #define VMOPT_XXNOENABLEHCR "-XX:-EnableHCR"
+
+#define VMOPT_XXUSECONTAINERSUPPORT "-XX:+UseContainerSupport"
+#define VMOPT_XXNOUSECONTAINERSUPPORT "-XX:-UseContainerSupport"
+
+#define VMOPT_XXREADIPINFOFORRAS "-XX:+ReadIPInfoForRAS"
+#define VMOPT_XXNOREADIPINFOFORRAS "-XX:-ReadIPInfoForRAS"
+#define VMOPT_ENABLE_PREVIEW "--enable-preview"
+
+#define VMOPT_XXNLSMESSAGES "-XX:+NLSMessages"
+#define VMOPT_XXNONLSMESSAGES  "-XX:-NLSMessages"
+
+#define VMOPT_XCOMPRESSEDREFS "-Xcompressedrefs"
+#define VMOPT_XNOCOMPRESSEDREFS "-Xnocompressedrefs"
 
 #define MAPOPT_AGENTLIB_JDWP_EQUALS "-agentlib:jdwp="
 
@@ -445,19 +477,21 @@ enum INIT_STAGE {
 #define MAPOPT_XP "-Xp"
 #define MAPOPT_XHEALTHCENTER "-Xhealthcenter"
 #define MAPOPT_XHEALTHCENTER_COLON "-Xhealthcenter:"
-#define MAPOPT_XDIAGNOSTICSCOLLECTOR "-Xdiagnosticscollector"
-#define MAPOPT_XDIAGNOSTICSCOLLECTOR_COLON "-Xdiagnosticscollector:"
 #define MAPOPT_XSOFTREFTHRESHOLD "-Xsoftrefthreshold"
-#define MAPOPT_XCOMPRESSEDREFS "-Xcompressedrefs"
-#define MAPOPT_XNOCOMPRESSEDREFS "-Xnocompressedrefs"
 #define MAPOPT_XXJITDIRECTORY "-XXjitdirectory="
 #define MAPOPT_XSHARE_ON "-Xshare:on"
 #define MAPOPT_XSHARE_OFF "-Xshare:off"
 #define MAPOPT_XSHARE_AUTO "-Xshare:auto"
 #define MAPOPT_XSHARECLASSES_UTILITIES "-Xshareclasses:utilities"
 #define MAPOPT_XSHARECLASSES_NONFATAL "-Xshareclasses:nonfatal"
+#define MAPOPT_XXDISABLEEXPLICITGC "-XX:+DisableExplicitGC"
+#define MAPOPT_XXENABLEEXPLICITGC "-XX:-DisableExplicitGC"
+#define MAPOPT_XXHEAPDUMPPATH_EQUALS "-XX:HeapDumpPath="
+#define MAPOPT_XXMAXHEAPSIZE_EQUALS "-XX:MaxHeapSize="
+#define MAPOPT_XXINITIALHEAPSIZE_EQUALS "-XX:InitialHeapSize="
+#define MAPOPT_XXONOUTOFMEMORYERROR_EQUALS "-XX:OnOutOfMemoryError="
 
-#define VMOPT_XENTITLEDCPUS "-Xentitledcpus"
+#define VMOPT_XXACTIVEPROCESSORCOUNT_EQUALS "-XX:ActiveProcessorCount="
 
 #define VMOPT_XXDUMPLOADEDCLASSLIST "-XX:DumpLoadedClassList"
 
@@ -483,6 +517,7 @@ enum INIT_STAGE {
 
 #define ENVVAR_IBM_MIXED_MODE_THRESHOLD "IBM_MIXED_MODE_THRESHOLD"
 #define ENVVAR_JAVA_COMPILER "JAVA_COMPILER"
+#define ENVVAR_OPENJ9_JAVA_OPTIONS "OPENJ9_JAVA_OPTIONS"
 #define ENVVAR_IBM_JAVA_OPTIONS "IBM_JAVA_OPTIONS"
 #define ENVVAR_JAVA_TOOL_OPTIONS "JAVA_TOOL_OPTIONS"
 #define ENVVAR_IBM_NOSIGHANDLER "IBM_NOSIGHANDLER"
@@ -502,7 +537,6 @@ enum INIT_STAGE {
 #define SYSPROP_JDK_MODULE_UPGRADE_PATH "jdk.module.upgrade.path"
 #define SYSPROP_JDK_MODULE_PATH "jdk.module.path"
 #define SYSPROP_JDK_MODULE_ADDMODS "jdk.module.addmods."
-#define SYSPROP_JDK_MODULE_ADDMODS_B136 "jdk.module.addmods"	/* to be removed when b148+ become default level */
 #define SYSPROP_JDK_MODULE_LIMITMODS "jdk.module.limitmods"
 #define SYSPROP_JDK_MODULE_ADDREADS "jdk.module.addreads."
 #define SYSPROP_JDK_MODULE_ADDEXPORTS "jdk.module.addexports."

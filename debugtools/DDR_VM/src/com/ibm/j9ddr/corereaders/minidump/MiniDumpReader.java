@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2014 IBM Corp. and others
+ * Copyright (c) 2004, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.corereaders.minidump;
 
@@ -520,7 +520,7 @@ public class MiniDumpReader extends AbstractCoreReader implements ICoreFileReade
 				}
 			}
 			/* Add thread info (may or may not be in the dump) */
-			/* Relies on threads having been initialised as it adds properties so must be done second. */
+			/* Relies on threads having been initialized as it adds properties so must be done second. */
 			for (ThreadInfoStream stream : threadInfoStreams) {
 				try {
 					stream.readFrom(this, this.getAddressSpaces().get(0), is64Bit(), threads);

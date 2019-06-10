@@ -1,7 +1,7 @@
 /*[INCLUDE-IF Sidecar16]*/
 package com.ibm.tools.attach.target;
 /*******************************************************************************
- * Copyright (c) 2009, 2010 IBM Corp. and others
+ * Copyright (c) 2009, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -19,7 +19,7 @@ package com.ibm.tools.attach.target;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 import java.io.File;
@@ -27,6 +27,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
+import static com.ibm.tools.attach.target.IPC.loggingStatus;
+import static com.ibm.tools.attach.target.IPC.LOGGING_DISABLED;
 
 public final class Advertisement {
 	private static final String KEY_ATTACH_NOTIFICATION_SYNC = "attachNotificationSync"; //$NON-NLS-1$
@@ -39,6 +41,7 @@ public final class Advertisement {
 	private static final String KEY_VERSION = "version"; //$NON-NLS-1$
 	private static final String KEY_PROCESS_ID = "processId"; //$NON-NLS-1$
 	private static final String ADVERT_FILENAME = "attachInfo"; //$NON-NLS-1$
+	private static final String GLOBAL_SEMAPHORE = "globalSemaphore"; //$NON-NLS-1$
 	private Properties props;
 	private final long pid, uid;
 
@@ -79,7 +82,7 @@ public final class Advertisement {
 	 * Factory method to read the data from an advertisement file
 	 * @param advertStream InputStream to an open file
 	 * @return Advertisement object containing the data from the file.
-	 * @throws IOException 
+	 * @throws IOException if file cannot be read
 	 */
 	public static Advertisement readAdvertisementFile(InputStream advertStream) throws IOException {
 		Advertisement advert = null;
@@ -107,7 +110,7 @@ public final class Advertisement {
 		addKeyValue(contentBuffer, KEY_VM_ID, vmId);
 		addKeyValue(contentBuffer, KEY_DISPLAY_NAME, (((null == displayName) || (displayName.length() == 0))? vmId: displayName));
 		addKeyValue(contentBuffer, KEY_NOTIFIER, CommonDirectory.MASTER_NOTIFIER);
-		
+		addKeyValue(contentBuffer, GLOBAL_SEMAPHORE, Boolean.TRUE.toString());
 		File tmpTargetDirectoryFileObject = TargetDirectory.getTargetDirectoryFileObject();
 		File tmpSyncFileObject = TargetDirectory.getSyncFileObject();
 		
@@ -189,7 +192,7 @@ public final class Advertisement {
 	 * This is called during initialization or after successful initialization only.
 	 * @param vmId ID of this VM
 	 * @param displayName display name of this VM
-	 * @throws IOException if cannot open the advertisement file
+	 * @throws IOException if cannot open the advertisement file or cannot delete an existing one
 	 */
 	static void createAdvertisementFile(String vmId, String displayName) throws IOException {
 
@@ -198,22 +201,20 @@ public final class Advertisement {
 			return;
 		}
 		File advertFile = TargetDirectory.getAdvertisementFileObject();
-		IPC.createFileWithPermissions(advertFile.getAbsolutePath(), TargetDirectory.ADVERTISEMENT_FILE_PERMISSIONS);
 		/* AttachHandler.terminate() will delete this file on shutdown */ 
-		FileOutputStream advertOutputStream = new FileOutputStream(advertFile);
-		try {
+		IPC.createNewFileWithPermissions(advertFile, TargetDirectory.ADVERTISEMENT_FILE_PERMISSIONS);
+		/* we have a brand new, empty file with correct ownership and permissions */
+		try (FileOutputStream advertOutputStream = new FileOutputStream(advertFile);){
 			StringBuilder advertContent = createAdvertContent(vmId, displayName);
 			if (null == advertContent) {
-				IPC.logMessage("createAdvertisementFile failed to create advertisement file : file objects null"); //$NON-NLS-1$
+				IPC.logMessage("createAdvertisementFile failed to create advertisement file : file object is null"); //$NON-NLS-1$
 				return;
 			}
 			
 			advertOutputStream.write(advertContent.toString().getBytes("ISO8859_1")); //$NON-NLS-1$
-			if (IPC.loggingEnabled ) {
+			if (LOGGING_DISABLED != loggingStatus) {
 				IPC.logMessage("createAdvertisementFile ", advertFile.getAbsolutePath()); //$NON-NLS-1$
 			}
-		} finally {
-			advertOutputStream.close(); /* cleanup from findbugs */
 		}
 	}
 	
@@ -270,6 +271,14 @@ public final class Advertisement {
 	 */
 	public long getUid() {
 		return uid;
+	}
+
+	/**
+	 * 
+	 * @return true if the target uses the global semaphore (Windows only)
+	 */
+	public boolean isGlobalSemaphore() {
+		return Boolean.parseBoolean(props.getProperty(GLOBAL_SEMAPHORE));
 	}
 
 	/**

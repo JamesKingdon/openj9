@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2016 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "jvmtiHelpers.h"
@@ -43,6 +43,7 @@ jvmtiGetLocalInstance(jvmtiEnv* env,
 	ENSURE_NON_NEGATIVE(depth);
 	ENSURE_NON_NULL(value_ptr);
 
+	*value_ptr = NULL;
 	rc = jvmtiGetOrSetLocal(env, thread, depth, 0, value_ptr, 'L', FALSE, TRUE);
 
 done:
@@ -67,6 +68,7 @@ jvmtiGetLocalObject(jvmtiEnv* env,
 	ENSURE_NON_NEGATIVE(depth);
 	ENSURE_NON_NULL(value_ptr);
 
+	*value_ptr = NULL;
 	rc = jvmtiGetOrSetLocal(env, thread, depth, slot, value_ptr, 'L', FALSE, FALSE);
 
 done:
@@ -91,6 +93,7 @@ jvmtiGetLocalInt(jvmtiEnv* env,
 	ENSURE_NON_NEGATIVE(depth);
 	ENSURE_NON_NULL(value_ptr);
 
+	*value_ptr = 0;
 	rc = jvmtiGetOrSetLocal(env, thread, depth, slot, value_ptr, 'I', FALSE, FALSE);
 
 done:
@@ -115,6 +118,7 @@ jvmtiGetLocalLong(jvmtiEnv* env,
 	ENSURE_NON_NEGATIVE(depth);
 	ENSURE_NON_NULL(value_ptr);
 
+	*value_ptr = 0;
 	rc = jvmtiGetOrSetLocal(env, thread, depth, slot, value_ptr, 'J', FALSE, FALSE);
 
 done:
@@ -139,6 +143,7 @@ jvmtiGetLocalFloat(jvmtiEnv* env,
 	ENSURE_NON_NEGATIVE(depth);
 	ENSURE_NON_NULL(value_ptr);
 
+	*(jint*)value_ptr = 0;
 	rc = jvmtiGetOrSetLocal(env, thread, depth, slot, value_ptr, 'F', FALSE, FALSE);
 
 done:
@@ -163,6 +168,7 @@ jvmtiGetLocalDouble(jvmtiEnv* env,
 	ENSURE_NON_NEGATIVE(depth);
 	ENSURE_NON_NULL(value_ptr);
 
+	*(jlong*)value_ptr = 0;
 	rc = jvmtiGetOrSetLocal(env, thread, depth, slot, value_ptr, 'D', FALSE, FALSE);
 
 done:
@@ -421,7 +427,7 @@ jvmtiGetOrSetLocal(jvmtiEnv* env,
 			}
 			releaseVMThread(currentThread, targetThread);
 		}
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	return rc;

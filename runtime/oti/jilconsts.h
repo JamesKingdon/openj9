@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef JILCONSTS_H
@@ -36,7 +36,6 @@ extern "C" {
 #define J9JIT_PATCHING_FENCE_REQUIRED  0x4000000
 #define J9JIT_CG_OPT_LEVEL_BEST_AVAILABLE  8
 #define J9JIT_CG_OPT_LEVEL_NONE  2
-#define J9JIT_DUMP_STATS  0x10000
 #define J9JIT_CG_REGISTER_MAPS  32
 #define J9JIT_JIT_ATTACHED  0x800000
 #define J9JIT_AOT_ATTACHED  0x1000000
@@ -67,7 +66,6 @@ extern "C" {
 #define J9JIT_CODE_CACHE_FULL  0x40000000
 #define J9JIT_COMPILE_CLINIT  0x400000
 #define J9JIT_JVMPI_INLINE_ALLOCATION_OFF  32
-#define J9JIT_J2PROF  0x100
 
 #define J9JIT_JIT_VTABLE_OFFSET 0x0
 #define J9JIT_INTERP_VTABLE_OFFSET sizeof(J9Class)
@@ -78,10 +76,6 @@ extern "C" {
 
 #define J9JIT_REVERT_METHOD_TO_INTERPRETED(javaVM, method) \
 	(javaVM)->internalVMFunctions->initializeMethodRunAddressNoHook((javaVM), (method))
-
-#if defined(J9_GC_OBJECT_HEAP_TAIL_PADDING) && (J9_GC_OBJECT_HEAP_TAIL_PADDING > 0)
-#define J9JIT_HEAP_TAIL_PADDING J9_GC_OBJECT_HEAP_TAIL_PADDING
-#endif
 
 #if defined(J9ZOS390) && !defined(J9VM_ENV_DATA64)
 /* CAA is r12 - r4-r15 are saved in the C stack frame (must also add the 2048 stack bias) */

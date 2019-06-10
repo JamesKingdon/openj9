@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef j9sock_h
@@ -45,8 +45,12 @@
 #include <xti.h>
 #elif !defined(J9ZTPF)
 #include <netinet/tcp.h>
+#if defined(OSX)
+#include <stdlib.h>
+#else /* OSX */
 #include <malloc.h>
-#include <sys/socketvar.h>
+#endif /* !OSX */
+#include <sys/socket.h>
 #endif /* defined(J9ZOS390) */
 
 #if defined(AIXPPC)
@@ -69,9 +73,17 @@
 
 /* PR 94621 - the following defines are used to determine how gethostby*_r calls should be handled.*/
 /* HOSTENT_DATA_R: if the HOSTENT_DATA structure is used */
-#define HOSTENT_DATA_R (defined(AIXPPC))
+#if defined(AIXPPC)
+#define HOSTENT_DATA_R 1
+#else
+#define HOSTENT_DATA_R 0
+#endif
 /* GLIBC_R: uses the GLIBC versions */
-#define GLIBC_R (defined(LINUX))
+#if defined(LINUX)
+#define GLIBC_R 1
+#else
+#define GLIBC_R 0
+#endif
 /* OTHER_R: everything else */
 #define OTHER_R ((!HOSTENT_DATA_R)&&(!GLIBC_R))
 
@@ -139,7 +151,7 @@ typedef struct hostent_data OSHOSTENT_DATA;
 #endif /* J9ZOS390 */
 #endif /* IPv6_FUNCTION_SUPPORT */
 
-/* defines for the unix error constants.  These may be overriden for specific platforms. */
+/* defines for the unix error constants.  These may be overridden for specific platforms. */
 #define J9PORT_ERROR_SOCKET_UNIX_CONNRESET 		ECONNRESET
 #define J9PORT_ERROR_SOCKET_UNIX_EAGAIN							EAGAIN
 #define J9PORT_ERROR_SOCKET_UNIX_EAFNOSUPPORT			EAFNOSUPPORT

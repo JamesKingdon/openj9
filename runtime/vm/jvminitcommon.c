@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "jvminitcommon.h"
@@ -26,7 +26,7 @@
 /**
  *  Walks the J9VMDllLoadInfo table looking for the entry for a specific library name. 
  *  
- *  @param aPool the pool hodling the DLL info
+ *  @param aPool the pool holding the DLL info
  *  @param dllName the name of the dll we are looking for
  *  @returns J9VMDllLoadInfo for the dll requested or NULL if not found
  */
@@ -133,5 +133,11 @@ jniVersionIsValid(UDATA jniVersion)
 		   || (jniVersion == JNI_VERSION_1_4) 
 		   || (jniVersion == JNI_VERSION_1_6) 
 		   || (jniVersion == JNI_VERSION_1_8)
-		   || (jniVersion == JNI_VERSION_9);
+#if JAVA_SPEC_VERSION >= 9
+		   || (jniVersion == JNI_VERSION_9)
+#endif /* JAVA_SPEC_VERSION >= 9 */
+#if JAVA_SPEC_VERSION >= 10
+		   || (jniVersion == JNI_VERSION_10)
+#endif /* JAVA_SPEC_VERSION >= 10 */
+		   ;
 }

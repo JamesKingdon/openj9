@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "exelib_api.h"
@@ -90,7 +90,7 @@ setupInvocationAPIMethods(struct j9cmdlineOptions* startupOptions)
 	strcat(libjvmPath, jvmLibName);
 
 	if (j9sl_open_shared_library(libjvmPath, &handle, J9PORT_SLOPEN_DECORATE)) {
-		j9tty_printf(PORTLIB, "Failed to open JVM DLL: %s (%s)\n", J9_VM_DLL_NAME, j9error_last_error_message());
+		j9tty_printf(PORTLIB, "Failed to open JVM DLL: %s (%s)\n", libjvmPath, j9error_last_error_message());
 		rc = FAIL;
 		goto cleanup;
 	}
@@ -120,7 +120,7 @@ setupInvocationAPIMethods(struct j9cmdlineOptions* startupOptions)
  * to free the memory allocated
  *
  * @param startupOptions the command line options passed to the test
- * @param vm_argsm, the JavaVMInitArgs struture into which the arguments will be populated
+ * @param vm_argsm, the JavaVMInitArgs structure into which the arguments will be populated
  * @param vmOptionsTable options table that can be used by the function to generate the options, this should be passed to
  * cleanupArguments once the test is complete to free allocated memory
  * @returns 0 on success, non-zero otherwise

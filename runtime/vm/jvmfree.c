@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
@@ -288,9 +288,9 @@ trcModulesFreeJ9ModuleEntry(J9JavaVM *javaVM, J9Module *j9module)
 	PORT_ACCESS_FROM_VMC(currentThread);
 	char moduleNameBuf[J9VM_PACKAGE_NAME_BUFFER_LENGTH];
 	char *moduleNameUTF = copyStringToUTF8WithMemAlloc(
-		currentThread, j9module->moduleName, J9_STR_NONE, "", moduleNameBuf, J9VM_PACKAGE_NAME_BUFFER_LENGTH);
+		currentThread, j9module->moduleName, J9_STR_NULL_TERMINATE_RESULT, "", 0, moduleNameBuf, J9VM_PACKAGE_NAME_BUFFER_LENGTH, NULL);
 	if (NULL != moduleNameUTF) {
-		Trc_MODULE_freeJ9Module_entry(currentThread, moduleNameUTF);
+		Trc_MODULE_freeJ9ModuleV2_entry(currentThread, moduleNameUTF, j9module);
 		if (moduleNameBuf != moduleNameUTF) {
 			j9mem_free_memory(moduleNameUTF);
 		}
@@ -302,7 +302,7 @@ freeJ9Module(J9JavaVM *javaVM, J9Module *j9module) {
 	/* Removed the module from all other modules readAccessHashTable and removeAccessHashtables */
 	J9HashTableState walkState;
 
-	if (TrcEnabled_Trc_MODULE_freeJ9Module_entry) {
+	if (TrcEnabled_Trc_MODULE_freeJ9ModuleV2_entry) {
 		trcModulesFreeJ9ModuleEntry(javaVM, j9module);
 	}
 

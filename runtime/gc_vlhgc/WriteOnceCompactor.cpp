@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <stdlib.h>
@@ -200,7 +200,7 @@ MM_WriteOnceCompactor::initialize(MM_EnvironmentVLHGC *env)
 		_compactGroupDestinations = (MM_CompactGroupDestinations *)j9mem_allocate_memory(sizeof(MM_CompactGroupDestinations) * compactGroups, OMRMEM_CATEGORY_MM);
 		didAllocateTable = (NULL != _compactGroupDestinations);
 		if (didAllocateTable) {
-			memset(_compactGroupDestinations, 0, sizeof(MM_CompactGroupDestinations) * compactGroups);
+			memset((void *)_compactGroupDestinations, 0, sizeof(MM_CompactGroupDestinations) * compactGroups);
 			for (UDATA i = 0; i < compactGroups; i++) {
 				_compactGroupDestinations[i].head = NULL;
 				_compactGroupDestinations[i].tail = NULL;
@@ -1224,13 +1224,18 @@ MM_WriteOnceCompactor::fixupClassObject(MM_EnvironmentVLHGC* env, J9Object *clas
 
 		do {
 			Assert_MM_mustBeClass(classPtr);
-			Assert_MM_true(0 == (J9CLASS_FLAGS(classPtr) & J9_JAVA_CLASS_DYING));
+			Assert_MM_true(0 == (J9CLASS_FLAGS(classPtr) & J9AccClassDying));
 
 			/*
-			 * scan static fields
+			 * Scan J9Class internals using general iterator
+			 * - scan statics fields
+			 * - scan call sites
+			 * - scan MethodTypes
+			 * - scan VarHandle MethodTypes
+			 * - scan constants pool objects
 			 */
-			GC_ClassStaticsIterator classStaticsIterator(env, classPtr);
-			while(NULL != (slotPtr = classStaticsIterator.nextSlot())) {
+			GC_ClassIterator classIterator(env, classPtr, false);
+			while (NULL != (slotPtr = classIterator.nextSlot())) {
 				J9Object *originalObject = *slotPtr;
 				if (NULL != originalObject) {
 					J9Object *forwardedObject = getForwardWrapper(env, originalObject, cache);
@@ -1239,60 +1244,9 @@ MM_WriteOnceCompactor::fixupClassObject(MM_EnvironmentVLHGC* env, J9Object *clas
 				}
 			}
 
-			/*
-			 * scan call sites
-			 */
-			GC_CallSitesIterator callSitesIterator(classPtr);
-			while(NULL != (slotPtr = callSitesIterator.nextSlot())) {
-				J9Object *originalObject = *slotPtr;
-				if (NULL != originalObject) {
-					J9Object *forwardedObject = getForwardWrapper(env, originalObject, cache);
-					*slotPtr = forwardedObject;
-					_interRegionRememberedSet->rememberReferenceForCompact(env, classObject, forwardedObject);
-				}
-			}
-
-			/*
-			 * scan MethodTypes
-			 */
-			GC_MethodTypesIterator methodTypesIterator(classPtr->romClass->methodTypeCount, classPtr->methodTypes);
-			while(NULL != (slotPtr = methodTypesIterator.nextSlot())) {
-				J9Object *originalObject = *slotPtr;
-				if (NULL != originalObject) {
-					J9Object *forwardedObject = getForwardWrapper(env, originalObject, cache);
-					*slotPtr = forwardedObject;
-					_interRegionRememberedSet->rememberReferenceForCompact(env, classObject, forwardedObject);
-				}
-			}
-
-			/*
-			 * scan VarHandle MethodTypes
-			 */
-			GC_MethodTypesIterator varHandleMethodTypesIterator(classPtr->romClass->varHandleMethodTypeCount, classPtr->varHandleMethodTypes);
-			while(NULL != (slotPtr = varHandleMethodTypesIterator.nextSlot())) {
-				J9Object *originalObject = *slotPtr;
-				if (NULL != originalObject) {
-					J9Object *forwardedObject = getForwardWrapper(env, originalObject, cache);
-					*slotPtr = forwardedObject;
-					_interRegionRememberedSet->rememberReferenceForCompact(env, classObject, forwardedObject);
-				}
-			}
-
-			/*
-			 * scan constant pool objects
-			 */
 			Assert_MM_true(classObject == getForwardWrapper(env, J9VM_J9CLASS_TO_HEAPCLASS(classPtr), cache));
 			classPtr->classObject = (j9object_t)classObject;
 
-			GC_ConstantPoolObjectSlotIterator constantPoolIterator(classPtr);
-			while(NULL != (slotPtr = constantPoolIterator.nextSlot())) {
-				J9Object *originalObject = *slotPtr;
-				if (NULL != originalObject) {
-					J9Object *forwardedObject = getForwardWrapper(env, originalObject, cache);
-					*slotPtr = forwardedObject;
-					_interRegionRememberedSet->rememberReferenceForCompact(env, classObject, forwardedObject);
-				}
-			}
 			classPtr = classPtr->replacedClass;
 		} while (NULL != classPtr);
 	}
@@ -1311,42 +1265,43 @@ MM_WriteOnceCompactor::fixupClassLoaderObject(MM_EnvironmentVLHGC* env, J9Object
 		/*
 		 * Fixup modules
 		 */
-		Assert_MM_true(NULL != classLoader->moduleHashTable);
-		J9HashTableState walkState;
-		J9Module **modulePtr = (J9Module **)hashTableStartDo(classLoader->moduleHashTable, &walkState);
+		if (NULL != classLoader->moduleHashTable) {
+			J9HashTableState walkState;
+			J9Module **modulePtr = (J9Module **)hashTableStartDo(classLoader->moduleHashTable, &walkState);
 
-		volatile j9object_t * slotPtr = NULL;
-		J9Object* originalObject = NULL;
+			volatile j9object_t * slotPtr = NULL;
+			J9Object* originalObject = NULL;
 
-		while (NULL != modulePtr) {
-			J9Module * const module = *modulePtr;
+			while (NULL != modulePtr) {
+				J9Module * const module = *modulePtr;
 
-			slotPtr = &module->moduleObject;
+				slotPtr = &module->moduleObject;
 
-			originalObject = *slotPtr;
-			J9Object* forwardedObject = getForwardWrapper(env, originalObject, cache);
-			*slotPtr = forwardedObject;
-			_interRegionRememberedSet->rememberReferenceForCompact(env, classLoaderObject, forwardedObject);
-
-			slotPtr = &module->moduleName;
-
-			originalObject = *slotPtr;
-			if (NULL != originalObject) {
+				originalObject = *slotPtr;
 				J9Object* forwardedObject = getForwardWrapper(env, originalObject, cache);
 				*slotPtr = forwardedObject;
 				_interRegionRememberedSet->rememberReferenceForCompact(env, classLoaderObject, forwardedObject);
+
+				slotPtr = &module->moduleName;
+
+				originalObject = *slotPtr;
+				if (NULL != originalObject) {
+					J9Object* forwardedObject = getForwardWrapper(env, originalObject, cache);
+					*slotPtr = forwardedObject;
+					_interRegionRememberedSet->rememberReferenceForCompact(env, classLoaderObject, forwardedObject);
+				}
+
+				slotPtr = &module->version;
+
+				originalObject = *slotPtr;
+				if (NULL != originalObject) {
+					J9Object* forwardedObject = getForwardWrapper(env, originalObject, cache);
+					*slotPtr = forwardedObject;
+					_interRegionRememberedSet->rememberReferenceForCompact(env, classLoaderObject, forwardedObject);
+				}
+
+				modulePtr = (J9Module**)hashTableNextDo(&walkState);
 			}
-
-			slotPtr = &module->version;
-
-			originalObject = *slotPtr;
-			if (NULL != originalObject) {
-				J9Object* forwardedObject = getForwardWrapper(env, originalObject, cache);
-				*slotPtr = forwardedObject;
-				_interRegionRememberedSet->rememberReferenceForCompact(env, classLoaderObject, forwardedObject);
-			}
-
-			modulePtr = (J9Module**)hashTableNextDo(&walkState);
 		}
 
 		/* We can't fixup remembered set for defined and referenced classes here since we 
@@ -2789,7 +2744,7 @@ MM_WriteOnceCompactor::rememberClassLoaders(MM_EnvironmentVLHGC *env)
 					GC_ClassHeapIterator classHeapIterator(_javaVM, segment);
 					J9Class *clazz = NULL;
 					while(NULL != (clazz = classHeapIterator.nextClass())) {
-						Assert_MM_true(!J9_ARE_ANY_BITS_SET(clazz->classDepthAndFlags, J9_JAVA_CLASS_DYING));
+						Assert_MM_true(!J9_ARE_ANY_BITS_SET(clazz->classDepthAndFlags, J9AccClassDying));
 						Assert_MM_true(!J9_ARE_ANY_BITS_SET(J9CLASS_EXTENDED_FLAGS(clazz), J9ClassGCScanned));
 						J9Object* classObject = clazz->classObject;
 						Assert_MM_true(NULL != classObject);
@@ -2830,7 +2785,7 @@ MM_WriteOnceCompactor::rebuildNextMarkMapFromClassLoaders(MM_EnvironmentVLHGC *e
 					GC_ClassHeapIterator classHeapIterator(_javaVM, segment);
 					J9Class *clazz = NULL;
 					while(NULL != (clazz = classHeapIterator.nextClass())) {
-						Assert_MM_true(!J9_ARE_ANY_BITS_SET(clazz->classDepthAndFlags, J9_JAVA_CLASS_DYING));
+						Assert_MM_true(!J9_ARE_ANY_BITS_SET(clazz->classDepthAndFlags, J9AccClassDying));
 						if(J9_ARE_ANY_BITS_SET(J9CLASS_EXTENDED_FLAGS(clazz), J9ClassGCScanned)) {
 							J9Object* classObject = clazz->classObject;
 							Assert_MM_true(NULL != classObject);

@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -97,7 +96,7 @@ static J9Object* convertPointerFromToken(J9JavaVM *javaVM, fj9object_t token);
 #define J9MODRON_GCCHK_J9CLASS_EYECATCHER (UDATA)0x99669966
 
 /**
- * Clear the counts of OwnableSynchronzierObjects
+ * Clear the counts of OwnableSynchronizerObjects
  */
 void
 GC_CheckEngine::clearCountsForOwnableSynchronizerObjects()
@@ -574,7 +573,7 @@ GC_CheckEngine::checkJ9Class(J9JavaVM *javaVM, J9Class *clazzPtr, J9MemorySegmen
 		return J9MODRON_GCCHK_RC_CLASS_POINTER_UNALIGNED;
 	}
 
-	/* Check that the class header containes the expected values */
+	/* Check that the class header contains the expected values */
 	UDATA ret = checkJ9ClassHeader(javaVM, clazzPtr);
 	if (J9MODRON_GCCHK_RC_OK != ret) {
 		return ret;
@@ -629,7 +628,7 @@ GC_CheckEngine::checkJ9ClassIsNotUnloaded(J9JavaVM *javaVM, J9Class *clazz)
 {
 	/* Check to ensure J9Class header has the correct eyecatcher.
 	 */
-	if (0 != (clazz->classDepthAndFlags & J9_JAVA_CLASS_DYING)) {
+	if (0 != (clazz->classDepthAndFlags & J9AccClassDying)) {
 		return  J9MODRON_GCCHK_RC_CLASS_IS_UNLOADED;
 	}
 	return  J9MODRON_GCCHK_RC_OK;
@@ -918,7 +917,7 @@ GC_CheckEngine::checkClassStatics(J9JavaVM* vm, J9Class* clazz)
 					numberOfReferences += 1;
 
 					/* get address of next field */
-					j9object_t* address = (j9object_t*)vm->internalVMFunctions->staticFieldAddress(currentThread, clazz, J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), J9UTF8_DATA(sigUTF), J9UTF8_LENGTH(sigUTF), NULL, NULL, 0, NULL);
+					j9object_t* address = (j9object_t*)vm->internalVMFunctions->staticFieldAddress(currentThread, clazz, J9UTF8_DATA(nameUTF), J9UTF8_LENGTH(nameUTF), J9UTF8_DATA(sigUTF), J9UTF8_LENGTH(sigUTF), NULL, NULL, J9_LOOK_NO_JAVA, NULL);
 
 					/* an address must be in gc scan range */
 					if (!((address >= sectionStart) && (address < sectionEnd))) {
@@ -1107,7 +1106,7 @@ GC_CheckEngine::checkObjectHeap(J9JavaVM *javaVM, J9MM_IterateObjectDescriptor *
 
 	if (!extensions->isConcurrentScavengerEnabled()) {
 		/* check Ownable Synchronizer Object consistency */
-		if ((OBJECT_HEADER_SHAPE_MIXED == J9GC_CLASS_SHAPE(clazz)) && (0 != (J9CLASS_FLAGS(clazz) & J9_JAVA_CLASS_OWNABLE_SYNCHRONIZER))) {
+		if ((OBJECT_HEADER_SHAPE_MIXED == J9GC_CLASS_SHAPE(clazz)) && (0 != (J9CLASS_FLAGS(clazz) & J9AccClassOwnableSynchronizer))) {
 			if (NULL == extensions->accessBarrier->isObjectInOwnableSynchronizerList(objectDesc->object)) {
 				PORT_ACCESS_FROM_PORT(_portLibrary);
 				j9tty_printf(PORTLIB, "  <gc check: found Ownable SynchronizerObject %p is not on the list >\n", objectDesc->object);
@@ -1299,7 +1298,7 @@ GC_CheckEngine::checkSlotOwnableSynchronizerList(J9JavaVM *javaVM, J9Object **ob
 		_reporter->report(&error);
 	} else {
 		J9Class *instanceClass = J9GC_J9OBJECT_CLAZZ(objectPtr);
-		if (0 == (J9CLASS_FLAGS(instanceClass) & J9_JAVA_CLASS_OWNABLE_SYNCHRONIZER)) {
+		if (0 == (J9CLASS_FLAGS(instanceClass) & J9AccClassOwnableSynchronizer)) {
 			GC_CheckError error(currentList, objectIndirect, _cycle, _currentCheck, J9MODRON_GCCHK_RC_INVALID_FLAGS, _cycle->nextErrorCount());
 			_reporter->report(&error);
 		}
@@ -1535,11 +1534,10 @@ isPointerInRange(void *pointer, void *start, void *end)
 static J9Object* 
 convertPointerFromToken(J9JavaVM* vm, fj9object_t token)
 {
-#if defined(J9VM_GC_COMPRESSED_POINTERS)	
-	MM_ObjectAccessBarrier *barrier = MM_GCExtensions::getExtensions(vm)->accessBarrier;
-	return barrier->convertPointerFromToken(token);
-#else 
+	if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm)) {
+		MM_ObjectAccessBarrier *barrier = MM_GCExtensions::getExtensions(vm)->accessBarrier;
+		return barrier->convertPointerFromToken(token);
+	}
 	return (J9Object*)token;
-#endif /* J9VM_GC_COMPRESSED_POINTERS */
 }
 #endif /* J9VM_GC_ARRAYLETS && !J9VM_GC_HYBRID_ARRAYLETS */

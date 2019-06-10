@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2014, 2017 IBM Corp. and others
+ * Copyright (c) 2014, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -28,6 +28,20 @@
  */
 
 #include "testjep178.h"
+#ifdef LINUX
+/* kludge to work around known issue in glibc pre 2.25
+ * https://sourceware.org/bugzilla/show_bug.cgi?id=16628
+ * https://github.com/eclipse/openj9/issues/3672
+ * Add a dummy pthread call to force libpthread to initialize.
+ */
+#include <pthread.h>
+
+static  pthread_key_t key;
+void unused_function()
+{
+    pthread_key_create(&key, NULL);
+}
+#endif
 
 /* The JVM launcher. */
 int main(int argc, char ** argv, char ** envp)
@@ -203,7 +217,7 @@ int main(int argc, char ** argv, char ** envp)
 	/* Open a handle to the jvm's shared library. */
 #if defined(WIN32)
 	handle = LoadLibrary(buffer);
-#elif defined(LINUX) || defined(AIXPPC)
+#elif defined(LINUX) || defined(AIXPPC) || defined(OSX)
 	handle = dlopen(buffer, RTLD_NOW);
 #else /* ZOS */
 	handle = dllload(buffer);
@@ -217,7 +231,7 @@ int main(int argc, char ** argv, char ** envp)
 	/* Lookup for the virtual machine entry point routine. */
 #if defined(WIN32)
 	createJavaVM = (createJVMFP) GetProcAddress((HINSTANCE)handle, "JNI_CreateJavaVM");
-#elif defined(LINUX) || defined(AIXPPC)
+#elif defined(LINUX) || defined(AIXPPC) || defined(OSX)
 	createJavaVM = (createJVMFP) dlsym(handle, "JNI_CreateJavaVM");
 #else /* Z/OS */
 	createJavaVM = (createJVMFP) dllqueryfn(handle, "JNI_CreateJavaVM");
@@ -297,7 +311,7 @@ fail:
 	if (NULL != handle) {
 #if defined(WIN32)
 		FreeLibrary(handle);
-#elif defined(LINUX) || defined(AIXPPC)
+#elif defined(LINUX) || defined(AIXPPC) || defined(OSX)
 		dlclose(handle);
 #else /* Z/OS */
 		dllfree(handle);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -49,19 +49,9 @@ static void lswPrintf(struct J9PortLibrary *portLibrary, const char *format, ...
 
 #ifdef LINUX
 static const char COL_RESET[] = "\x1b[0m";
-static const char RED[]     = "\x1b[31m";
-static const char GREEN[]   = "\x1b[32m";
-static const char YELLOW[]  = "\x1b[33m";
-static const char BLUE[]    = "\x1b[34m";
-static const char MAGENTA[] = "\x1b[35m";
 static const char CYAN[]    = "\x1b[36m";
 #else
 static const char COL_RESET[] = "";
-static const char RED[]     = "";
-static const char GREEN[]   = "";
-static const char YELLOW[]  = "";
-static const char BLUE[]    = "";
-static const char MAGENTA[] = "";
 static const char CYAN[]    = ""; 
 #endif
 
@@ -383,11 +373,7 @@ lswRecordSlot(J9StackWalkState * walkState, const void * slotAddress, UDATA slot
 	slot->type = slotType;
 
 	va_start(args, format);
-#if defined(WIN32)
-	_vsnprintf(buf, LSW_STRING_MAX, format, args);
-#else
 	vsnprintf(buf, LSW_STRING_MAX, format, args);
-#endif
 	va_end(args);
 
 	slot->name = lswStrDup(slotWalker, buf);
@@ -756,11 +742,7 @@ lswPrintf(struct J9PortLibrary *privatePortLibrary, const char *format, ...)
 	va_list args;
 
 	va_start(args, format);
-#if defined(WIN32)
-	_vsnprintf(buf, LSW_STRING_MAX, format, args);
-#else
 	vsnprintf(buf, LSW_STRING_MAX, format, args);
-#endif
 	va_end(args);
 
 	j9tty_printf(privatePortLibrary, buf);

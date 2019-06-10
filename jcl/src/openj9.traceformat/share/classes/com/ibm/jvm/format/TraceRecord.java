@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar18-SE]*/
 /*******************************************************************************
- * Copyright (c) 2000, 2016 IBM Corp. and others
+ * Copyright (c) 2000, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jvm.format;
 
@@ -176,7 +176,7 @@ public class TraceRecord implements Comparable {
         this.bufferSize    = traceFile.traceFileHeader.getBufferSize();
         this.traceFile     = traceFile;
         this.start         = start;
-        this.currentTimeStamp = timeStamp; // for intial sort
+        this.currentTimeStamp = timeStamp; // for initial sort
 
         // Validity check the nextEntry field. Note that a value of -1                      ibm@51252
         // indicates that this record does not contain the start of a trace                 ibm@51252
@@ -221,7 +221,7 @@ public class TraceRecord implements Comparable {
         Util.Debug.println("Processing Record Header");
         foundThreadID = false;
 
-        if ( Util.findThreadID(new Long(threadID)) == false ) {
+        if ( Util.findThreadID(Long.valueOf(threadID)) == false ) {
             return;
         }
 
@@ -240,7 +240,7 @@ public class TraceRecord implements Comparable {
         traceThread.addElement(this);
     }
 
-    /** Initialises static variables.
+    /** Initializes static variables.
      *
      *  <p>This is called each time the TraceFormatter is started, from the initStatics()
      *     method in TraceFormat.java</p>

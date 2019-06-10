@@ -2,7 +2,7 @@
 package com.ibm.tools.attach.attacher;
 
 /*******************************************************************************
- * Copyright (c) 2009, 2017 IBM Corp. and others
+ * Copyright (c) 2009, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -20,7 +20,7 @@ package com.ibm.tools.attach.attacher;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 import java.io.File;
@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.List;
 import com.sun.tools.attach.AttachNotSupportedException;
 import com.sun.tools.attach.AttachPermission;
-import com.sun.tools.attach.VirtualMachine;
 import com.sun.tools.attach.VirtualMachineDescriptor;
 import com.sun.tools.attach.spi.AttachProvider;
 import com.ibm.tools.attach.target.Advertisement;
@@ -52,7 +51,7 @@ public class OpenJ9AttachProvider extends AttachProvider {
 	}
 
 	@Override
-	public VirtualMachine attachVirtualMachine(String id)
+	public OpenJ9VirtualMachine attachVirtualMachine(String id)
 			throws AttachNotSupportedException, IOException {
 
 		checkAttachSecurity();
@@ -71,7 +70,7 @@ public class OpenJ9AttachProvider extends AttachProvider {
 	}
 
 	@Override
-	public VirtualMachine attachVirtualMachine (
+	public OpenJ9VirtualMachine attachVirtualMachine (
 			VirtualMachineDescriptor descriptor)
 			throws AttachNotSupportedException, IOException {
 
@@ -131,10 +130,10 @@ public class OpenJ9AttachProvider extends AttachProvider {
 				}
 
 				boolean staleDirectory = true;
-				File advertisment = new File(f, Advertisement.getFilename());
+				File advertisement = new File(f, Advertisement.getFilename());
 				long uid = 0;
-				if (advertisment.exists()) {
-					OpenJ9VirtualMachineDescriptor descriptor = OpenJ9VirtualMachineDescriptor.fromAdvertisement(this, advertisment);
+				if (advertisement.exists()) {
+					OpenJ9VirtualMachineDescriptor descriptor = OpenJ9VirtualMachineDescriptor.fromAdvertisement(this, advertisement);
 					if (null != descriptor) {
 						long pid = descriptor.getProcessId();
 						uid = descriptor.getUid();
@@ -150,7 +149,7 @@ public class OpenJ9AttachProvider extends AttachProvider {
 						 * If getFileOwner fails, the uid will appear to be -1, and non-root users will ignore it.
 						 * CommonDirectory.deleteStaleDirectories() will handle the case of a target directory which does not have an advertisement directory.
 						 */
-						uid = CommonDirectory.getFileOwner(advertisment.getAbsolutePath());
+						uid = CommonDirectory.getFileOwner(advertisement.getAbsolutePath());
 					}
 				}
 

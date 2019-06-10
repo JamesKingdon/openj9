@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -175,11 +174,14 @@ j9mm_iterate_spaces(
 		spaceDesc.classPointerOffset = TMP_OFFSETOF_J9OBJECT_CLAZZ;
 		spaceDesc.classPointerSize = sizeof(j9objectclass_t);
 		spaceDesc.fobjectPointerDisplacement = 0;
-#if defined(J9VM_GC_COMPRESSED_POINTERS)
-		spaceDesc.fobjectPointerScale = (UDATA)1 << vm->compressedPointersShift;
-#else /* J9VM_GC_COMPRESSED_POINTERS */
-		spaceDesc.fobjectPointerScale = 1;
-#endif /* J9VM_GC_COMPRESSED_POINTERS */
+#if defined(OMR_GC_COMPRESSED_POINTERS)
+		if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm)) {
+			spaceDesc.fobjectPointerScale = (UDATA)1 << vm->compressedPointersShift;
+		} else
+#endif /* OMR_GC_COMPRESSED_POINTERS */
+		{
+			spaceDesc.fobjectPointerScale = 1;
+		}
 		spaceDesc.fobjectSize = sizeof(fj9object_t);
 		spaceDesc.memorySpace = defaultMemorySpace;
 
@@ -430,7 +432,7 @@ j9mm_iterate_object_slots(
 
 
 /**
- * Provide the arraylet idetification bitmask.  For builds that do not
+ * Provide the arraylet identification bitmask.  For builds that do not
  * support arraylets all values are set to 0.
  *
  * @return arrayletLeafSize
@@ -750,7 +752,7 @@ iterateRegionObjects(
 	J9Object* object = NULL;
 	while(NULL != (object = objectHeapIterator.nextObject())) {
 		J9MM_IterateObjectDescriptor objectDescriptor;
-		if ((extensions->objectModel.isDeadObject(object)) || (0 != (J9CLASS_FLAGS(J9GC_J9OBJECT_CLAZZ(object)) & J9_JAVA_CLASS_DYING))) {
+		if ((extensions->objectModel.isDeadObject(object)) || (0 != (J9CLASS_FLAGS(J9GC_J9OBJECT_CLAZZ(object)) & J9AccClassDying))) {
 			if (0 != (flags & j9mm_iterator_flag_include_holes)) {
 				if (extensions->objectModel.isDeadObject(object)) {
 					objectDescriptor.id = (UDATA)object;

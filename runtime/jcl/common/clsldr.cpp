@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2017 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #include "ArrayCopyHelpers.hpp"
 #include "j9.h"
@@ -37,29 +37,52 @@ jboolean JNICALL Java_java_lang_ClassLoader_isVerboseImpl(JNIEnv *env, jclass cl
 	return ( (javaVM->verboseLevel & VERBOSE_CLASS) == VERBOSE_CLASS );
 }
 
-
-jclass JNICALL 
+jclass JNICALL
 Java_java_lang_ClassLoader_defineClassImpl(JNIEnv *env, jobject receiver, jstring className, jbyteArray classRep, jint offset, jint length, jobject protectionDomain)
 {
-#ifdef J9VM_OPT_DYNAMIC_LOAD_SUPPORT
-	if (className != NULL) {
-		J9VMThread *currentThread = (J9VMThread *)env;
-		J9JavaVM *vm = currentThread->javaVM;
-		J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
+	J9VMThread *currentThread = (J9VMThread *)env;
+	J9InternalVMFunctions *vmFuncs = currentThread->javaVM->internalVMFunctions;
+	UDATA options = 0;
 
+#ifdef J9VM_OPT_DYNAMIC_LOAD_SUPPORT
+	if (NULL != className) {
 		vmFuncs->internalEnterVMFromJNI(currentThread);
 
 		if (CLASSNAME_INVALID == vmFuncs->verifyQualifiedName(currentThread, J9_JNI_UNWRAP_REFERENCE(className))) {
-			vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGNOCLASSDEFFOUNDERROR, (UDATA *)*(j9object_t*)className);
-			vmFuncs->internalReleaseVMAccess(currentThread);
-			return NULL;
+			/*
+			 * We don't yet know if the class being defined is exempt. Setting this option tells
+			 * defineClassCommon() to fail if it discovers that the class is not exempt. That failure
+			 * is distinguished by returning NULL with no exception pending.
+			 */
+			options |= J9_FINDCLASS_FLAG_NAME_IS_INVALID;
 		}
 
-		vmFuncs->internalReleaseVMAccess(currentThread);
+		vmFuncs->internalExitVMToJNI(currentThread);
 	}
-#endif
+#endif /* J9VM_OPT_DYNAMIC_LOAD_SUPPORT */
 
-	return defineClassCommon(env, receiver, className, classRep, offset, length, protectionDomain, 0, NULL);
+	if (NULL == protectionDomain) {
+		/*
+		 * Only trusted code has access to JavaLangAccess.defineClass();
+		 * callers only provide a NULL protectionDomain when exemptions
+		 * are required.
+		 */
+		options |= J9_FINDCLASS_FLAG_UNSAFE;
+	}
+
+	jclass result = defineClassCommon(env, receiver, className, classRep, offset, length, protectionDomain, options, NULL);
+
+	if (J9_ARE_ANY_BITS_SET(options, J9_FINDCLASS_FLAG_NAME_IS_INVALID) && (NULL == result) && (NULL == currentThread->currentException)) {
+		/*
+		 * Now that we know the class is not exempt, throw NoClassDefFoundError as we
+		 * would have liked to have done above before we called defineClassCommon().
+		 */
+		vmFuncs->internalEnterVMFromJNI(currentThread);
+		vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGNOCLASSDEFFOUNDERROR, (UDATA *)*(j9object_t *)className);
+		vmFuncs->internalExitVMToJNI(currentThread);
+	}
+
+	return result;
 }
 
 jboolean JNICALL
@@ -92,11 +115,11 @@ Java_com_ibm_oti_vm_BootstrapClassLoader_addJar(JNIEnv *env, jobject receiver, j
 		newCount = (jint)addJarToSystemClassLoaderClassPathEntries(vm, jarPathBuffer);
 		j9mem_free_memory(jarPathBuffer);
 		vmFuncs->releaseExclusiveVMAccess(currentThread);
-		vmFuncs->internalReleaseVMAccess(currentThread);
+		vmFuncs->internalExitVMToJNI(currentThread);
 	}
-	/* If any error occcurred, throw OutOfMemoryError */
+	/* If any error occurred, throw OutOfMemoryError */
 	if (0 == newCount) {
-		throwNativeOOMError(env, J9NLS_JCL_UNABLE_TO_CREATE_CLASS_PATH_ENTRY);
+		vmFuncs->throwNativeOOMError(env, J9NLS_JCL_UNABLE_TO_CREATE_CLASS_PATH_ENTRY);
 	}
 	return newCount;
 }

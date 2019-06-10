@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -43,60 +43,24 @@
 #include <netinet/in.h> /* for struct in_addr */
 #include <sys/ioctl.h>
 #include <net/if.h> /* for struct ifconf */
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 #include <arpa/inet.h>
 #endif
 
-#if defined(J9ZTPF)
+#if defined(J9ZTPF) || defined(OSX)
 #undef GLIBC_R
-#endif /* defined(J9ZTPF) */
+#endif /* defined(J9ZTPF) || defined(OSX) */
 
 #if defined(J9ZOS390)
 #include "atoe.h"
 #endif
 
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 #include <poll.h>
+#if defined(LINUX)
 #define IPV6_FLOWINFO_SEND      33
-#define HAS_RTNETLINK 1
-#endif
-
-#if defined(HAS_RTNETLINK)
-#include <asm/types.h>
-#include <linux/netlink.h> 
-#include <linux/rtnetlink.h> 
-typedef struct linkReq_struct{
-               struct nlmsghdr 	netlinkHeader;
-               struct ifinfomsg	msg;
-	} linkReq_struct ;
-
-typedef struct addrReq_struct{
-               struct nlmsghdr 	netlinkHeader;
-               struct ifaddrmsg   msg;
-	} addrReq_struct ;
-
-#define NETLINK_DATA_BUFFER_SIZE 4096
-#define NETLINK_READTIMEOUT_SECS 20
-
-typedef struct netlinkContext_struct {
-			int 						netlinkSocketHandle;
-			char 						buffer[NETLINK_DATA_BUFFER_SIZE];
-			struct nlmsghdr*    	netlinkHeader;
-			uint32_t 					remainingLength;
-			uint32_t						done;
-	} netlinkContext_struct;
-
-#else /* HAS_RTNETLINK */
-
-/* need something so that functions still compile */
-typedef struct netlinkContext_struct {
-			int 						netlinkSocketHandle;
-	} netlinkContext_struct;
-
-typedef struct nlmsghdr {
-			int length;
-	} nlmsghdr;
-#endif
+#endif /* defined(LINUX) */
+#endif /* defined(LINUX) || defined(OSX) */
 
 #define INVALID_SOCKET (j9socket_t) -1
 
@@ -528,7 +492,7 @@ platformSocketOption(int32_t portableSocketOption)
  * entity, as known to the communications layer. The exact format of the addr parameter 
  * is determined by the address family established when the socket was created. 
  * @param[in] sockHandle A pointer to a j9socket_t  which will point to the newly created 
- * socket once accept returns succesfully
+ * socket once accept returns successfully
  *
  * @return 
  * \arg 0 on success
@@ -543,7 +507,7 @@ platformSocketOption(int32_t portableSocketOption)
 int32_t
 j9sock_accept(struct J9PortLibrary *portLibrary, j9socket_t serverSock, j9sockaddr_t addrHandle, j9socket_t *sockHandle)
 {
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 #define ACCEPTCAST (socklen_t *)
 #else
 #define ACCEPTCAST
@@ -790,13 +754,13 @@ j9sock_fdset_init(struct J9PortLibrary *portLibrary, j9socket_t socketP)
 	fdset = ptBuffers->fdset;
 	memset(fdset, 0, sizeof(struct j9fdset_struct));
 
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 	portLibrary->sock_fdset_zero(portLibrary, ptBuffers->fdset);
 	portLibrary->sock_fdset_set(portLibrary, socketP, ptBuffers->fdset);
 #else
 	FD_ZERO(&fdset->handle);
 	FD_SET(SOCKET_CAST(socketP), &fdset->handle);
-#endif
+#endif /* defined(LINUX) || defined(OSX) */
 
 	return 0;
 }
@@ -1104,7 +1068,7 @@ j9sock_getaddrinfo_family(struct J9PortLibrary *portLibrary, j9addrinfo_t handle
 	OSADDRINFO *addr;
     	int i;
 
-	/* If we have the IPv6 functions then we'll cast to a OSADDRINFO othewise we have a hostent */
+	/* If we have the IPv6 functions then we'll cast to a OSADDRINFO otherwise we have a hostent */
 #ifdef IPv6_FUNCTION_SUPPORT
 	addr = (OSADDRINFO *) handle->addr_info;
 	for( i=0; i<index; i++ ) {
@@ -1225,14 +1189,14 @@ j9sock_getaddrinfo_name(struct J9PortLibrary *portLibrary, j9addrinfo_t handle, 
 int32_t
 j9sock_gethostbyaddr(struct J9PortLibrary *portLibrary, char *addr, int32_t length, int32_t type, j9hostent_t handle)
 {
-#if defined(J9ZTPF)
+#if defined(J9ZTPF) || defined(OSX) /* TODO: OSX: Revisit this after java -version works */ 
     int herr = NO_RECOVERY;
     OMRPORT_ACCESS_FROM_J9PORT(portLibrary);
 
     J9SOCKDEBUGH("<gethostbyaddr failed, err=%d>\n", herr);
     return omrerror_set_last_error(herr, findHostError(herr));
 
-#else /* defined(J9ZTPF) */
+#else /* defined(J9ZTPF) || defined(OX) */
 
 #if !HOSTENT_DATA_R
 	OSHOSTENT *result;
@@ -1347,6 +1311,10 @@ j9sock_gethostbyaddr(struct J9PortLibrary *portLibrary, char *addr, int32_t leng
 int32_t
 j9sock_gethostbyname(struct J9PortLibrary *portLibrary, const char *name, j9hostent_t handle)
 {
+#if defined(OSX) /* TODO: OSX: Revisit this after java -version works */
+	return -1;
+#else /* OSX */
+
 #if !HOSTENT_DATA_R
 	OSHOSTENT *result;
 #endif
@@ -1440,6 +1408,7 @@ j9sock_gethostbyname(struct J9PortLibrary *portLibrary, const char *name, j9host
 #undef hostentBuffer
 
 	return 0;
+#endif /* !OSX */
 }
 
 
@@ -1482,7 +1451,7 @@ j9sock_gethostname(struct J9PortLibrary *portLibrary, char *buffer, int32_t leng
  * @param[in] sockaddr_size The size of "in_addr"
  * @param[out] name The hostname of the passed address in a preallocated buffer.
  * @param[in] name_length The length of the buffer pointed to by name
- * @param[in] flags Flags on how to form the repsonse (see man pages or doc for getnameinfo)
+ * @param[in] flags Flags on how to form the response (see man pages or doc for getnameinfo)
  *
  * @return	0, if no errors occurred, otherwise the (negative) error code
  *
@@ -1494,11 +1463,11 @@ j9sock_getnameinfo(struct J9PortLibrary *portLibrary, j9sockaddr_t in_addr, int3
 {
 	OMRPORT_ACCESS_FROM_J9PORT(portLibrary);
 	/* On z/TPF we don't support this option of returning the host name from the in_addr */
-#if defined(J9ZTPF)
+#if defined(J9ZTPF) || defined(OSX) /* TODO: OSX: Revisit this after java -version works */
 	int herr = NO_RECOVERY;
 	J9SOCKDEBUGH( "<gethostbyaddr failed, err=%d>\n", herr);
 	return omrerror_set_last_error(herr, findHostError(herr));
-#else /* defined(J9ZTPF) */
+#else /* defined(J9ZTPF) || defined(OSX) */
 /* If we have the IPv6 functions available we will call them, otherwise we'll call the IPv4 function */
 #ifdef IPv6_FUNCTION_SUPPORT
 	int rc = 0;
@@ -1850,8 +1819,8 @@ j9sock_getopt_sockaddr(struct J9PortLibrary *portLibrary, j9socket_t socketP, in
 
 	/* if IPv4 the OS returns in_addr, if IPv6, value of interface index is returned */
 	typedef union byte_or_int {
-		uint8_t byte;
-		uint32_t integer;
+		uint8_t byte_val;
+		uint32_t integer_val;
 	} value;
 	value val;
 	socklen_t optlen = sizeof(val);
@@ -1881,13 +1850,13 @@ j9sock_getopt_sockaddr(struct J9PortLibrary *portLibrary, j9socket_t socketP, in
 	if (J9ADDR_FAMILY_AFINET6 == portableFamily) {
 		if (optlen == sizeof(uint8_t)) {
 			/* lookup the address with the interface index */
-			int32_t result = lookupIPv6AddressFromIndex(portLibrary, val.byte, (j9sockaddr_t) sockaddr);
+			int32_t result = lookupIPv6AddressFromIndex(portLibrary, val.byte_val, (j9sockaddr_t) sockaddr);
 			if (0 != result){
 				return result;
 			}
 		} else if (optlen == sizeof(struct in_addr)){
 			/* if optlen is 4, address is IPv4 */
-			sockaddr->sin_addr.s_addr = val.integer;
+			sockaddr->sin_addr.s_addr = val.integer_val;
 		} else {
 			Trc_PRT_sock_j9sock_getopt_sockaddr_address_length_invalid_Exit(portableFamily);
 			return J9PORT_ERROR_SOCKET_OPTARGSINVALID;
@@ -1895,7 +1864,7 @@ j9sock_getopt_sockaddr(struct J9PortLibrary *portLibrary, j9socket_t socketP, in
 	} else if (J9ADDR_FAMILY_AFINET4 == portableFamily) {
 		/* portableFamily is AFINET4 when preferIPv4Stack=true */
 		if (optlen == sizeof(struct in_addr)) {
-			sockaddr->sin_addr.s_addr = val.integer;
+			sockaddr->sin_addr.s_addr = val.integer_val;
 		} else {
 			Trc_PRT_sock_j9sock_getopt_sockaddr_address_length_invalid_Exit(portableFamily);
 			return J9PORT_ERROR_SOCKET_OPTARGSINVALID;
@@ -2162,7 +2131,7 @@ j9sock_ipmreq_init(struct J9PortLibrary *portLibrary, j9ipmreq_t handle, uint32_
  * @param[in] portLibrary The port library.
  * @param[out] handle A pointer to the j9ipv6_mreq_struct to populate.
  * @param[in] ipmcast_addr The ip mulitcast address.
- * @param[in] ipv6mr_interface The ip mulitcast inteface.
+ * @param[in] ipv6mr_interface The ip mulitcast interface.
  *
  * @return	0, if no errors occurred, otherwise the (negative) error code.
  *
@@ -2417,9 +2386,9 @@ j9sock_select(struct J9PortLibrary *portLibrary, int32_t nfds, j9fdset_t readfd,
 {
 	OMRPORT_ACCESS_FROM_J9PORT(portLibrary);
 	int32_t rc = 0;
-#if !defined(LINUX)	
+#if !defined(LINUX) && !defined(OSX)
 	int32_t result = 0;
-#endif /* !defined(LINUX) */
+#endif /* !defined(LINUX) && !defined(OSX) */
 
 	Trc_PRT_sock_j9sock_select_Entry(nfds, readfd, writefd, exceptfd_notSupported, timeout == NULL ? 0 : timeout->time.tv_sec, timeout == NULL ? 0 : timeout->time.tv_usec);
 
@@ -2431,7 +2400,7 @@ j9sock_select(struct J9PortLibrary *portLibrary, int32_t nfds, j9fdset_t readfd,
 	 * The checking code should be kept active on other platforms (zOS/AIX) since they still use select(..)
 	 * and the default value of FD_SETSIZE varies with platforms.
 	 */
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 	if (NULL == timeout) {
 #else
 	if ((nfds >= FD_SETSIZE) || (NULL == timeout)) {
@@ -2440,7 +2409,7 @@ j9sock_select(struct J9PortLibrary *portLibrary, int32_t nfds, j9fdset_t readfd,
 	} else {
 
 		if (NULL != exceptfd_notSupported) {
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 			if (-1 != exceptfd_notSupported->fd) {
 #else
 			if (NULL != &exceptfd_notSupported->handle) {
@@ -2451,7 +2420,7 @@ j9sock_select(struct J9PortLibrary *portLibrary, int32_t nfds, j9fdset_t readfd,
 			}
 		}
 
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 		int timeoutms;
 		int pollrc = 0;
 		struct pollfd pfds[2];
@@ -2516,7 +2485,7 @@ j9sock_select(struct J9PortLibrary *portLibrary, int32_t nfds, j9fdset_t readfd,
 		 * In the case of poll fails with EINTR, continue trying to poll since EINTR happens randomly for no reason.
 		 */
 		do {
-			/* Make sure revents is initilized to 0 before poll call. revents might not be initilized to 0 if this is not the first try of calling poll */
+			/* Make sure revents is initialized to 0 before poll call. revents might not be initialized to 0 if this is not the first try of calling poll */
 			pfds[0].revents = 0;
 			pfds[1].revents = 0;
 			pollrc = poll(pfds, numEntriesInPfd, timeoutms);
@@ -2817,9 +2786,9 @@ j9sock_setopt_int(struct J9PortLibrary *portLibrary, j9socket_t socketP, int32_t
 	/* for LINUX in order to enable support sending the ipv6_flowinfo field we have to set the SEND_FLOWINFO option on the socket
 		In java one value is set that is used for both the traffic class in the flowinfo field and the IP_TOS option.  Therefore  if the caller is setting traffic class
 		then this indicates that we should also be setting the flowinfo field so we need to 
-		set this option.  Howerver it can only be set on IPv6 sockets */
+		set this option.  However it can only be set on IPv6 sockets */
 #if defined(IPv6_FUNCTION_SUPPORT)
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 	if(( OS_IPPROTO_IP == platformLevel)&&(OS_IP_TOS==platformOption)&&(socketP->family == J9ADDR_FAMILY_AFINET6 )){
 		uint32_t on = 1;
 		uint32_t result = 0;
@@ -3515,7 +3484,7 @@ j9sock_sockaddr_port(struct J9PortLibrary *portLibrary, j9sockaddr_t handle)
  * @param[in] portLibrary The port library.
  * @param[out]	handle Pointer pointer to the j9socket struct, to be allocated
  * @param[in] family The address family (currently, only J9SOCK_AFINET is supported)
- * @param[in] socktype Secifies what type of socket is created
+ * @param[in] socktype Specifies what type of socket is created
  * \arg J9SOCK_STREAM, for a stream socket
  * \arg J9SOCK_DGRAM, for a datagram socket
  * @param[in] protocol Type/family specific creation parameter (currently, only J9SOCK_DEFPROTOCOL supported).
@@ -3823,7 +3792,7 @@ j9sock_connect_with_timeout(struct J9PortLibrary *portLibrary, j9socket_t sock, 
 void
 j9sock_fdset_zero(struct J9PortLibrary *portLibrary, j9fdset_t j9fdset) 
 {
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 	j9fdset->fd = -1;
 #else
 	FD_ZERO(&j9fdset->handle);
@@ -3836,7 +3805,7 @@ void
 j9sock_fdset_set(struct J9PortLibrary *portLibrary, j9socket_t aSocket, j9fdset_t j9fdset) 
 {
 
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 	/* check that the j9fdset is empty */
 	Assert_PRT_true((-1 == j9fdset->fd) || (j9fdset->fd == SOCKET_CAST(aSocket)));
 
@@ -3856,7 +3825,7 @@ j9sock_fdset_set(struct J9PortLibrary *portLibrary, j9socket_t aSocket, j9fdset_
 void
 j9sock_fdset_clr(struct J9PortLibrary *portLibrary, j9socket_t aSocket, j9fdset_t j9fdset) 
 {
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 	j9fdset->fd = -1;
 #else
 	if (SOCKET_CAST(aSocket) > FD_SETSIZE) {
@@ -3874,7 +3843,7 @@ j9sock_fdset_isset(struct J9PortLibrary *portLibrary, j9socket_t aSocket, j9fdse
 {
 	BOOLEAN rc = FALSE;
 
-#if defined(LINUX)
+#if defined(LINUX) || defined(OSX)
 	rc = (j9fdset->fd == SOCKET_CAST(aSocket));
 #else
 	int fdIsSetRC;
@@ -3901,7 +3870,7 @@ j9sock_fdset_isset(struct J9PortLibrary *portLibrary, j9socket_t aSocket, j9fdse
  *
  * @return	0 if success, a socket error if a failure occurred
  */
-#ifdef LINUX
+#if defined(LINUX) || defined(OSX)
 static int32_t
 disconnectSocket(struct J9PortLibrary *portLibrary, j9socket_t sock, socklen_t fromlen)
 {

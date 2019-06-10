@@ -1,6 +1,6 @@
  
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,16 +18,19 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
  * @file
  */
 
+#include "omrutil.h"
+
 #include "MetronomeAlarmThread.hpp"
-#include "RealtimeGC.hpp"
+#include "MetronomeDelegate.hpp"
 #include "OSInterface.hpp"
+#include "RealtimeGC.hpp"
 #include "Timer.hpp"
 
 #if defined(LINUX)
@@ -44,7 +47,7 @@ MM_MetronomeAlarmThread::newInstance(MM_EnvironmentBase *env)
 {
 	MM_MetronomeAlarmThread *alarmThread;
 	
-	alarmThread = (MM_MetronomeAlarmThread *)env->getForge()->allocate(sizeof(MM_MetronomeAlarmThread), MM_AllocationCategory::FIXED, J9_GET_CALLSITE());
+	alarmThread = (MM_MetronomeAlarmThread *)env->getForge()->allocate(sizeof(MM_MetronomeAlarmThread), MM_AllocationCategory::FIXED, OMR_GET_CALLSITE());
 	if (alarmThread) {
 		new(alarmThread) MM_MetronomeAlarmThread(env);
 		if (!alarmThread->initialize(env)) {
@@ -96,7 +99,7 @@ MM_MetronomeAlarmThread::initialize(MM_EnvironmentBase *env)
 		return false;
 	}
 
-	/* TODO: The MM_Alarm classes don't quite have the newInstance/initalize
+	/* TODO: The MM_Alarm classes don't quite have the newInstance/initialize
 	 * pattern right, so we have to manually call initialize.
 	 */
 	_alarm = MM_Alarm::factory(env, _scheduler->_osInterface);
@@ -107,49 +110,13 @@ MM_MetronomeAlarmThread::initialize(MM_EnvironmentBase *env)
 	return true;
 }
 
-UDATA
-MM_MetronomeAlarmThread::signalProtectedFunction(J9PortLibrary* privatePortLibrary, void* userData)
-{
-	MM_MetronomeAlarmThread *alarmThread = (MM_MetronomeAlarmThread *)userData;
-	J9JavaVM *javaVM = (J9JavaVM *)alarmThread->getScheduler()->_extensions->getOmrVM()->_language_vm;
-	J9VMThread *vmThread = NULL;
-	MM_EnvironmentRealtime *env = NULL;
-	
-	if (JNI_OK != (javaVM->internalVMFunctions->attachSystemDaemonThread(javaVM, &vmThread, "GC Alarm"))) {
-		return 0;
-	}
-	
-	env = MM_EnvironmentRealtime::getEnvironment(vmThread);
-	
-	alarmThread->run(env);
-	
-	javaVM->internalVMFunctions->DetachCurrentThread((JavaVM*)javaVM);
-	
-	return 0;
-}
-
 /**
  * C entrypoint for the newly created alarm thread.
  */
 int J9THREAD_PROC
 MM_MetronomeAlarmThread::metronomeAlarmThreadWrapper(void* userData)
 {
-	MM_MetronomeAlarmThread *alarmThread = (MM_MetronomeAlarmThread *)userData;
-	J9JavaVM *javaVM = (J9JavaVM *)alarmThread->getScheduler()->_extensions->getOmrVM()->_language_vm;
-	PORT_ACCESS_FROM_JAVAVM(javaVM);
-	UDATA rc;
-
-	j9sig_protect(MM_MetronomeAlarmThread::signalProtectedFunction, (void*)userData, 
-		javaVM->internalVMFunctions->structuredSignalHandlerVM, javaVM,
-		J9PORT_SIG_FLAG_SIGALLSYNC | J9PORT_SIG_FLAG_MAY_CONTINUE_EXECUTION, 
-		&rc);
-		
-	omrthread_monitor_enter(alarmThread->_mutex);
-	alarmThread->_alarmThreadActive = ALARM_THREAD_SHUTDOWN;
-	omrthread_monitor_notify(alarmThread->_mutex);
-	omrthread_exit(alarmThread->_mutex);
-		
-	return 0;
+	return MM_MetronomeDelegate::metronomeAlarmThreadWrapper(userData);
 }
 
 /**
@@ -163,13 +130,12 @@ MM_MetronomeAlarmThread::metronomeAlarmThreadWrapper(void* userData)
 bool
 MM_MetronomeAlarmThread::startThread(MM_EnvironmentBase *env)
 {
-	J9JavaVM *vm = (J9JavaVM *)env->getLanguageVM();
-	UDATA startPriority;
+	uintptr_t startPriority;
 	bool retCode;
 
 	startPriority = J9THREAD_PRIORITY_MAX;
 
-	if (0 != vm->internalVMFunctions->createThreadWithCategory(
+	if (J9THREAD_SUCCESS != createThreadWithCategory(
 				&_thread,
 				64 * 1024,
 				startPriority,
@@ -214,3 +180,4 @@ MM_MetronomeAlarmThread::run(MM_EnvironmentRealtime *env)
 	}
 	omrthread_monitor_exit(_mutex);
 }
+

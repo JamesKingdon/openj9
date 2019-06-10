@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2015 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.view.dtfj.java;
 
@@ -56,16 +56,13 @@ import com.ibm.j9ddr.view.dtfj.image.J9DDRCorruptData;
 import com.ibm.j9ddr.view.dtfj.image.J9DDRImageSection;
 import com.ibm.j9ddr.vm29.events.EventManager;
 import com.ibm.j9ddr.vm29.j9.DataType;
-import com.ibm.j9ddr.vm29.j9.Pool;
 import com.ibm.j9ddr.vm29.j9.RootScanner;
-import com.ibm.j9ddr.vm29.j9.SlotIterator;
 import com.ibm.j9ddr.vm29.j9.gc.GCClassLoaderIterator;
 import com.ibm.j9ddr.vm29.j9.gc.GCVMThreadListIterator;
 import com.ibm.j9ddr.vm29.j9.walkers.J9MemTagIterator;
 import com.ibm.j9ddr.vm29.j9.walkers.MemoryCategoryIterator;
 import com.ibm.j9ddr.vm29.pointer.U8Pointer;
 import com.ibm.j9ddr.vm29.pointer.VoidPointer;
-import com.ibm.j9ddr.vm29.pointer.generated.J9BuildFlags;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ClassLoaderPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ClassPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9JITConfigPointer;
@@ -76,7 +73,6 @@ import com.ibm.j9ddr.vm29.pointer.generated.J9ThreadAbstractMonitorPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9VMThreadPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.MM_MemorySpacePointer;
 import com.ibm.j9ddr.vm29.pointer.helper.J9JavaVMHelper;
-import com.ibm.j9ddr.vm29.structure.J9Consts;
 import com.ibm.j9ddr.vm29.structure.J9JITConfig;
 import com.ibm.j9ddr.vm29.structure.J9JavaVM;
 import com.ibm.j9ddr.vm29.types.U64;
@@ -195,7 +191,7 @@ public class DTFJJavaRuntime implements JavaRuntime {
 					properties.setProperty("AOT", "disabled");
 				}
 				
-				if (jitConfig.fsdEnabled().eq(new UDATA(0))) {
+				if (!jitConfig.fsdEnabled().eq(new UDATA(0))) {
 					properties.setProperty("FSD", "enabled");
 				} else {
 					properties.setProperty("FSD", "disabled");
@@ -664,21 +660,18 @@ public class DTFJJavaRuntime implements JavaRuntime {
 				}
 			}
 		}
-
 	}
 
-
 	@SuppressWarnings("rawtypes")
-
-	public Iterator getHeaps() throws UnsupportedOperationException {		
+	public Iterator getHeaps() throws UnsupportedOperationException {
 		try {
 			LinkedList<Object> heaps = new LinkedList<Object>();
-			
+
 			VoidPointer memorySpace = DTFJContext.getVm().defaultMemorySpace();
 			MM_MemorySpacePointer defaultMemorySpace = MM_MemorySpacePointer.cast(memorySpace);
 			U8Pointer namePtr = defaultMemorySpace._name();
 			String name = "No name"; //MEMORY_SPACE_NAME_UNDEFINED
-			if( namePtr != null && namePtr != U8Pointer.NULL ) {
+			if (namePtr != null && !namePtr.isNull()) {
 				try {
 					name = namePtr.getCStringAtOffset(0);
 				} catch (com.ibm.j9ddr.CorruptDataException e) {
@@ -686,7 +679,7 @@ public class DTFJJavaRuntime implements JavaRuntime {
 				}
 			}
 			heaps.add(new DTFJJavaHeap(defaultMemorySpace, name, DTFJContext.getImagePointer(memorySpace.getAddress())));
-			
+
 			return heaps.iterator();
 		} catch (Throwable t) {
 			CorruptData cd = J9DDRDTFJUtils.handleAsCorruptData(DTFJContext.getProcess(), t);

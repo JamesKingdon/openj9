@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2015 IBM Corp. and others
+ * Copyright (c) 2009, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.view.dtfj.java;
 
@@ -44,7 +44,6 @@ import com.ibm.dtfj.java.JavaReference;
 import com.ibm.dtfj.java.JavaThread;
 import com.ibm.j9ddr.events.IEventListener;
 import com.ibm.j9ddr.view.dtfj.J9DDRDTFJUtils;
-import com.ibm.j9ddr.view.dtfj.image.J9DDRBaseImageThread;
 import com.ibm.j9ddr.view.dtfj.image.J9DDRCorruptData;
 import com.ibm.j9ddr.view.dtfj.image.J9DDRImageProcess;
 import com.ibm.j9ddr.view.dtfj.image.J9DDRImageSection;
@@ -98,7 +97,7 @@ public class DTFJJavaThread implements JavaThread
 			
 				imageThread = imageProcess.getThread(tid);
 							
-				//We could't match one of the "proper" ImageThreads - so we'll return a stub image thread instead.
+				//We couldn't match one of the "proper" ImageThreads - so we'll return a stub image thread instead.
 				if (null == imageThread) {
 					imageThread = new J9DDRStubImageThread(DTFJContext.getProcess(), tid);
 				}

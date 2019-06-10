@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,19 +17,18 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
-#include "j9.h"
-#include "j9cfg.h"
+#include "omr.h"
+#include "omrcfg.h"
 
 #include "EnvironmentRealtime.hpp"
-#include "GCExtensions.hpp"
+#include "GCExtensionsBase.hpp"
 #include "HeapRegionQueue.hpp"
-#include "RegionPoolSegregated.hpp"
-#include "Metronome.hpp"
 #include "OSInterface.hpp"
 #include "RealtimeGC.hpp"
+#include "RealtimeRootScanner.hpp"
 #include "SegregatedAllocationTracker.hpp"
 #include "Timer.hpp"
 
@@ -45,7 +43,7 @@ MM_EnvironmentRealtime::newInstance(MM_GCExtensionsBase *extensions, OMR_VMThrea
 		if (omrVMThread) {
 			env = new(envPtr) MM_EnvironmentRealtime(omrVMThread);
 		} else {
-			env = new(envPtr) MM_EnvironmentRealtime((J9JavaVM *)extensions->getOmrVM()->_language_vm);
+			env = new(envPtr) MM_EnvironmentRealtime(extensions->getOmrVM());
 		}
 		if (!env->initialize(extensions)) {
 			env->kill();
@@ -63,10 +61,8 @@ MM_EnvironmentRealtime::kill()
 }
 
 bool
-MM_EnvironmentRealtime::initialize(MM_GCExtensionsBase *extensionsBase)
+MM_EnvironmentRealtime::initialize(MM_GCExtensionsBase *extensions)
 {
-	MM_GCExtensions* extensions = MM_GCExtensions::getExtensions(extensionsBase);
-
 	/* initialize base class */
 	if(!MM_EnvironmentBase::initialize(extensions)) {
 		return false;
@@ -80,7 +76,7 @@ MM_EnvironmentRealtime::initialize(MM_GCExtensionsBase *extensionsBase)
 	
 	_distanceToYieldTimeCheck = extensions->distanceToYieldTimeCheck;
 
-	_overflowCache = (MM_HeapRegionDescriptorRealtime**)getForge()->allocate(sizeof(MM_HeapRegionDescriptorRealtime *) * extensions->overflowCacheCount, MM_AllocationCategory::FIXED, J9_GET_CALLSITE());
+	_overflowCache = (MM_HeapRegionDescriptorRealtime**)getForge()->allocate(sizeof(MM_HeapRegionDescriptorRealtime *) * extensions->overflowCacheCount, MM_AllocationCategory::FIXED, OMR_GET_CALLSITE());
 	if (NULL == _overflowCache) {
 		return false;
 	}
@@ -115,4 +111,18 @@ void MM_EnvironmentRealtime::enableYield()
 {
 	_yieldDisableDepth--;
 	assert1(_yieldDisableDepth >= 0);
+}
+
+void
+MM_EnvironmentRealtime::reportScanningSuspended() {
+	if (NULL != _rootScanner) {
+		_rootScanner->reportScanningSuspended();
+	}
+}
+
+void
+MM_EnvironmentRealtime::reportScanningResumed() {
+	if (NULL != _rootScanner) {
+		_rootScanner->reportScanningResumed();
+	}
 }

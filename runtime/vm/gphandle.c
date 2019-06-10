@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /* Turn off FPO optimisation on Windows 32-bit to improve native stack traces */
@@ -154,6 +154,9 @@ static void printBacktrace(struct J9JavaVM *vm, void* gpInfo);
 /* The target register is GPR1 */
 #define UNSAFE_TARGET_REGISTER 1
 #elif defined(J9VM_ARCH_ARM) && defined(LINUX)
+/* The target register is GPR0 */
+#define UNSAFE_TARGET_REGISTER 0
+#elif defined(J9VM_ARCH_AARCH64)
 /* The target register is GPR0 */
 #define UNSAFE_TARGET_REGISTER 0
 #endif /* defined(J9VM_ARCH_X86) && defined(J9VM_ENV_DATA64) */
@@ -466,7 +469,7 @@ prepareToResumeBackInJava(struct J9PortLibrary* portLibrary, J9VMThread *vmThrea
 	}
 
 	infoType = j9sig_info(sigInfo, J9PORT_SIG_CONTROL, J9PORT_SIG_CONTROL_S390_FPC, &infoName, &infoValue);
-	if (infoType != J9PORT_SIG_VALUE_ADDRESS) {
+	if (infoType != J9PORT_SIG_VALUE_32) {
 		return K8ZOS_GO_DOWN;
 	}
 	*(U_32 *)infoValue = *((U_32 *)vmThread->entryLocalStorage->ceehdlrFPCLocation);
@@ -725,7 +728,7 @@ vmSignalHandler(struct J9PortLibrary* portLibrary, U_32 gpType, void* gpInfo, vo
 		
 	memset(&recursiveCrashData, 0, sizeof(J9RecursiveCrashData));
 
-#ifdef J9VM_INTERP_NATIVE_SUPPORT
+#if defined(J9VM_INTERP_NATIVE_SUPPORT) && !defined(J9ZTPF)
 	/* give the JIT a chance to recover from the exception */
 	if (NULL != vmThread) {
 		J9JITConfig *jitConfig = vm->jitConfig;
@@ -738,7 +741,7 @@ vmSignalHandler(struct J9PortLibrary* portLibrary, U_32 gpType, void* gpInfo, vo
 			}
 		}
 	}
-#endif /* J9VM_INTERP_NATIVE_SUPPORT */
+#endif /* defined(J9VM_INTERP_NATIVE_SUPPORT) && !defined(J9ZTPF) */
 
 #if defined(J9VM_PORT_ZOS_CEEHDLRSUPPORT)
 	if (J9_SIG_ZOS_CEEHDLR == (vm->sigFlags & J9_SIG_ZOS_CEEHDLR)) {
@@ -1151,7 +1154,7 @@ generateDiagnosticFiles(struct J9PortLibrary* portLibrary, void* userData)
 	gpHaveRASdump = ( vm->j9rasDumpFunctions && vm->j9rasDumpFunctions->reserved != 0 );
 #endif
 
-	/* Generate primary crash dump (but only if RASdump not activated) */
+	/* Generate primary crash dump (but only if RASdump is not activated) */
 	if (!gpHaveRASdump) {
 		generateSystemDump(portLibrary, gpInfo);
 	}
@@ -1161,7 +1164,9 @@ generateDiagnosticFiles(struct J9PortLibrary* portLibrary, void* userData)
 		vmThread->gpInfo = gpInfo;
 		printBacktrace(vm, gpInfo);
 	}
-	if (NULL != vm->j9rasDumpFunctions) {
+
+	/* Trigger dump only if RASdump is activated */
+	if (gpHaveRASdump) {
 		J9DMP_TRIGGER( vm, vmThread, J9RAS_DUMP_ON_GP_FAULT );
 	}
 #else

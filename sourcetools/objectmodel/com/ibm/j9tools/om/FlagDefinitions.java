@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 IBM Corp. and others
+ * Copyright (c) 2007, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9tools.om;
 
@@ -57,7 +57,7 @@ public class FlagDefinitions extends OMObject {
 	}
 
 	/**
-	 * Returns the runtime to wich this flag definition belongs to, or <code>null</code> if none.
+	 * Returns the runtime to which this flag definition belongs to, or <code>null</code> if none.
 	 * 
 	 * @return the runtime
 	 */
@@ -146,7 +146,7 @@ public class FlagDefinitions extends OMObject {
 	/**
 	 * Retrieve the HashMap containing all flag definitions contained by this FlagDefinitions object. 
 	 * 
-	 * @return	A HashMap with all the flag defintions that this FlagDefinitions object holds.
+	 * @return	A HashMap with all the flag definitions that this FlagDefinitions object holds.
 	 */
 	public Map<String, FlagDefinition> getFlagDefinitions() {
 		return Collections.unmodifiableMap(_flagDefinitions);

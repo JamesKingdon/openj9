@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010, 2017 IBM Corp. and others
+ * Copyright (c) 2010, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /*
@@ -46,11 +46,8 @@
 
 #define SRPHASHTABLE_CREATED_BY_SRPHASHTABLENEW 1
 #define SRPHASHTABLE_CREATED_BY_SRPHASHTABLENEWINREGION 2
-#define SRPHASHTABLE_CREATED_BY_SRPHASHTABLERECREATE 3
+#define SRPHASHTABLE_CREATED_BY_SRPHASHTABLERECREATE 4
 
-/**
- * Copied from gc_base/gcutils.h
- */
 #define ROUND_TO_SIZEOF_UDATA(number) (((number) + (sizeof(UDATA) - 1)) & (~(sizeof(UDATA) - 1)))
 
 static J9SRP * srpHashTableFindNode (J9SRPHashTable *srptable, void *entry);
@@ -198,7 +195,7 @@ srpHashTableNew(
 	srpHashTable->functionUserData = functionUserData;
 	srpHashTable->flags = SRPHASHTABLE_CREATED_BY_SRPHASHTABLENEW;
 
-	/*SRPHASTABLEINTERNAL*/
+	/*SRPHASHTABLEINTERNAL*/
 	srpHashTableInternal = (J9SRPHashTableInternal *) (allocatedMemory);
 	srpHashTable->srpHashtableInternal = srpHashTableInternal;
 	srpHashTableInternal->tableSize = primeTableSize;
@@ -241,7 +238,7 @@ srpHashTableNew(
  * @return				An initialized SRP hash table
  *
  * Creates a SRP hash table with as many nodes as possible in the given memory region.
- * The actual number of nodes is egual to the next smaller value in primes table
+ * The actual number of nodes is equal to the next smaller value in primes table
  * of max elements that can fit in a given memory.
  */
 J9SRPHashTable *
@@ -355,7 +352,7 @@ srpHashTableReset(
 	/*Set bits to 0*/
 	memset((char *)address + sizeof(J9SRPHashTableInternal), 0, ROUND_TO_SIZEOF_UDATA(sizeof(J9SRP) * tableSize));
 
-	/*SRPHASTABLEINTERNAL*/
+	/*SRPHASHTABLEINTERNAL*/
 	srpHashTableInternal = (J9SRPHashTableInternal *) (address);
 	srpHashTableInternal->tableSize = tableSize;
 	srpHashTableInternal->numberOfNodes = 0;
@@ -843,7 +840,7 @@ srpHashTableVerify(
 	} else  if (srptableInternal->tableSize == PRIMENUMBERHELPER_OUTOFRANGE){
 		Trc_srpHashTableVerify_tableSizeIncorrect(srptable, srptableInternal->tableSize, PRIMENUMBERHELPER_OUTOFRANGE);
 	} else if (NULL != nodes) {
-		/* Recompute table size and verify it against the one stored in SRP hashtable strcuture */
+		/* Recompute table size and verify it against the one stored in SRP hashtable structure */
 		recalculatedTableSize = srpHashTable_calculateTableSize(memorySize, entrySize, FALSE);
 		if (recalculatedTableSize != srptableInternal->tableSize) {
 			Trc_srpHashTableVerify_tableSizeIncorrect(srptable, srptableInternal->tableSize, recalculatedTableSize);

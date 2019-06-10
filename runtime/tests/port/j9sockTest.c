@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /*
@@ -178,7 +178,7 @@ j9sock_verify_function_slots(struct J9PortLibrary *portLibrary)
  * @param[in] server_socket	a pointer to the server socket. 
  * @param[in] server_addr 
  * 
- * @return 0 on succes, non-zero otherwise
+ * @return 0 on success, non-zero otherwise
  */ 
 I_32 
 startServer(struct J9PortLibrary *portLibrary, const char* testName, char *addrStr, U_16 port, j9socket_t *server_socket, j9sockaddr_t server_addr) {
@@ -226,7 +226,7 @@ startServer(struct J9PortLibrary *portLibrary, const char* testName, char *addrS
  * @param[in] session_client_socket	a pointer to the client socket. 
  * @param[in] server_addr 
  * 
- * @return 0 on succes, non-zero otherwise
+ * @return 0 on success, non-zero otherwise
  */ 
 I_32 
 connectClientToServer(struct J9PortLibrary *portLibrary, const char* testName, char *addrStr, U_16 port, j9socket_t *session_client_socket, j9sockaddr_t session_client_addr) {
@@ -269,7 +269,7 @@ connectClientToServer(struct J9PortLibrary *portLibrary, const char* testName, c
  * @param[in] session_client_socket	a pointer to the client socket. 
  * @param[in] server_addr 
  * 
- * @return 0 on succes, non-zero otherwise
+ * @return 0 on success, non-zero otherwise
  */ 
 static I_32 
 connectClientToServerNonBlocking(struct J9PortLibrary *portLibrary, const char* testName, char *addrStr, U_16 port, j9socket_t *session_client_socket, j9sockaddr_t session_client_addr) {
@@ -1541,11 +1541,7 @@ j9sock_runTests(struct J9PortLibrary *portLibrary)
 		rc |= j9sock_test5_basic_options(portLibrary);
 		rc |= j9sock_test6_nonblocking_connect(portLibrary);
 		rc |= j9sock_test7_nonblocking_read(portLibrary);
-#if 0
-		/* CMVC 169177, this testcase only applies to functionality required by
-		 * the Harmony Class Library, remove it for now as it causes failures on windows C builds */
-		rc |= j9sock_test8_select_read_closed_socket(portLibrary);
-#endif
+		/* j9sock_test8_select_read_closed_socket doesn't work on Windows and applies only to Harmony port library. */
 		rc |= j9sock_test10_get_addrinfo(portLibrary);
 		rc |= j9sock_test11_getnameinfo(portLibrary);
 	}

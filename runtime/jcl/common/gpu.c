@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2014, 2016 IBM Corp. and others
+ * Copyright (c) 2014, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "jni.h"
@@ -48,7 +48,7 @@ extractArguments(JNIEnv *env, jintArray argSizes, jlongArray argValues) {
 		jsize i = 0;
 
 		if (NULL == args) {
-			throwNativeOOMError(env, 0, 0);
+			((J9VMThread *)env)->javaVM->internalVMFunctions->throwNativeOOMError(env, 0, 0);
 			return NULL;
 		}
 		/* gather addresses of parameters */
@@ -108,7 +108,7 @@ Java_com_ibm_gpu_Kernel_launch(JNIEnv *env,
 						blockDimX, blockDimY, blockDimZ,
 						args);
 
-		jvm->internalVMFunctions->internalReleaseVMAccess(vmThread);
+		jvm->internalVMFunctions->internalExitVMToJNI(vmThread);
 
 		if (NULL != args) {
 			j9mem_free_memory(args);
@@ -131,7 +131,7 @@ Java_java_util_stream_IntPipeline_promoteGPUCompile(JNIEnv *env, jclass clazz)
 
 		vmFuncs->internalEnterVMFromJNI(vmThread);
 		vm->jitConfig->promoteGPUCompile(vmThread);
-		vmFuncs->internalReleaseVMAccess(vmThread);
+		vmFuncs->internalExitVMToJNI(vmThread);
 	}
 }
 

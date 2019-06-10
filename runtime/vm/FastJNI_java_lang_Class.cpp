@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "fastJNI.h"
@@ -120,14 +120,6 @@ done:
 	return result;
 }
 
-/* java.lang.Class: private native int getClassDepth(); */
-jint JNICALL
-Fast_java_lang_Class_getClassDepth(J9VMThread *currentThread, j9object_t classObject)
-{
-	J9Class *receiverClazz = J9VM_J9CLASS_FROM_HEAPCLASS(currentThread, classObject);
-	return (jint)(J9CLASS_DEPTH(receiverClazz));
-}
-
 /* java.lang.Class: private native boolean isArray(); */
 jboolean JNICALL
 Fast_java_lang_Class_isArray(J9VMThread *currentThread, j9object_t classObject)
@@ -188,6 +180,24 @@ Fast_java_lang_Class_getModifiersImpl(J9VMThread *currentThread, j9object_t rece
 	return (jint)modifiers;
 }
 
+/* java.lang.Class: private native Class<?> arrayTypeImpl(); */
+j9object_t JNICALL
+Fast_java_lang_Class_arrayTypeImpl(J9VMThread *currentThread, j9object_t receiverObject)
+{
+	j9object_t arrayObject = NULL;
+	J9Class *componentClazz = J9VM_J9CLASS_FROM_HEAPCLASS(currentThread, receiverObject);
+	J9Class *arrayClazz = componentClazz->arrayClass;
+	if (NULL == arrayClazz) {
+		arrayClazz = internalCreateArrayClass(currentThread, 
+			(J9ROMArrayClass *) J9ROMIMAGEHEADER_FIRSTCLASS(currentThread->javaVM->arrayROMClasses), 
+			componentClazz);
+	}
+	if (NULL != arrayClazz) {
+		arrayObject = J9VM_J9CLASS_TO_HEAPCLASS(arrayClazz);
+	}
+	return arrayObject;
+}
+
 /* java.lang.Class: public native Class<?> getComponentType(); */
 j9object_t JNICALL
 Fast_java_lang_Class_getComponentType(J9VMThread *currentThread, j9object_t receiverObject)
@@ -205,9 +215,6 @@ J9_FAST_JNI_METHOD_TABLE(java_lang_Class)
 		J9_FAST_JNI_RETAIN_VM_ACCESS | J9_FAST_JNI_DO_NOT_WRAP_OBJECTS)
 	J9_FAST_JNI_METHOD("forNameImpl", "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;", Fast_java_lang_Class_forNameImpl,
 		J9_FAST_JNI_RETAIN_VM_ACCESS | J9_FAST_JNI_DO_NOT_WRAP_OBJECTS | J9_FAST_JNI_DO_NOT_PASS_RECEIVER)
-	J9_FAST_JNI_METHOD("getClassDepth", "()I", Fast_java_lang_Class_getClassDepth,
-		J9_FAST_JNI_RETAIN_VM_ACCESS | J9_FAST_JNI_NOT_GC_POINT | J9_FAST_JNI_NO_NATIVE_METHOD_FRAME | J9_FAST_JNI_NO_EXCEPTION_THROW |
-		J9_FAST_JNI_NO_SPECIAL_TEAR_DOWN | J9_FAST_JNI_DO_NOT_WRAP_OBJECTS)
 	J9_FAST_JNI_METHOD("isArray", "()Z", Fast_java_lang_Class_isArray,
 		J9_FAST_JNI_RETAIN_VM_ACCESS | J9_FAST_JNI_NOT_GC_POINT | J9_FAST_JNI_NO_NATIVE_METHOD_FRAME | J9_FAST_JNI_NO_EXCEPTION_THROW |
 		J9_FAST_JNI_NO_SPECIAL_TEAR_DOWN | J9_FAST_JNI_DO_NOT_WRAP_OBJECTS)
@@ -223,6 +230,8 @@ J9_FAST_JNI_METHOD_TABLE(java_lang_Class)
 	J9_FAST_JNI_METHOD("getComponentType", "()Ljava/lang/Class;", Fast_java_lang_Class_getComponentType,
 		J9_FAST_JNI_RETAIN_VM_ACCESS | J9_FAST_JNI_NOT_GC_POINT | J9_FAST_JNI_NO_NATIVE_METHOD_FRAME | J9_FAST_JNI_NO_EXCEPTION_THROW |
 		J9_FAST_JNI_NO_SPECIAL_TEAR_DOWN | J9_FAST_JNI_DO_NOT_WRAP_OBJECTS)
+	J9_FAST_JNI_METHOD("arrayTypeImpl", "()Ljava/lang/Class;", Fast_java_lang_Class_arrayTypeImpl,
+		J9_FAST_JNI_RETAIN_VM_ACCESS | J9_FAST_JNI_DO_NOT_WRAP_OBJECTS)
 J9_FAST_JNI_METHOD_TABLE_END
 
 }

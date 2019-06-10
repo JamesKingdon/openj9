@@ -1,4 +1,4 @@
-dnl Copyright (c) 2017, 2017 IBM Corp. and others
+dnl Copyright (c) 2017, 2019 IBM Corp. and others
 dnl
 dnl This program and the accompanying materials are made available under
 dnl the terms of the Eclipse Public License 2.0 which accompanies this
@@ -16,7 +16,7 @@ dnl
 dnl [1] https://www.gnu.org/software/classpath/license.html
 dnl [2] http://openjdk.java.net/legal/assembly-exception.html
 dnl
-dnl SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+dnl SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 
 include(zhelpers.m4)
 
@@ -153,56 +153,96 @@ END_CURRENT
 })
 
 ifdef({OMR_GC_CONCURRENT_SCAVENGER},{
-dnl Handler for guarded storage events. 
-dnl When event occurs, hardware populates return address in
-dnl vmThread->gsParameters.returnAddr
-define({HANDLE_GS_EVENT},{
+define({HANDLE_HARDWARE_READ_BARRIER},{
 BEGIN_HELPER($1)
     SAVE_ALL_REGS($1)
+
+dnl Test the TX bit of GSECI (bit 16) to see if the CPU was in transactional-
+dnl execution mode when the guarded storage event was recognized. Subsequently
+dnl test the CX bit of GSECI (bit 17) to see which type of transaction we were
+dnl executing. At that point we have two cases:
+dnl
+dnl 1. TX was a non-constrained transaction:
+dnl    If this was the case do not execute the read barrier and simply return to
+dnl    the fallback transaction abort JIT code to handle it by forcing condition
+dnl    code to be 2 with the below CL(G)FI instruction indicating a transient 
+dnl    transaction abort.
+dnl
+dnl 2. TX was a constrained transaction:
+dnl    This should not happen because we cannot handle constrained transactions
+dnl    in the hardware read barrier case. Because executing any of the following
+dnl    code will be functionally incorrect we force a crash here so we fail fast
+dnl    and can manually debug.
+dnl
+dnl See the following PRs for more details:
+dnl eclipse/openj9#2545
+dnl eclipse/openj9#2790
+dnl eclipse/openj9#3763
+    TM J9TR_VMThread_gsParameters_GSECI(J9VMTHREAD),128
+    JZ LABEL_NAME(L_GS_CALL_HELPER)
+    TM J9TR_VMThread_gsParameters_GSECI(J9VMTHREAD),64
+    JNZ LABEL_NAME(L_GS_FORCE_CRASH)
+    CLFI_GPR J9SP,0
+    J LABEL_NAME(L_GS_SKIP_HELPER)
+
+PLACE_LABEL(L_GS_CALL_HELPER)
     ST_GPR J9SP,J9TR_VMThread_sp(J9VMTHREAD)
     LR_GPR CARG1,J9VMTHREAD
     L_GPR CRA,J9TR_VMThread_javaVM(J9VMTHREAD)
     L_GPR CRA,J9TR_JavaVM_invokeJ9ReadBarrier(CRA)
     CALL_INDIRECT(CRA)
-    L_GPR J9SP,J9TR_VMThread_sp(J9VMTHREAD)
-    ST_GPR J9SP,JIT_GPR_SAVE_SLOT(J9SP)
-    RESTORE_ALL_REGS_AND_SWITCH_TO_JAVA_STACK($1)
-dnl Force condition code 2 to be set before the return. This is done to
-dnl ensure that if we are returning to a non-constrained transactional
-dnl memory region that the transaction would abort with a condition code
-dnl indicating a transient transaction abort. The transaction would then
-dnl be re-executed. Note the below CLFI / CLGFI instruction will always 
-dnl produce condition code 2 because the Java stack pointer is always
-dnl non-zero at the return point.
-dnl 
-dnl TODO: When assembler -march changes to z9 update to:
-dnl CLFI_GPR J9SP,0
-ifdef({ASM_J9VM_ENV_DATA64},{
-    ifdef({J9ZOS390},{
-        DC X'C25E0000'
-        DC X'0000'
-    },{
-       .long 0xC25E0000
-       .short 0x0000
-    })
-},{
-    ifdef({J9ZOS390},{
-        DC X'C25F0000'
-        DC X'0000'
-    },{
-       .long 0xC25F0000
-       .short 0x0000
-    })
+
+dnl Load the updated object pointer into CARG2
+    LG CARG1,J9TR_VMThread_gsParameters_operandAddr(J9VMTHREAD)
+ifdef({ASM_OMR_GC_COMPRESSED_POINTERS},{
+dnl Some objects may be stored in a decompressed format on the heap.
+dnl A typical example of this may be static objects. For such objects
+dnl we must not decompress via the compressedPointersShift value. To
+dnl check for this we disassemble the guarded load instruction in the
+dnl mainline and check whether it is an LGG or LLGFSG instruction.
+    LG CARG2,J9TR_VMThread_gsParameters_instructionAddr(J9VMTHREAD)
+    TM 5(CARG2),4
+    JNZ LABEL_NAME(L_GS_SKIP_SHIFT)
+    LLGF CARG1,0(CARG1)
+    LG CARG2,J9TR_VMThread_javaVM(J9VMTHREAD)
+    LG CARG2,J9TR_JavaVM_compressedPointersShift(CARG2)
+    SLLG CARG2,CARG1,0(CARG2)
+    J LABEL_NAME(L_GS_DONE_SHIFT)
 })
 
-dnl Branch back to the instruction that triggered guarded storage event.
-BRANCH_INDIRECT_ON_CONDITION(15,J9TR_VMThread_gsParameters_returnAddr,0,J9VMTHREAD)
+PLACE_LABEL(L_GS_SKIP_SHIFT)
+    LG CARG2,0(CARG1)
+PLACE_LABEL(L_GS_DONE_SHIFT)
 
+dnl Extract the target address register
+    LG CARG1,J9TR_VMThread_gsParameters_instructionAddr(J9VMTHREAD)
+    LLGH CARG1,0(CARG1)
+
+dnl We combine a shift right by 4 and a multiply by 8 to a shift
+dnl right by 1 to get the byte offset into the save area where to
+dnl store the updated object pointer
+    ENCODE_RISBGN(CARG1,CARG1,57,188,63)
+
+dnl Finally store the updated object pointer into the save slot
+    STG CARG2,JIT_GPR_SAVE_OFFSET(0)(CARG1,CSP)
+
+dnl Skip past the guarded load instruction by updating the returnAddr
+dnl to 6 bytes (length of the guarded load instruction) past the
+dnl original value
+    ENCODE_AGSI(J9TR_VMThread_gsParameters_returnAddr,J9VMTHREAD,6)
+
+    L_GPR J9SP,J9TR_VMThread_sp(J9VMTHREAD)
+    ST_GPR J9SP,JIT_GPR_SAVE_SLOT(J9SP)
+PLACE_LABEL(L_GS_SKIP_HELPER)
+    RESTORE_ALL_REGS_AND_SWITCH_TO_JAVA_STACK($1)
+    ENCODE_BIC(15,J9TR_VMThread_gsParameters_returnAddr,0,J9VMTHREAD)
+PLACE_LABEL(L_GS_FORCE_CRASH)
+    BYTE(0)
+    BYTE(0)
 END_CURRENT
 })
 
-HANDLE_GS_EVENT(handleGuardedStorageEvent)
-
+HANDLE_HARDWARE_READ_BARRIER(handleHardwareReadBarrier)
 })
 
     FILE_END

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015, 2017 IBM Corp. and others
+ * Copyright (c) 2015, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "errormessage_internal.h"
@@ -184,6 +184,7 @@ constructRtvMethodContextInfo(MethodContextInfo* methodInfo, J9BytecodeVerificat
 	/* Stackmap table */
 	methodInfo->stackMapData = NULL;
 	methodInfo->stackMapCount = 0;
+	methodInfo->stackMapLength = 0;
 
 	/* It is required to use the compressed stackmap table in the class file for the output format of framework
 	 * to print out data in the stackmap table so as to match Oracle's behavior.
@@ -193,6 +194,7 @@ constructRtvMethodContextInfo(MethodContextInfo* methodInfo, J9BytecodeVerificat
 	if (NULL != stackMapMethod) {
 		methodInfo->stackMapData = (U_8 *)(stackMapMethod + 1);
 		NEXT_U16(methodInfo->stackMapCount, methodInfo->stackMapData);
+		methodInfo->stackMapLength = (U_32)((verifyData->stackSize) * (verifyData->stackMapsCount));
 	}
 
 	/* Register callback functions dealing with the constant pool, the class name list, and the exception handler table */
@@ -230,7 +232,7 @@ pushLiveStackToVerificationTypeBuffer(StackMapFrame* stackMapFrame, J9BytecodeVe
 
 	/* 'locals' on liveStack */
 
-	/* Determine the count of local varibles on 'locals' (liveStack) starting from the right end of 'locals'.
+	/* Determine the count of local variables on 'locals' (liveStack) starting from the right end of 'locals'.
 	 * Note: It is true that placeholders ('top') always occur on the right end of 'locals'.
 	 * e.g. data1, data2, data3, top, top, top, ...
 	 * However, local variables can be updated at any place of 'locals' in the bytecode
@@ -257,7 +259,7 @@ pushLiveStackToVerificationTypeBuffer(StackMapFrame* stackMapFrame, J9BytecodeVe
 	}
 
 	/* Step forward by 1 slot to point to the non-top element or the 2nd slot of long/double
-	 * as we retreat 1 step when the non-top element was defectd in the for loop.
+	 * as we retreat 1 step when the non-top element was detected in the for loop.
 	 */
 	if (nonTopFound) {
 		lastIndex += 1;
@@ -610,11 +612,11 @@ printExpectedTypeFromStackMapFrame(MessageBuffer *msgBuf, J9BytecodeVerification
 		goto exit;
 	}
 
-	/* Walk thourgh the stackmap table for the specified stackmape frame */
+	/* Walk through the stackmap table for the specified stackmap frame */
 	while (stackmapFrameIndex != errorTargetFrameIndex) {
 		stackmapFrameIndex += 1;
 		nextStackmapFrame = decodeStackmapFrameData(targetFrame, nextStackmapFrame, stackmapFrameIndex, methodInfo, verifyData);
-		/* Return FALSE if out-of-memory during allocating verification buffer for data types in the specified stackmape frame */
+		/* Return FALSE if out-of-memory during allocating verification buffer for data types in the specified stackmap frame */
 		if (NULL == nextStackmapFrame) {
 			result = FALSE;
 			goto exit;
@@ -709,11 +711,11 @@ setStackMapFrameWithIndex(J9BytecodeVerificationData *verifyData, MethodContextI
 			goto exit;
 		}
 
-		/* Walk thourgh the stackmap table for the specified stackmape frame */
+		/* Walk through the stackmap table for the specified stackmap frame */
 		while (stackmapFrameIndex != errorTargetFrameIndex) {
 			stackmapFrameIndex += 1;
 			nextStackmapFrame = decodeStackmapFrameData(targetFrame, nextStackmapFrame, stackmapFrameIndex, methodInfo, verifyData);
-			/* Return FALSE if out-of-memory during allocating verification buffer for data types in the specified stackmape frame */
+			/* Return FALSE if out-of-memory during allocating verification buffer for data types in the specified stackmap frame */
 			if (NULL == nextStackmapFrame) {
 				goto exit;
 			}
@@ -748,7 +750,7 @@ printReasonForFlagMismatch(MessageBuffer *msgBuf, J9BytecodeVerificationData *ve
 
 	/* Check the stackmap frame for flag only if the stackmap table exists in the class file */
 	if (stackMapCount > 0) {
-		I_32 stackmapFrameIndex = -1;
+		I_32 stackmapFrameIndex = 0;
 		U_8* nextStackmapFrame = NULL;
 
 		if (FALSE == prepareVerificationTypeBuffer(targetFrame, methodInfo)) {
@@ -757,9 +759,9 @@ printReasonForFlagMismatch(MessageBuffer *msgBuf, J9BytecodeVerificationData *ve
 
 		/* Walk through the stackmap table for the specified stackmap frame */
 		while (stackmapFrameIndex < (I_32)stackMapCount) {
-			stackmapFrameIndex += 1;
 			nextStackmapFrame = decodeStackmapFrameData(targetFrame, nextStackmapFrame, stackmapFrameIndex, methodInfo, verifyData);
-			/* Return FALSE if out-of-memory during allocating verification buffer for data types in the specified stackmape frame */
+			stackmapFrameIndex += 1;
+			/* Return FALSE if out-of-memory during allocating verification buffer for data types in the specified stackmap frame */
 			if (NULL == nextStackmapFrame) {
 				goto exit;
 			}
@@ -868,7 +870,7 @@ generateJ9RtvExceptionDetails(J9BytecodeVerificationData* verifyData, U_8* initM
 		printCurrentStack = printStackFrame;
 		break;
 	case BCV_ERR_STACKMAP_FRAME_LOCALS_UNDERFLOW:
-		printMessage(&msgBuf, "The count of local varibles in the stackmap frame is less than 0.");
+		printMessage(&msgBuf, "The count of local variables in the stackmap frame is less than 0.");
 		break;
 	case BCV_ERR_STACKMAP_FRAME_LOCALS_OVERFLOW:
 		printMessage(&msgBuf, "Exceeded max local size %u in the stackmap frame.", verifyData->errorTempData);
@@ -886,7 +888,7 @@ generateJ9RtvExceptionDetails(J9BytecodeVerificationData* verifyData, U_8* initM
 		printMessage(&msgBuf, "Expected return type 'V' in the function.");
 		break;
 	case BCV_ERR_WRONG_TOP_TYPE:
-		printMessage(&msgBuf, "The data type on 'stack' is long or double rather than a single-slot type.");
+		printMessage(&msgBuf, "The pair of data types on the top of 'stack' must be long, double or two non-top singles.");
 		break;
 	case BCV_ERR_INVALID_ARRAY_REFERENCE:
 	{
@@ -954,7 +956,12 @@ generateJ9RtvExceptionDetails(J9BytecodeVerificationData* verifyData, U_8* initM
 
 	/* Stackmap Frame: */
 	if (printStackFrame) {
-		printMessage(&msgBuf, "\n%*sStackmap Frame:", INDENT(2));
+		/* Specify if the stack frame is from classfile or internal */
+		if (verifyData->createdStackMap) {
+			printMessage(&msgBuf, "\n%*sStackmap Frame (FallBack):", INDENT(2));
+		} else {
+			printMessage(&msgBuf, "\n%*sStackmap Frame:", INDENT(2));
+		}
 		printTheStackMapFrame(&msgBuf, &stackMapFrameTarget, &methodInfo);
 	}
 
@@ -967,8 +974,10 @@ generateJ9RtvExceptionDetails(J9BytecodeVerificationData* verifyData, U_8* initM
 		printExceptionTable(&msgBuf, &methodInfo);
 	}
 
-	/* Stack Map Table: */
-	if (methodInfo.stackMapCount > 0) {
+	/* Stack Map Table:
+	 * Only prints the stackmap table if it is non-empty and not internally generated
+	 */
+	if ((methodInfo.stackMapCount > 0) && (!verifyData->createdStackMap)) {
 		printMessage(&msgBuf, "\n%*sStackmap Table:", INDENT(2));
 		printSimpleStackMapTable(&msgBuf, &methodInfo);
 	}

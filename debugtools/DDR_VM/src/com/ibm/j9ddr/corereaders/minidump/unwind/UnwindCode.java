@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2014 IBM Corp. and others
+ * Copyright (c) 2012, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 package com.ibm.j9ddr.corereaders.minidump.unwind;
@@ -83,7 +83,7 @@ public class UnwindCode {
 	 * http://msdn.microsoft.com/en-US/library/ck9asaa9%28v=vs.80%29
 	 * The operations marked as untested haven't yet been found in any stack
 	 * (and are quite rare to find in the unwind info for dll's at all) so
-	 * if have found and corrected one please remove the unteseted label.
+	 * if have found and corrected one please remove the untested label.
 	 */
 	public String formatOp() throws CorruptDataException {
 		byte opCode = getOpCode();

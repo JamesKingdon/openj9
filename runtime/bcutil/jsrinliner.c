@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #define J9JSRI_DEBUG		0
@@ -843,7 +843,7 @@ _nextBranch:
 			variable8 = (U_8) (bc - CFR_BC_aload_0);
 			if (jsrData && (variable8 < inlineBuffers->maxLocals)) {
 				if (jsrData->locals[variable8]) {
-					/* Jazz 82615: Set the verose error type and the local variable index in the case of illegal load operation */
+					/* Jazz 82615: Set the verbose error type and the local variable index in the case of illegal load operation */
 					inlineBuffers->verboseErrorType = BCV_ERR_JSR_ILLEGAL_LOAD_OPERATION;
 					inlineBuffers->errorLocalIndex = (U_32)variable8;
 					goto _verifyError;
@@ -857,7 +857,7 @@ _nextBranch:
 			NEXT_U8(variable8, bcIndex);
 			if (jsrData && (variable8 < inlineBuffers->maxLocals)) {
 				if (jsrData->locals[variable8]) {
-					/* Jazz 82615: Set the verose error type and the local variable index in the case of illegal load operation */
+					/* Jazz 82615: Set the verbose error type and the local variable index in the case of illegal load operation */
 					inlineBuffers->verboseErrorType = BCV_ERR_JSR_ILLEGAL_LOAD_OPERATION;
 					inlineBuffers->errorLocalIndex = (U_32)variable8;
 					goto _verifyError;
@@ -1036,7 +1036,7 @@ _nextBranch:
 			break;
 
 		/*	START OF DUP CODES */
-		/* DUPS can legally duplicate return adresses */
+		/* DUPS can legally duplicate return addresses */
 
 		case CFR_BC_dup:
 			value = popStack(jsrData);
@@ -1303,7 +1303,7 @@ _nextBranch:
 				NEXT_U16(variable16, bcIndex);
 				if (jsrData && ((UDATA) variable16 < inlineBuffers->maxLocals)) {
 					if (jsrData->locals[variable16]) {
-						/* Jazz 82615: Set the verose error type and the local variable index in the case of illegal load operation */
+						/* Jazz 82615: Set the verbose error type and the local variable index in the case of illegal load operation */
 						inlineBuffers->verboseErrorType = BCV_ERR_JSR_ILLEGAL_LOAD_OPERATION;
 						inlineBuffers->errorLocalIndex = (U_32)variable16;
 						goto _verifyError;
@@ -1842,6 +1842,8 @@ getCodeBlockParentInChainWithVar(J9JSRIJSRData * root, U_16 variable, U_32 curre
 			if (inlineBuffers->errorCode) {
 				inlineBuffers->errorCode = BCT_ERR_VERIFY_ERROR_INLINING;
 				inlineBuffers->verifyError = J9NLS_BCV_ERR_MULTIPLE_RET__ID;
+				/* Set the current PC value to show up in the error message framework */
+				inlineBuffers->verifyErrorPC = currentPC;
 #if J9JSRI_DEBUG
 				j9tty_printf(inlineBuffers->portLib, "[][][] Verify Error multiple rets\n");
 #endif
@@ -1852,7 +1854,7 @@ getCodeBlockParentInChainWithVar(J9JSRIJSRData * root, U_16 variable, U_32 curre
 	}
 	inlineBuffers->errorCode =	BCT_ERR_VERIFY_ERROR_INLINING;
 	inlineBuffers->verifyError = J9NLS_BCV_ERR_TEMP_NOT_RET_ADDRESS__ID;
-	/* Jazz 82615: Set the current PC value to show up in the error message framework */
+	/* Set the current PC value to show up in the error message framework */
 	inlineBuffers->verifyErrorPC = currentPC;
 #if J9JSRI_DEBUG
 	j9tty_printf(inlineBuffers->portLib, "[][][] Verify Error bad addr\n"); 
@@ -2354,6 +2356,8 @@ _tryOuterJsrData:
 		/* exception table too large - format limitation */
 		inlineBuffers->errorCode = BCT_ERR_VERIFY_ERROR_INLINING;
 		inlineBuffers->verifyError = J9NLS_BCV_ERR_TOO_MANY_JSRS__ID;
+		/* Set the current PC value to show up in the error message framework */
+		inlineBuffers->verifyErrorPC = 0;
 	}
 	inlineBuffers->bytesAddedByJSRInliner += ((U_16) exceptionCount - inlineBuffers->codeAttribute->exceptionTableLength) * sizeof(U_16) * 4;
 	inlineBuffers->codeAttribute->exceptionTableLength = (U_16) exceptionCount;
@@ -2582,6 +2586,8 @@ _inlineWide:
 	if (inlineBuffers->destBufferIndex > (16 * 1024 * 1024)) {
 		inlineBuffers->errorCode = BCT_ERR_VERIFY_ERROR_INLINING;
 		inlineBuffers->verifyError = J9NLS_BCV_ERR_TOO_MANY_JSRS__ID;
+		/* Set the current PC value to show up in the error message framework */
+		inlineBuffers->verifyErrorPC = 0;
 		return;
 	}
 

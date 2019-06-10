@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2017 IBM Corp. and others
+ * Copyright (c) 2002, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /*
@@ -52,7 +52,7 @@
  *    action and delay.
  *
  * triggering on methods:
- *    An entry is created in the triggerOnMethods chain, achored off RasGlobalStorage.
+ *    An entry is created in the triggerOnMethods chain, anchored off RasGlobalStorage.
  *    This is known as a method rule.  This contains a RasMethodSpec, as used
  *    in method trace, representing the user entered methodspec.  Whenever a
  *    class is loaded, the classloader calls us.  The class and if necessary its
@@ -74,7 +74,7 @@
  * ===========================================================================
  */
 
-/* _GNU_SOURCE forces GLIBC_2.0 sscanf/vsscanf/fscanf for RHEL5 compatability */
+/* _GNU_SOURCE forces GLIBC_2.0 sscanf/vsscanf/fscanf for RHEL5 compatibility */
 #if defined(LINUX) && !defined(J9ZTPF)
 #define _GNU_SOURCE
 #endif /* defined(__GNUC__) && !defined(J9ZTPF) */
@@ -453,22 +453,22 @@ processTriggerTpnidClause(OMR_VMThread *thr, char *clause, BOOLEAN atRuntime)
 {
 	OMRPORT_ACCESS_FROM_OMRVMTHREAD(thr);
 	omr_error_t rc = OMR_ERROR_NONE;
-	char *p;
-	int length;
-	const char *ptrName;
-	const char *ptrAction;
-	const char *ptrDelay;
-	const char *ptrMatch;
+	char *p = NULL;
+	int length = 0;
+	const char *ptrName = NULL;
+	const char *ptrAction = NULL;
+	const char *ptrDelay = NULL;
+	const char *ptrMatch = NULL;
 	char *ptrRangeStart = NULL;
 	char *ptrRangeEnd = NULL;
 	int32_t doneFirstParm = FALSE;
 	int tpidRangeStart = 0;
 	int tpidRangeEnd = 0;
-	uint32_t actionIndex;
+	uint32_t actionIndex = 0;
 	int delayCount = 0;
 	int matchCount = -1;
-	RasTriggerTpidRange *newTriggerRangeP;
-	char *compName;
+	RasTriggerTpidRange *newTriggerRangeP = NULL;
+	char *compName = NULL;
 
 	RAS_DBGOUT((stderr, "<RAS> Processing tpnid clause: \"%s\"\n", clause));
 
@@ -591,7 +591,7 @@ processTriggerTpnidClause(OMR_VMThread *thr, char *clause, BOOLEAN atRuntime)
 				}
 
 				/*
-				 * initialise the new tpid range
+				 * initialize the new tpid range
 				 */
 				if (OMR_ERROR_NONE == rc) {
 					/* header */
@@ -635,18 +635,18 @@ processTriggerGroupClause(OMR_VMThread *thr, char *clause, BOOLEAN atRuntime)
 	OMRPORT_ACCESS_FROM_OMRVMTHREAD(thr);
 	omr_error_t rc = OMR_ERROR_NONE;
 	int numParms = 0;
-	int length;
+	int length = 0;
 	unsigned int maxLength = 5;
-	const char *ptrGroupName;
-	const char *ptrAction;
-	const char *ptrDelay;
-	const char *ptrMatch;
-	uint32_t actionIndex;
+	const char *ptrGroupName = NULL;
+	const char *ptrAction = NULL;
+	const char *ptrDelay = NULL;
+	const char *ptrMatch = NULL;
+	uint32_t actionIndex = 0;
 	int delay = 0;
 	int match = -1;
-	char *p;
-	RasTriggerGroup *newTriggerGroupP;
-	char *copyOfNameP;
+	char *p = NULL;
+	RasTriggerGroup *newTriggerGroupP = NULL;
+	char *copyOfNameP = NULL;
 
 	RAS_DBGOUT((stderr, "<RAS> Processing GROUP clause: \"%s\"\n", clause));
 
@@ -735,7 +735,7 @@ processTriggerGroupClause(OMR_VMThread *thr, char *clause, BOOLEAN atRuntime)
 			UT_DBGOUT(1, ("<UT> Out of memory processing trigger property."));
 		}
 
-		/* initialise the new tpid group */
+		/* initialize the new tpid group */
 		if (OMR_ERROR_NONE == rc) {
 			/* header */
 			memcpy(newTriggerGroupP->header.eyecatcher, "RSGR", 4);

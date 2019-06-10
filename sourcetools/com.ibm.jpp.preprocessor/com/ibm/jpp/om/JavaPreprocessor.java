@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1999, 2017 IBM Corp. and others
+ * Copyright (c) 1999, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jpp.om;
 
@@ -70,7 +70,7 @@ import java.util.StringTokenizer;
  */
 public class JavaPreprocessor {
 
-	private static final Charset ASCII = Charset.forName("US-ASCII");
+	private final Charset charset;
 
 	private final File inFile;
 	private BufferedReader in;
@@ -171,12 +171,20 @@ public class JavaPreprocessor {
 	 */
 	public JavaPreprocessor(OutputStream metadataOut, File inputFile, OutputStream out, File outputFile) {
 		super();
+		
+		String osname = System.getProperty("os.name");
+		if ("z/OS".equalsIgnoreCase(osname)) {
+			charset = Charset.forName("IBM-1047");
+		} else {
+			charset = Charset.forName("US-ASCII");
+		}
+		
 		this.inStack = new Stack<>();
 		this.inFile = inputFile;
-		this.out = new OutputStreamWriter(out, ASCII);
+		this.out = new OutputStreamWriter(out, charset);
 
 		if (metadataOut != null) {
-			this.metadataOut = new OutputStreamWriter(metadataOut, ASCII);
+			this.metadataOut = new OutputStreamWriter(metadataOut, charset);
 			try {
 				this.metadataOut.write(inputFile.getAbsolutePath());
 				this.metadataOut.write(newLine);
@@ -198,7 +206,7 @@ public class JavaPreprocessor {
 	}
 
 	/**
-	 * Sets whether preprocessing for bootpath projoect or not
+	 * Sets whether preprocessing for bootpath project or not
 	 * @param       bootPath    true if bootPath project, otherwise false
 	 *
 	 */
@@ -407,7 +415,7 @@ public class JavaPreprocessor {
 			// First check to see if the key and value exist already
 			if (externalMessages.containsKey(key)) {
 				if (!value.equals(externalMessages.get(key))) {
-					throw new SyntaxException("\"" + key + "\" already has the value \"" + externalMessagesToBeAdded.get(key) + "\"");
+					throw new SyntaxException("\"" + key + "\" already has the value \"" + externalMessages.get(key) + "\"");
 				}
 			} else if (externalMessages.containsValue(value)) {
 				warning("MSG command warning: \"" + value + "\" is given multiple keys");
@@ -503,7 +511,7 @@ public class JavaPreprocessor {
 		}
 
 		try {
-			BufferedReader includeReader = new BufferedReader(new InputStreamReader(new FileInputStream(arg), ASCII));
+			BufferedReader includeReader = new BufferedReader(new InputStreamReader(new FileInputStream(arg), charset));
 
 			includeReader.mark(1024);
 
@@ -784,7 +792,7 @@ public class JavaPreprocessor {
 
 	/**
 	 * Each preprocessor may use a single instance of this class to replace
-	 * specially-formatted calls to Msg.getString() with appropiate
+	 * specially-formatted calls to Msg.getString() with appropriate
 	 * String-valued expressions at preprocess time.
 	 */
 	private final class MsgCallInliner {
@@ -1287,7 +1295,7 @@ public class JavaPreprocessor {
 
 		try {
 			fis = new FileInputStream(inFile);
-			this.in = new BufferedReader(new InputStreamReader(fis, ASCII));
+			this.in = new BufferedReader(new InputStreamReader(fis, charset));
 		} catch (FileNotFoundException e) {
 			error("File not found: " + inFile.getAbsolutePath());
 		}
@@ -1676,7 +1684,7 @@ public class JavaPreprocessor {
 		}
 
 		// Find the last ']' on the line to allow arguments to include that
-		// character, but this means that ']' cannot be used in commments
+		// character, but this means that ']' cannot be used in comments
 		// after the command on the same line.
 		int positionOfClose = lineLength;
 

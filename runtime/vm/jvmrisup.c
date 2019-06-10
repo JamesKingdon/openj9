@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if defined(WIN32) || defined (WIN64)
@@ -613,7 +613,7 @@ static int JNICALL rasDumpRegister(JNIEnv *env, int (JNICALL *func)(JNIEnv *env2
 	}
 	
 	memset(rda, 0, sizeof(*rda));
-	/* change this to filter on a java core when that facility is avaiable. */
+	/* change this to filter on a java core when that facility is available. */
 	/* for now just run when anything unexpected happens! */
 	rda->nextPtr = NULL;
 	rda->shutdownFn = rasDumpAgentShutdownFn;
@@ -869,7 +869,7 @@ initJVMRI( J9JavaVM * vm )
 {
 	if (omrthread_monitor_init_with_name(&jvmridumpmonitor, 0, "jvmriDumpThread")) {
 		PORT_ACCESS_FROM_JAVAVM(vm);
-		j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_RI_INITIALISE_CANT_ALLOCATE_MONITOR);
+		j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_RI_INITIALIZE_CANT_ALLOCATE_MONITOR);
 		return JNI_ERR;
 	}
 	

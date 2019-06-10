@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar16]*/
 /*******************************************************************************
- * Copyright (c) 2010, 2010 IBM Corp. and others
+ * Copyright (c) 2010, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 package com.ibm.tools.attach.target;
@@ -28,6 +28,8 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.util.TimerTask;
+import static com.ibm.tools.attach.target.IPC.LOGGING_DISABLED;
+import static com.ibm.tools.attach.target.IPC.loggingStatus;
 
 public final class FileLock {
 	long fileDescriptor;
@@ -63,7 +65,7 @@ public final class FileLock {
 	 * @note locking and unlocking must be done by the same thread.
 	 */
 	public boolean lockFile(boolean blocking) throws IOException {
-		if (IPC.loggingEnabled ) {
+		if (LOGGING_DISABLED != loggingStatus) {
 			IPC.logMessage(blocking? "locking file ": "non-blocking locking file ", lockFilepath);  //$NON-NLS-1$//$NON-NLS-2$
 		}
 		
@@ -118,11 +120,12 @@ public final class FileLock {
 
 		return locked;
 	}
-
-	/*[PR Jazz 30075] inlined createFileLockWatchdogTimer which is called once and has obligations on its caller */
 	
+	/**
+	 * Release the lock on a file.
+	 */
 	public void unlockFile() {
-		if (IPC.loggingEnabled ) {
+		if (LOGGING_DISABLED != loggingStatus) {
 			IPC.logMessage("unlocking file ", lockFilepath);  //$NON-NLS-1$
 		}
 		java.nio.channels.FileLock lockObjectCopy = lockObject;
@@ -132,9 +135,8 @@ public final class FileLock {
 				lockObjectCopy.release();
 				lockFileRAF.close();
 			} catch (IOException e) {
-				IPC.logMessage("IOException unlocking file"); //$NON-NLS-1$
+				IPC.logMessage("IOException unlocking file "+lockFilepath, e); //$NON-NLS-1$
 			}
-			lockObjectCopy = null;
 		}
 		if (locked && (fileDescriptor >= 0)) {
 			unlockFileImpl(fileDescriptor);

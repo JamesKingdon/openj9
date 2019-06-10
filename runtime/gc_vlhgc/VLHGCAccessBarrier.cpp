@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2016 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 
@@ -98,7 +97,7 @@ MM_VLHGCAccessBarrier::postObjectStore(J9VMThread *vmThread, J9Class *destClass,
 {
 	j9object_t destObject = J9VM_J9CLASS_TO_HEAPCLASS(destClass);
 
-	/* destObject is guaranteed to be in old space, so the common code path will rememember objects appropriately here */
+	/* destObject is guaranteed to be in old space, so the common code path will remember objects appropriately here */
 	postObjectStoreImpl(vmThread, destObject, value);
 }
 
@@ -135,7 +134,6 @@ MM_VLHGCAccessBarrier::preBatchObjectStore(J9VMThread *vmThread, J9Class *destCl
  * 
  * @note The write barrier can be called with minimal, all, or no validation checking.
  * @note Any object that contains a new reference MUST have its REMEMBERED bit set.
- * @note This code was moved verbatim from ScavengerWriteBarrier.cpp and made an instance method
  */
 void
 MM_VLHGCAccessBarrier::postObjectStoreImpl(J9VMThread *vmThread, J9Object *dstObject, J9Object *srcObject)
@@ -163,7 +161,6 @@ MM_VLHGCAccessBarrier::postObjectStoreImpl(J9VMThread *vmThread, J9Object *dstOb
  * @note Any object that contains a new reference MUST have its REMEMBERED bit set.
  * @note This call is typically used by array copies, when it may be more efficient
  * to optimistically add an object to the remembered set without checking too hard.
- * @note This code was moved verbatim from ScavengerWriteBarrier.cpp and made an instance method
  */
 void 
 MM_VLHGCAccessBarrier::preBatchObjectStoreImpl(J9VMThread *vmThread, J9Object *dstObject)
@@ -291,11 +288,7 @@ MM_VLHGCAccessBarrier::jniGetPrimitiveArrayCritical(J9VMThread* vmThread, jarray
 		vmThread->jniCriticalCopyCount += 1;
 	} else {
 		// acquire access and return a direct pointer
-#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
-	  	vmThread->jniCriticalDirectCount += 1;
-#else /* J9VM_INTERP_ATOMIC_FREE_JNI */
-		MM_JNICriticalRegion::enterCriticalRegion(vmThread);
-#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
+		MM_JNICriticalRegion::enterCriticalRegion(vmThread, true);
 		Assert_MM_true(vmThread->publicFlags & J9_PUBLIC_FLAGS_VM_ACCESS);
 		arrayObject = (J9IndexableObject*)J9_JNI_UNWRAP_REFERENCE(array);
 		data = (void *)_extensions->indexableObjectModel.getDataPointerForContiguous(arrayObject);
@@ -365,11 +358,7 @@ MM_VLHGCAccessBarrier::jniReleasePrimitiveArrayCritical(J9VMThread* vmThread, ja
 		Assert_MM_true((*criticalCount) > 0);
 		MM_AtomicOperations::subtract(criticalCount, 1);
 #endif /* defined(J9VM_GC_MODRON_COMPACTION) || defined(J9VM_GC_MODRON_SCAVENGER)*/
-#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
-	  	vmThread->jniCriticalDirectCount -= 1;
-#else /* J9VM_INTERP_ATOMIC_FREE_JNI */
-		MM_JNICriticalRegion::exitCriticalRegion(vmThread);
-#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
+		MM_JNICriticalRegion::exitCriticalRegion(vmThread, true);
 	}
 	VM_VMAccess::inlineExitVMToJNI(vmThread);
 }
@@ -435,11 +424,7 @@ MM_VLHGCAccessBarrier::jniGetStringCritical(J9VMThread* vmThread, jstring str, j
 		vmThread->jniCriticalCopyCount += 1;
 	} else {
 		// acquire access and return a direct pointer
-#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
-	  	vmThread->jniCriticalDirectCount += 1;
-#else /* J9VM_INTERP_ATOMIC_FREE_JNI */
-		MM_JNICriticalRegion::enterCriticalRegion(vmThread);
-#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
+		MM_JNICriticalRegion::enterCriticalRegion(vmThread, true);
 		Assert_MM_true(vmThread->publicFlags & J9_PUBLIC_FLAGS_VM_ACCESS);
 		data = (jchar*)_extensions->indexableObjectModel.getDataPointerForContiguous(valueObject);
 
@@ -499,11 +484,7 @@ MM_VLHGCAccessBarrier::jniReleaseStringCritical(J9VMThread* vmThread, jstring st
 		Assert_MM_true((*criticalCount) > 0);
 		MM_AtomicOperations::subtract(criticalCount, 1);
 #endif /* defined(J9VM_GC_MODRON_COMPACTION) || defined(J9VM_GC_MODRON_SCAVENGER)*/
-#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
-	  	vmThread->jniCriticalDirectCount -= 1;
-#else /* J9VM_INTERP_ATOMIC_FREE_JNI */
-		MM_JNICriticalRegion::exitCriticalRegion(vmThread);
-#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
+		MM_JNICriticalRegion::exitCriticalRegion(vmThread, true);
 	}
 	VM_VMAccess::inlineExitVMToJNI(vmThread);
 }

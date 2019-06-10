@@ -1,4 +1,4 @@
-# Copyright (c) 1998, 2017 IBM Corp. and others
+# Copyright (c) 1998, 2019 IBM Corp. and others
 #
 # This program and the accompanying materials are made available under
 # the terms of the Eclipse Public License 2.0 which accompanies this
@@ -16,7 +16,7 @@
 # [1] https://www.gnu.org/software/classpath/license.html
 # [2] http://openjdk.java.net/legal/assembly-exception.html
 #
-# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 
 # List all flags that are enabled.
 <#list uma.spec.flags as flag>
@@ -24,8 +24,7 @@
 </#list>
 
 # Define the Java Version we are compiling
-VERSION_MAJOR?=9
-export VERSION_MAJOR
+export VERSION_MAJOR := ${uma.spec.properties.JAVA_SPEC_VERSION.value}
 
 # Define a default target of the root directory for all targets.
 ifndef UMA_TARGET_PATH
@@ -33,27 +32,115 @@ ifndef UMA_TARGET_PATH
 endif
 
 # Define all the tool used for compilation and linking.
-<#if uma.spec.tools.interp_gcc.needed>INTERP_GCC=${uma.spec.tools.interp_gcc.name}<#else>#INTERP_GCC not used</#if>
-<#if uma.spec.tools.as.needed>AS=${uma.spec.tools.as.name}<#else># AS not used</#if>
-<#if uma.spec.tools.cc.needed>CC=${uma.spec.tools.cc.name}<#else># CC not used</#if>
-<#if uma.spec.tools.cpp.needed>CPP=${uma.spec.tools.cpp.name}<#else># CPP not used</#if>
-<#if uma.spec.tools.cxx.needed>CXX=${uma.spec.tools.cxx.name}<#else># CXX not used</#if>
-<#if uma.spec.tools.rc.needed>RC=${uma.spec.tools.rc.name}<#else># RC not used</#if>
-<#if uma.spec.tools.link.needed>LINK=${uma.spec.tools.link.name}<#else># LINK not used</#if>
-<#if uma.spec.tools.mt.needed>MT=${uma.spec.tools.mt.name}<#else># MT not used</#if>
-<#if uma.spec.tools.implib.needed>IMPLIB=${uma.spec.tools.implib.name}<#else># IMPLIB not used</#if>
-<#if uma.spec.tools.ar.needed>AR=${uma.spec.tools.ar.name}<#else># AR not used</#if>
-<#if uma.spec.tools.ranlib.needed>RANLIB=${uma.spec.tools.ranlib.name}<#else># RANLIB not used</#if>
-<#if uma.spec.tools.dll_ld.needed>DLL_LD=${uma.spec.tools.dll_ld.name}<#else># DLL_LD not used</#if>
-<#if uma.spec.tools.cxx_dll_ld.needed>CXX_DLL_LD=${uma.spec.tools.cxx_dll_ld.name}<#else># CXX_DLL_LD not used</#if>
-<#if uma.spec.tools.exe_ld.needed>EXE_LD=${uma.spec.tools.exe_ld.name}<#else># EXE_LD not used</#if>
-<#if uma.spec.tools.cxx_exe_ld.needed>CXX_EXE_LD=${uma.spec.tools.cxx_exe_ld.name}<#else># CXX_EXE_LD not used</#if>
-<#if uma.spec.tools.dll_ld.needed>UMA_DLL_LD=$(if $(UMA_IS_C_PLUS_PLUS),$(CXX_DLL_LD),$(DLL_LD))</#if>
-<#if uma.spec.tools.exe_ld.needed>UMA_EXE_LD=$(if $(UMA_IS_C_PLUS_PLUS),$(CXX_EXE_LD),$(EXE_LD))</#if>
+<#if uma.spec.type.windows>
+<#if uma.spec.flags.build_VS12AndHigher.enabled>
+VS12AndHigher:=1
+</#if>
+ifndef NO_USE_CLANG
+USE_CLANG:=1
+endif
+ifdef USE_CLANG
+<#if uma.spec.tools.clang_cxx.needed>
+ifneq (default,$(origin CXX))
+  ifndef CLANG_CXX
+    # If the user has overridden CXX we'll want to let them know that CLANG_CXX exists.
+    ifndef PRINT_ONCE_CLANG_CXX
+      $(info ****************)
+      $(info *)
+      $(info * CXX=$(CXX) (overridden), note that this build will also invoke another compiler that can be overridden: CLANG_CXX=${uma.spec.tools.clang_cxx.name})
+      $(info *)
+      $(info ****************)
+      export PRINT_ONCE_CLANG_CXX=1
+    endif
+  endif
+endif
+CLANG_CXX?=${uma.spec.tools.clang_cxx.name}
+<#else>
+# CLANG_CXX not used
+</#if>
+endif
+</#if>
+
+<#if uma.spec.processor.ppc && uma.spec.type.linux && !uma.spec.flags.env_advanceToolchain.enabled && !uma.spec.flags.uma_codeCoverage.enabled>
+ifndef NO_USE_PPC_GCC
+USE_PPC_GCC:=1
+endif
+ifdef USE_PPC_GCC
+<#if uma.spec.tools.ppc_gcc_cxx.needed>
+ifneq (default,$(origin CXX))
+  ifndef PPC_GCC_CXX
+    # If the user has overridden CXX we'll want to let them know that PPC_GCC_CXX exists.
+    ifndef PRINT_ONCE_PPC_GCC_CXX
+      $(info ****************)
+      $(info *)
+      $(info * CXX=$(CXX) (overridden), note that this build will also invoke another compiler that can be overridden: PPC_GCC_CXX=${uma.spec.tools.ppc_gcc_cxx.name})
+      $(info *)
+      $(info ****************)
+      export PRINT_ONCE_PPC_GCC_CXX=1
+    endif
+  endif
+endif
+PPC_GCC_CXX?=${uma.spec.tools.ppc_gcc_cxx.name}
+<#else>
+# PPC_GCC_CXX not used
+</#if>
+endif
+</#if>
+
+<#if uma.spec.tools.as.needed>
+ifeq (default,$(origin AS))
+  AS=${uma.spec.tools.as.name}
+endif
+<#else>
+# AS not used
+</#if>
+<#if uma.spec.tools.cc.needed>
+ifeq (default,$(origin CC))
+  CC=${uma.spec.tools.cc.name}
+endif
+<#else>
+# CC not used
+</#if>
+<#if uma.spec.tools.cpp.needed>
+ifeq (default,$(origin CPP))
+  CPP=${uma.spec.tools.cpp.name}
+endif
+<#else>
+# CPP not used
+</#if>
+<#if uma.spec.tools.cxx.needed>
+ifeq (default,$(origin CXX))
+  CXX=${uma.spec.tools.cxx.name}
+endif
+<#else>
+# CXX not used
+</#if>
+<#if uma.spec.tools.rc.needed>RC?=${uma.spec.tools.rc.name}<#else># RC not used</#if>
+<#if uma.spec.tools.link.needed>LINK?=${uma.spec.tools.link.name}<#else># LINK not used</#if>
+<#if uma.spec.tools.mt.needed>MT?=${uma.spec.tools.mt.name}<#else># MT not used</#if>
+<#if uma.spec.tools.implib.needed>IMPLIB?=${uma.spec.tools.implib.name}<#else># IMPLIB not used</#if>
+<#if uma.spec.tools.ar.needed>
+ifeq (default,$(origin AR))
+  AR=${uma.spec.tools.ar.name}
+endif
+<#else>
+  # AR not used
+</#if>
+<#if uma.spec.tools.ranlib.needed>RANLIB?=${uma.spec.tools.ranlib.name}<#else># RANLIB not used</#if>
+<#if uma.spec.tools.dll_ld.needed>DLL_LD?=${uma.spec.tools.dll_ld.name}<#else># DLL_LD not used</#if>
+<#if uma.spec.tools.cxx_dll_ld.needed>CXX_DLL_LD?=${uma.spec.tools.cxx_dll_ld.name}<#else># CXX_DLL_LD not used</#if>
+<#if uma.spec.tools.exe_ld.needed>EXE_LD?=${uma.spec.tools.exe_ld.name}<#else># EXE_LD not used</#if>
+<#if uma.spec.tools.cxx_exe_ld.needed>CXX_EXE_LD?=${uma.spec.tools.cxx_exe_ld.name}<#else># CXX_EXE_LD not used</#if>
+<#if uma.spec.tools.dll_ld.needed>UMA_DLL_LD?=$(if $(UMA_IS_C_PLUS_PLUS),$(CXX_DLL_LD),$(DLL_LD))</#if>
+<#if uma.spec.tools.exe_ld.needed>UMA_EXE_LD?=$(if $(UMA_IS_C_PLUS_PLUS),$(CXX_EXE_LD),$(EXE_LD))</#if>
 
 ifdef UMA_CLANG
-  CC=clang
-  CXX=clang++
+  ifeq (default,$(origin CC))
+    CC=clang
+  endif
+  ifeq (default,$(origin CXX))
+    CXX=clang++
+  endif
 endif
 
 # Define the JIT HOST type.
@@ -61,6 +148,8 @@ endif
 TR_HOST=TR_HOST_X86
 <#elseif uma.spec.processor.arm>
 TR_HOST=TR_HOST_ARM
+<#elseif uma.spec.processor.aarch64>
+TR_HOST=TR_HOST_ARM64
 <#elseif uma.spec.processor.ppc>
 TR_HOST=TR_HOST_POWER
 <#elseif uma.spec.processor.s390>
@@ -88,15 +177,9 @@ TR_HOST=TR_HOST_S390
 </#if>
 </#if>
 
-<#if uma.spec.properties.use_ld_to_link.defined>
-ifndef UMA_IS_C_PLUS_PLUS
-  UMA_USING_LD_TO_LINK=1
-endif
-</#if>
-
 <#if uma.spec.type.windows>
 # definitions for UMA_CPU
-# can be overriden by makefile including this one.
+# can be overridden by makefile including this one.
 ifndef UMA_CPU
 <#if uma.spec.processor.amd64>
   UMA_CPU:=AMD64
@@ -133,7 +216,7 @@ UMA_DOT_O=.obj
 UMA_DOT_O=.o
 </#if>
 
-# gather all the object files together, this can be overriden by a module
+# gather all the object files together, this can be overridden by a module
 #
 UMA_OBJECTS:=$(foreach suffix,$(UMA_SOURCE_SUFFIX_LIST),$(patsubst %$(suffix),%$(UMA_DOT_O),$(wildcard *$(suffix))))
 # Remove XXXexp.o from the object list.  Will be added, if needed, by the appropriate makefile.
@@ -161,31 +244,19 @@ UMA_OBJECTS+=$(patsubst %.mc,%.res,$(wildcard *.mc))
 UMA_WINDOWS_PARRALLEL_HACK=-j $(NUMBER_OF_PROCESSORS)
 </#if>
 
-<#if uma.spec.type.windows>
-<#if uma.spec.flags.build_VS12AndHigher.enabled>
-VS12AndHigher:=1
-</#if>
-ifndef NO_USE_MINGW
-USE_MINGW:=1
+# On z/OS, some generated files must be converted to EBCDIC for consistency.
+# This macro is intended to be used in a rule where the target is initially
+# created with ASCII encoding and must be converted to EBCDIC, for example:
+#     m4 < input.m4 > output $(call CONVERT_ASCII_TO_NATIVE, output)
+<#if uma.spec.type.zos>
+ifeq ($(OPENJ9_BUILD),true)
+CONVERT_ASCII_TO_NATIVE = \
+	&& iconv -f ISO8859-1 -t IBM-1047 < $1 > $(strip $1).tmp \
+	&& mv -f $(strip $1).tmp $1 \
+	&& chtag -t -c IBM-1047 $1
+else
+CONVERT_ASCII_TO_NATIVE =
 endif
-ifdef USE_MINGW
-<#if uma.spec.tools.mingw_cxx.needed>
-MINGW_CXX=${uma.spec.tools.mingw_cxx.name}
 <#else>
-# MINGW_CXX not used
-</#if>
-endif
-</#if>
-
-<#if uma.spec.processor.ppc && uma.spec.type.linux && !uma.spec.flags.env_advanceToolchain.enabled && !uma.spec.flags.uma_codeCoverage.enabled>
-ifndef NO_USE_PPC_GCC
-USE_PPC_GCC:=1
-endif
-ifdef USE_PPC_GCC
-<#if uma.spec.tools.ppc_gcc_cxx.needed>
-PPC_GCC_CXX=${uma.spec.tools.ppc_gcc_cxx.name}
-<#else>
-# PPC_GCC_CXX not used
-</#if>
-endif
+CONVERT_ASCII_TO_NATIVE =
 </#if>

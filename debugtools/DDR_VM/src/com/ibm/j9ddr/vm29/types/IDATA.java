@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.types;
 
@@ -114,18 +114,19 @@ public class IDATA extends IScalar {
 	public I64 sub(I64 parameter) {
 		return new I64(this).sub(parameter);
 	}
-	
+
 	public int intValue() {
-		// TODO: Should we try to return negative numbers up to MAXINT most negative?
-		if (SIZEOF == U64.SIZEOF && super.intValue() < 0) {
-			throw new InvalidDataTypeException("IDATA is 32 bits wide and contains a number larger than MAX_INT");
-		} else {
-			return super.intValue();
+		int value = (int) data;
+
+		if (SIZEOF == I64.SIZEOF && data != value) {
+			throw new InvalidDataTypeException("IDATA is 64 bits wide: conversion to int would lose data");
 		}
+
+		return value;
 	}
-	
+
 	public long longValue() {
-		if (SIZEOF == U32.SIZEOF) {
+		if (SIZEOF == I32.SIZEOF) {
 			return (int) data;
 		} else {
 			return data;

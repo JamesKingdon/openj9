@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2000, 2017 IBM Corp. and others
+# Copyright (c) 2000, 2019 IBM Corp. and others
 #
 # This program and the accompanying materials are made available under
 # the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
 # [1] https://www.gnu.org/software/classpath/license.html
 # [2] http://openjdk.java.net/legal/assembly-exception.html
 #
-# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 #
 
 # Externalised messages for the RASdump module.
@@ -33,7 +33,7 @@
 # Note to translators:
 #
 # This file uses printf style substitutions. Sequences such as %s, %.*s, %10d
-# etc. will be subsituted at runtime. The special case of %% is not a substitution.
+# etc. will be substituted at runtime. The special case of %% is not a substitution.
 # It indicates a single percent sign. Please do not modify the format specifiers, or 
 # change their order. For instance, in a message like "from %d to %s", %d
 # MUST appear before %s in any translated message, or a run-time crash
@@ -172,7 +172,7 @@ J9NLS_DMP_ERROR_IN_DUMP_STR=Error in %1$s dump: %2$s
 # START NON-TRANSLATABLE
 J9NLS_DMP_ERROR_IN_DUMP_STR.explanation=The JVM detected an error while attempting to produce a dump.
 J9NLS_DMP_ERROR_IN_DUMP_STR.system_action=The JVM continues, but the dump might not be usable.
-J9NLS_DMP_ERROR_IN_DUMP_STR.user_response=Refer to diagnostic information or contact your local IBM support representative.
+J9NLS_DMP_ERROR_IN_DUMP_STR.user_response=Refer to diagnostic information or contact your support representative.
 J9NLS_DMP_ERROR_IN_DUMP_STR.sample_input_1=Tool
 J9NLS_DMP_ERROR_IN_DUMP_STR.sample_input_2=missing process
 J9NLS_DMP_ERROR_IN_DUMP_STR.link=
@@ -505,4 +505,12 @@ J9NLS_DMP_INVALID_OR_RESERVED.system_action=The JVM exits.
 J9NLS_DMP_INVALID_OR_RESERVED.user_response=select a different value.
 J9NLS_DMP_INVALID_OR_RESERVED.sample_input_1=suspendwith
 J9NLS_DMP_INVALID_OR_RESERVED.link=
+# END NON-TRANSLATABLE
+
+J9NLS_DMP_TOO_MANY_DUMP_OPTIONS=The number of dump options must be less than %d, including options set by default.
+# START NON-TRANSLATABLE
+J9NLS_DMP_TOO_MANY_DUMP_OPTIONS.explanation=The number of -Xdump: options exceeds the VM limit
+J9NLS_DMP_TOO_MANY_DUMP_OPTIONS.system_action=The JVM exits.
+J9NLS_DMP_TOO_MANY_DUMP_OPTIONS.user_response=Combine dump types, event types, and filters using '+' into a single option
+J9NLS_DMP_TOO_MANY_DUMP_OPTIONS.link=
 # END NON-TRANSLATABLE

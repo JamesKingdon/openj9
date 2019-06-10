@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #ifndef SHCHELP_H
 #define SHCHELP_H
@@ -31,16 +31,21 @@
 extern "C" {
 #endif
 
-#define J9SH_MODLEVEL_JAVA5 1
-#define J9SH_MODLEVEL_JAVA6 2
-#define J9SH_MODLEVEL_JAVA7 3
-#define J9SH_MODLEVEL_JAVA8 4
-#define J9SH_MODLEVEL_JAVA9 5
+#define J9SH_MODLEVEL_JAVA5  1
+#define J9SH_MODLEVEL_JAVA6  2
+#define J9SH_MODLEVEL_JAVA7  3
+#define J9SH_MODLEVEL_JAVA8  4
+#define J9SH_MODLEVEL_JAVA9  5
+/*
+ * From Java 10, modLevel equals to java version number. But there might be Java 10 shared cache that has modLevel 6
+ * created before this change. Define J9SH_MODLEVEL_JAVA10 to handle them
+ */
+#define J9SH_MODLEVEL_JAVA10  6
 
 /*	JVM feature bit flag(s)	*/
 /*
  * if there is a need for double digit features such as 10
- * version string leng is going to increase by 1
+ * version string length is going to increase by 1
  * J9SH_VERSION_STRING_LEN need to be changed accordingly *
  */
 #define J9SH_FEATURE_DEFAULT 0x0
@@ -72,8 +77,11 @@ extern "C" {
 #define J9SH_VERSION_STRING_G07ANDLOWER_SPEC "C%dD%dA%d"
 #define J9SH_VERSION_STRING_G07TO29_SPEC "C%dM%dA%d"
 #define J9SH_VERSION_STRING_SPEC "C%dM%dF%xA%d"
-#define J9SH_VERSION_STRING_LEN 12
+#define J9SH_VERSION_STRING_LEN 13
 #define J9SH_VERSTRLEN_INCREASED_SINCEG29 2
+#define J9SH_VERSTRLEN_INCREASED_SINCEJAVA10 1
+
+#define J9SH_MODLEVEL_PREFIX_CHAR_OFFSET 4
 
 typedef struct J9PortShcVersion {
     uint32_t esVersionMajor;
@@ -100,16 +108,18 @@ uint32_t
 getJCLForShcModlevel(uintptr_t modlevel);
 
 uintptr_t
-isCompatibleShcFilePrefix(J9PortLibrary* portlib, uint32_t j2seVersion, uint32_t feature, const char* filename);
+isCompatibleShcFilePrefix(J9PortLibrary* portlib, uint32_t javaVersion, uint32_t feature, const char* filename);
 
 void
-getStringForShcModlevel(J9PortLibrary* portlib, uint32_t modlevel, char* buffer);
+getStringForShcModlevel(J9PortLibrary* portlib, uint32_t modlevel, char* buffer, uint32_t buffSize);
 
 void
 getStringForShcAddrmode(J9PortLibrary* portlib, uint32_t addrmode, char* buffer);
 
 uintptr_t
 isCacheFileName(J9PortLibrary* portlib, const char* nameToTest, uintptr_t expectPersistent, const char* optionalExtraID);
+
+intptr_t getModLevelFromName(const char* cacheNameWithVGen);
 
 #ifdef __cplusplus
 } /* extern "C" */

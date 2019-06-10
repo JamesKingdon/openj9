@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2016 IBM Corp. and others
+ * Copyright (c) 2009, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.j9.stackwalker;
 
@@ -26,7 +26,6 @@ import static com.ibm.j9ddr.vm29.j9.ROMHelp.J9_ROM_METHOD_FROM_RAM_METHOD;
 import static com.ibm.j9ddr.vm29.structure.J9Consts.J9_STACKWALK_ITERATE_METHOD_CLASS_SLOTS;
 import static com.ibm.j9ddr.vm29.structure.J9Consts.J9_STACKWALK_ITERATE_O_SLOTS;
 import static com.ibm.j9ddr.vm29.structure.J9Consts.J9_STACKWALK_MAINTAIN_REGISTER_MAP;
-import static com.ibm.j9ddr.vm29.structure.J9StackWalkConstants.J9SW_JIT_STACK_SLOTS_USED_BY_CALL;
 import static com.ibm.j9ddr.vm29.structure.J9StackWalkState.J9_STACKWALK_SLOT_TYPE_INTERNAL;
 import static java.util.logging.Level.FINE;
 import static java.util.logging.Level.FINER;
@@ -39,6 +38,7 @@ import java.io.PrintStream;
 import java.text.MessageFormat;
 
 import com.ibm.j9ddr.CorruptDataException;
+import com.ibm.j9ddr.vm29.j9.J9ConfigFlags;
 import com.ibm.j9ddr.vm29.pointer.PointerPointer;
 import com.ibm.j9ddr.vm29.pointer.UDATAPointer;
 import com.ibm.j9ddr.vm29.pointer.VoidPointer;
@@ -47,7 +47,6 @@ import com.ibm.j9ddr.vm29.pointer.generated.J9ConstantPoolPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9MethodPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ROMMethodPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9UTF8Pointer;
-import com.ibm.j9ddr.vm29.pointer.generated.TRBuildFlags;
 import com.ibm.j9ddr.vm29.pointer.helper.J9UTF8Helper;
 import com.ibm.j9ddr.vm29.structure.J9Consts;
 import com.ibm.j9ddr.vm29.types.UDATA;
@@ -89,15 +88,19 @@ public class StackWalkerUtils
 	static final int jitArgumentRegisterNumbers[];
 	
 	static {
-		if (TRBuildFlags.host_X86 && TRBuildFlags.host_64BIT) {
-			jitArgumentRegisterNumbers = new int[]{ 0, 5, 3, 2};
-		} else if (TRBuildFlags.host_POWER) {
-			jitArgumentRegisterNumbers = new int[]{ 3, 4, 5, 6, 7, 8, 9, 10 };
-		} else if (TRBuildFlags.host_S390) {
-			jitArgumentRegisterNumbers = new int[]{ 1, 2, 3 };
+		if (J9ConfigFlags.arch_x86) {
+			if (J9BuildFlags.env_data64) {
+				jitArgumentRegisterNumbers = new int[] { 0, 5, 3, 2 };
+			} else {
+				// 32 bit X86 doesn't use jitArgumentRegisterNumbers
+				jitArgumentRegisterNumbers = new int[0];
+			}
+		} else if (J9ConfigFlags.arch_power) {
+			jitArgumentRegisterNumbers = new int[] { 3, 4, 5, 6, 7, 8, 9, 10 };
+		} else if (J9ConfigFlags.arch_s390) {
+			jitArgumentRegisterNumbers = new int[] { 1, 2, 3 };
 		} else {
-			//32 bit X86 doesn't use jitArgumentRegisterNumbers
-			jitArgumentRegisterNumbers = new int[0];
+			throw new IllegalArgumentException("Unsupported platform");
 		}
 	}
 	
@@ -261,7 +264,7 @@ public class StackWalkerUtils
 	
 	public static UDATA JIT_RESOLVE_PARM(WalkState walkState, int parmNumber) throws CorruptDataException
 	{
-		if (TRBuildFlags.host_X86 && TRBuildFlags.host_32BIT) {
+		if (J9ConfigFlags.arch_x86 && !J9BuildFlags.env_data64) {
 			return walkState.bp.at(parmNumber);
 		} else {
 			return walkState.walkedEntryLocalStorage.jitGlobalStorageBase().at(jitArgumentRegisterNumbers[parmNumber - 1]);

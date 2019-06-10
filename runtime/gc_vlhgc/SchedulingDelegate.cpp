@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -127,7 +127,7 @@ void
 MM_SchedulingDelegate::globalMarkPhaseCompleted(MM_EnvironmentVLHGC *env)
 {
 	/* Taking a snapshot of _liveSetBytesAfterPartialCollect from the last PGC.
-	 * This is slighly incorrect. We should take liveSetBytes at the beginning of next PGC
+	 * This is slightly incorrect. We should take liveSetBytes at the beginning of next PGC
 	 * (just before sweep is done)
 	 */
 	_liveSetBytesBeforeGlobalSweep = _liveSetBytesAfterPartialCollect;
@@ -201,7 +201,8 @@ MM_SchedulingDelegate::determineNextPGCType(MM_EnvironmentVLHGC *env)
 	}
 
 	/* Aborted CopyForward happened in near past. The rest of PGCs until GMP completes, should not try CopyForward. */
-	if (_disableCopyForwardDuringCurrentGlobalMarkPhase) {
+	/* try only mark partial nursery regions instead of mark all of collectionSet in CopyForwardHybrid mode */
+	if (_disableCopyForwardDuringCurrentGlobalMarkPhase && !_extensions->tarokEnableCopyForwardHybrid) {
 		env->_cycleState->_reasonForMarkCompactPGC = MM_CycleState::reason_recent_abort;
 		_nextPGCShouldCopyForward = false;
 	}
@@ -265,8 +266,8 @@ MM_SchedulingDelegate::partialGarbageCollectCompleted(MM_EnvironmentVLHGC *env, 
 		UDATA nonEdenSurvivorCount = copyForwardStats->_nonEdenSurvivorRegionCount;
 		
 		/* estimate how many more regions we would have needed to avoid abort */
-		Assert_MM_true( (0 == copyForwardStats->_scanBytesEden) || copyForwardStats->_aborted);
-		Assert_MM_true( (0 == copyForwardStats->_scanBytesNonEden) || copyForwardStats->_aborted);
+		Assert_MM_true( (0 == copyForwardStats->_scanBytesEden) || copyForwardStats->_aborted || (0 != copyForwardStats->_nonEvacuateRegionCount));
+		Assert_MM_true( (0 == copyForwardStats->_scanBytesNonEden) || copyForwardStats->_aborted || (0 != copyForwardStats->_nonEvacuateRegionCount));
 		edenSurvivorCount += (copyForwardStats->_scanBytesEden + regionSize - 1) / regionSize;
 		nonEdenSurvivorCount += (copyForwardStats->_scanBytesNonEden + regionSize - 1) / regionSize;
 
@@ -276,7 +277,7 @@ MM_SchedulingDelegate::partialGarbageCollectCompleted(MM_EnvironmentVLHGC *env, 
 			double thisSurvivalRate = (double)edenSurvivorCount / (double)edenCountBeforeCollect;
 			updateSurvivalRatesAfterCopyForward(thisSurvivalRate, nonEdenSurvivorCount);
 		}
-		
+
 		if (copyForwardStats->_aborted && (0 ==_remainingGMPIntermissionIntervals)) {
 			_disableCopyForwardDuringCurrentGlobalMarkPhase = true;
 		}
@@ -284,19 +285,11 @@ MM_SchedulingDelegate::partialGarbageCollectCompleted(MM_EnvironmentVLHGC *env, 
 		/* measure scan rate in PGC, only if we did M/S/C collect */
 		measureScanRate(env, measureScanRateHistoricWeightForPGC);
 	}
+
 	measureConsumptionForPartialGC(env, reclaimableRegions, defragmentReclaimableRegions);
 	calculateAutomaticGMPIntermission(env);
 	calculateEdenSize(env);
-
 	estimateMacroDefragmentationWork(env);
-	
-	if (isFirstPGCAfterGMP()) {
-		calculatePGCCompactionRate(env, edenCountBeforeCollect * _regionManager->getRegionSize());
-		calculateHeapOccupancyTrend(env);
-		calculateScannableBytesRatio(env);
-
-		firstPGCAfterGMPCompleted();
-	}
 	
 	/* Calculate the time spent in the current Partial GC */
 	U_64 partialGcEndTime = j9time_hires_clock();
@@ -606,7 +599,11 @@ MM_SchedulingDelegate::estimatePartialGCsRemaining(MM_EnvironmentVLHGC *env) con
 
 			/* Calculate the number of regions that we need for copy forward destination */
 			double survivorRegions = _averageSurvivorSetRegionCount;
-			Trc_MM_SchedulingDelegate_estimatePartialGCsRemaining_survivorNeeds(env->getLanguageVMThread(), (UDATA)_averageSurvivorSetRegionCount, MM_GCExtensions::getExtensions(env)->tarokKickoffHeadroomRegionCount, (UDATA)survivorRegions);
+			/* if _extensions->fvtest_forceCopyForwardHybridRatio is set(testing purpose), correct required survivor region count to avoid underestimating the remaining. */
+			if ((0 != _extensions->fvtest_forceCopyForwardHybridRatio) && (100 >= _extensions->fvtest_forceCopyForwardHybridRatio)) {
+				survivorRegions = survivorRegions * (100 - _extensions->fvtest_forceCopyForwardHybridRatio) / 100;
+			}
+			Trc_MM_SchedulingDelegate_estimatePartialGCsRemaining_survivorNeeds(env->getLanguageVMThread(), (UDATA)_averageSurvivorSetRegionCount, MM_GCExtensions::getExtensions(env)->tarokKickoffHeadroomInBytes, (UDATA)survivorRegions);
 
 			double freeRegions = (double)((MM_GlobalAllocationManagerTarok *)_extensions->globalAllocationManager)->getFreeRegionCount();
 
@@ -677,6 +674,18 @@ MM_SchedulingDelegate::calculateScannableBytesRatio(MM_EnvironmentVLHGC *env)
 	}
 }
 
+void
+MM_SchedulingDelegate::recalculateRatesOnFirstPGCAfterGMP(MM_EnvironmentVLHGC *env)
+{
+	if (isFirstPGCAfterGMP()) {
+		calculatePGCCompactionRate(env, getCurrentEdenSizeInRegions(env) * _regionManager->getRegionSize());
+		calculateHeapOccupancyTrend(env);
+		calculateScannableBytesRatio(env);
+
+		firstPGCAfterGMPCompleted();
+	}
+}
+
 double
 MM_SchedulingDelegate::getAverageEmptinessOfCopyForwardedRegions()
 {
@@ -707,6 +716,40 @@ MM_SchedulingDelegate::getDefragmentEmptinessThreshold(MM_EnvironmentVLHGC *env)
 
 }
 
+UDATA
+MM_SchedulingDelegate::estimateTotalFreeMemory(MM_EnvironmentVLHGC *env, UDATA freeRegionMemory, UDATA defragmentedMemory, UDATA reservedFreeMemory)
+{
+	UDATA estimatedFreeMemory = 0;
+
+	/* Adjust estimatedFreeMemory - we are only interested in area that shortfall can be fed from.
+	 * Thus exclude reservedFreeMemory(Eden and Survivor size).
+	 */
+	estimatedFreeMemory = MM_Math::saturatingSubtract(defragmentedMemory + freeRegionMemory, reservedFreeMemory);
+
+	Trc_MM_SchedulingDelegate_estimateTotalFreeMemory(env->getLanguageVMThread(), estimatedFreeMemory, reservedFreeMemory, defragmentedMemory, freeRegionMemory);
+	return estimatedFreeMemory;
+}
+
+UDATA
+MM_SchedulingDelegate::calculateKickoffHeadroom(MM_EnvironmentVLHGC *env, UDATA totalFreeMemory)
+{
+	if (_extensions->tarokForceKickoffHeadroomInBytes) {
+		return _extensions->tarokKickoffHeadroomInBytes;
+	}
+	UDATA newHeadroom = totalFreeMemory * _extensions->tarokKickoffHeadroomRegionRate / 100;
+	Trc_MM_SchedulingDelegate_calculateKickoffHeadroom(env->getLanguageVMThread(), _extensions->tarokKickoffHeadroomInBytes, newHeadroom);
+	_extensions->tarokKickoffHeadroomInBytes = newHeadroom;
+	return newHeadroom;
+}
+
+UDATA
+MM_SchedulingDelegate::initializeKickoffHeadroom(MM_EnvironmentVLHGC *env)
+{
+	/* total free memory = total heap size - eden size */
+	UDATA totalFreeMemory = _regionManager->getTotalHeapSize() - getCurrentEdenSizeInBytes(env);
+	return calculateKickoffHeadroom(env, totalFreeMemory);
+}
+
 void
 MM_SchedulingDelegate::calculatePGCCompactionRate(MM_EnvironmentVLHGC *env, UDATA edenSizeInBytes)
 {
@@ -716,28 +759,46 @@ MM_SchedulingDelegate::calculatePGCCompactionRate(MM_EnvironmentVLHGC *env, UDAT
 	const double defragmentEmptinessThreshold = getDefragmentEmptinessThreshold(env);
 	Assert_MM_true( (defragmentEmptinessThreshold >= 0.0) && (defragmentEmptinessThreshold <= 1.0) );
 	const UDATA regionSize = _regionManager->getRegionSize();
-	UDATA totalFreeMemory = 0;
-	UDATA totalLiveData = 0;
+
+	UDATA totalLiveDataInCollectableRegions = 0;
+	UDATA totalLiveDataInNonCollectibleRegions = 0;
 	UDATA fullyCompactedData = 0;
+
+	UDATA freeMemoryInCollectibleRegions = 0;
+	UDATA freeMemoryInNonCollectibleRegions = 0;
+	UDATA freeMemoryInFullyCompactedRegions = 0;
 	UDATA freeRegionMemory = 0;
+
+	UDATA collectibleRegions = 0;
+	UDATA nonCollectibleRegions = 0;
+	UDATA freeRegions = 0;
+	UDATA fullyCompactedRegions = 0;
+
+	UDATA estimatedFreeMemory = 0;
 	UDATA defragmentedMemory = 0;
 
 	GC_HeapRegionIteratorVLHGC regionIterator(_regionManager, MM_HeapRegionDescriptor::MANAGED);
 	MM_HeapRegionDescriptorVLHGC *region = NULL;
+
 	while (NULL != (region = regionIterator.nextRegion())) {
 		region->_defragmentationTarget = false;
+		MM_MemoryPoolBumpPointer *memoryPool = (MM_MemoryPoolBumpPointer *)region->getMemoryPool();
 		if (region->containsObjects()) {
 			Assert_MM_true(region->_sweepData._alreadySwept);
+			UDATA freeMemory = memoryPool->getFreeMemoryAndDarkMatterBytes();
 			if (!region->getRememberedSetCardList()->isAccurate()) {
 				/* Overflowed regions or those that RSCL is being rebuilt will not be be compacted */
+				nonCollectibleRegions += 1;
+				freeMemoryInNonCollectibleRegions += freeMemory;
+				totalLiveDataInNonCollectibleRegions += (regionSize - freeMemory);
 			} else {
-				MM_MemoryPoolBumpPointer *memoryPool = (MM_MemoryPoolBumpPointer *)region->getMemoryPool();
-				UDATA freeMemory = memoryPool->getFreeMemoryAndDarkMatterBytes();
 				double emptiness = (double)freeMemory / (double)regionSize;
 				Assert_MM_true( (emptiness >= 0.0) && (emptiness <= 1.0) );
 
 				/* Only consider regions which are likely to become more dense if we copy-and-forward them */
 				if (emptiness > defragmentEmptinessThreshold) {
+					collectibleRegions += 1;
+					freeMemoryInCollectibleRegions += freeMemory;
 					/* see ReclaimDelegate::deriveCompactScore() for an explanation of potentialWastedWork */
 					UDATA compactGroup = MM_CompactGroupManager::getCompactGroupNumber(env, region);
 					double weightedSurvivalRate = MM_GCExtensions::getExtensions(env)->compactGroupPersistentStats[compactGroup]._weightedSurvivalRate;
@@ -745,33 +806,48 @@ MM_SchedulingDelegate::calculatePGCCompactionRate(MM_EnvironmentVLHGC *env, UDAT
 
 					/* the probability that we'll recover the free memory is determined by the potential gainful work, so use that determine how much memory we're likely to actually compact */
 					defragmentedMemory += (UDATA)((double)freeMemory * (1.0 - potentialWastedWork));
-					totalLiveData += (UDATA)((double)(regionSize - freeMemory) * (1.0 - potentialWastedWork));
+					totalLiveDataInCollectableRegions += (UDATA)((double)(regionSize - freeMemory) * (1.0 - potentialWastedWork));
 					region->_defragmentationTarget = true;
+
 				} else {
+					/* if method calculatePGCCompactionRate() is called right after the sweep before PGC(the first PGC after GMP), half of Eden regions were allocated after the final GMP, those Eden regions didn't have been marked, they would be showed as fullyCompacted regions */
+					fullyCompactedRegions += 1;
+					freeMemoryInFullyCompactedRegions += freeMemory;
 					fullyCompactedData += (regionSize - freeMemory);
 				}
 			}
 		} else if (region->isFreeOrIdle()) {
+			freeRegions += 1;
 			freeRegionMemory += regionSize;
 		}
 	}
 
-	/* Adjust totalFreeMemory - we are only interested in area that shortfall can be fed from.
-	 * Thus exclude Eden and Survivor size. Survivor space needs to accommodate for Nursery set, Dynamic collection set and Compaction set
+	/* Survivor space needs to accommodate for Nursery set, Dynamic collection set and Compaction set
 	 */
-	UDATA surivivorSize = (UDATA)(regionSize * (_averageSurvivorSetRegionCount + _extensions->tarokKickoffHeadroomRegionCount));
+	/* estimate totalFreeMemory for recalculating kickoffHeadroomRegionCount */	 
+	UDATA surivivorSize = (UDATA)(regionSize * _averageSurvivorSetRegionCount);
 	UDATA reservedFreeMemory = edenSizeInBytes + surivivorSize;
-	totalFreeMemory = MM_Math::saturatingSubtract(defragmentedMemory + freeRegionMemory, reservedFreeMemory);
+	estimatedFreeMemory = estimateTotalFreeMemory(env, freeRegionMemory, defragmentedMemory, reservedFreeMemory);
+	calculateKickoffHeadroom(env, estimatedFreeMemory);
+
+	/* estimate totalFreeMemory for recalculating PGCCompactionRate with tarokKickoffHeadroomInBytes */
+	reservedFreeMemory += _extensions->tarokKickoffHeadroomInBytes;
+	estimatedFreeMemory = estimateTotalFreeMemory(env, freeRegionMemory, defragmentedMemory, reservedFreeMemory);
+
 	double bytesDiscardedPerByteCopied = (_averageCopyForwardBytesCopied > 0.0) ? (_averageCopyForwardBytesDiscarded / _averageCopyForwardBytesCopied) : 0.0;
-	double estimatedFreeMemoryDiscarded = (double)totalLiveData * bytesDiscardedPerByteCopied;
-	double recoverableFreeMemory = (double)totalFreeMemory - estimatedFreeMemoryDiscarded;
+	double estimatedFreeMemoryDiscarded = (double)totalLiveDataInCollectableRegions * bytesDiscardedPerByteCopied;
+	double recoverableFreeMemory = (double)estimatedFreeMemory - estimatedFreeMemoryDiscarded;
 
 	if (0.0 < recoverableFreeMemory) {
-		_bytesCompactedToFreeBytesRatio = ((double)totalLiveData)/recoverableFreeMemory;
+		_bytesCompactedToFreeBytesRatio = ((double)totalLiveDataInCollectableRegions)/recoverableFreeMemory;
 	} else {
 		_bytesCompactedToFreeBytesRatio = (double)(_regionManager->getTableRegionCount() + 1);
 	}
-	Trc_MM_SchedulingDelegate_calculatePGCCompactionRate_liveToFreeRatio(env->getLanguageVMThread(), _bytesCompactedToFreeBytesRatio, totalLiveData, totalFreeMemory, fullyCompactedData, reservedFreeMemory, defragmentEmptinessThreshold, surivivorSize, defragmentedMemory, freeRegionMemory, edenSizeInBytes);
+
+	Trc_MM_SchedulingDelegate_calculatePGCCompactionRate_liveToFreeRatio1(env->getLanguageVMThread(), (totalLiveDataInCollectableRegions + totalLiveDataInNonCollectibleRegions + fullyCompactedData), totalLiveDataInCollectableRegions, totalLiveDataInNonCollectibleRegions, fullyCompactedData);
+	Trc_MM_SchedulingDelegate_calculatePGCCompactionRate_liveToFreeRatio2(env->getLanguageVMThread(), (freeMemoryInCollectibleRegions + freeMemoryInNonCollectibleRegions + freeRegionMemory), freeMemoryInCollectibleRegions, freeMemoryInNonCollectibleRegions, freeRegionMemory, freeMemoryInFullyCompactedRegions);
+	Trc_MM_SchedulingDelegate_calculatePGCCompactionRate_liveToFreeRatio3(env->getLanguageVMThread(), (collectibleRegions + nonCollectibleRegions + fullyCompactedRegions + freeRegions), collectibleRegions, nonCollectibleRegions, fullyCompactedRegions, freeRegions);
+	Trc_MM_SchedulingDelegate_calculatePGCCompactionRate_liveToFreeRatio4(env->getLanguageVMThread(), _bytesCompactedToFreeBytesRatio, edenSizeInBytes, surivivorSize, reservedFreeMemory, defragmentEmptinessThreshold, defragmentedMemory, estimatedFreeMemory);
 }
 
 UDATA
@@ -888,7 +964,7 @@ MM_SchedulingDelegate::calculateAutomaticGMPIntermission(MM_EnvironmentVLHGC *en
 		}
 	}
 
-	Trc_MM_SchedulingDelegate_calculateAutomaticGMPIntermission_Exit(env->getLanguageVMThread(), _remainingGMPIntermissionIntervals);
+	Trc_MM_SchedulingDelegate_calculateAutomaticGMPIntermission_1_Exit(env->getLanguageVMThread(), _remainingGMPIntermissionIntervals, _extensions->tarokKickoffHeadroomInBytes);
 }
 
 void
@@ -1031,7 +1107,7 @@ MM_SchedulingDelegate::calculateGlobalMarkIncrementHeadroom(MM_EnvironmentVLHGC 
 	UDATA headroomIncrements = 0;
 
 	if (_regionConsumptionRate > 0.0) {
-		double headroomRegions = (double) _extensions->tarokKickoffHeadroomRegionCount;
+		double headroomRegions = (double) _extensions->tarokKickoffHeadroomInBytes / _regionManager->getRegionSize();
 		double headroomPartialGCs = headroomRegions / _regionConsumptionRate;
 		double headroomGlobalMarkIncrements = headroomPartialGCs * (double)_extensions->tarokPGCtoGMPDenominator / (double)_extensions->tarokPGCtoGMPNumerator;
 		headroomIncrements = (UDATA) ceil(headroomGlobalMarkIncrements);

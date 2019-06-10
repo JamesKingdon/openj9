@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef bcutil_api_h
@@ -245,13 +245,13 @@ internalLoadROMClass(J9VMThread *vmThread, J9LoadROMClassData *loadData, J9Trans
 * @param vmThread pointer to J9VMThread
 * @param moduleName name of the module containing the class; can be NULL
 * @param className name of the class to be located
-* @param classNameLength lenght of className
+* @param classNameLength length of className
 * @param classLoader pointer to J9ClassLoader loading the class
 * @param classPath pointer to class path entries
 * @param classPathEntryCount number of class path entries in classPath
 * @param options load options such as J9_FINDCLASS_FLAG_EXISTING_ONLY
 * @param flags flags such as BCU_BOOTSTRAP_ENTRIES_ONLY
-* @param [in/out] localBuffer contains values for entryInfex, loadLocationType and cpEntryUsed. This pointer can't be NULL.
+* @param [in/out] localBuffer contains values for entryIndex, loadLocationType and cpEntryUsed. This pointer can't be NULL.
 *
 * @return zero on success, -1 on failure.
 */
@@ -552,13 +552,6 @@ releaseInlineBuffers  (J9JSRIData * inlineBuffers);
 */
 const char * 
 buildVerifyErrorString ( J9JavaVM *javaVM, J9CfrError *error, U_8* className, UDATA classNameLength);
-
-
-typedef struct J9TenantIsolationFilter {
-	const U_8 *filter;		/**< The name or prefix to match */
-	BOOLEAN startsWith; 		/**< Specifies whether or not we want the filter to only match the beginning of the string */
-} J9TenantIsolationFilter;
-
 
 #ifdef __cplusplus
 }

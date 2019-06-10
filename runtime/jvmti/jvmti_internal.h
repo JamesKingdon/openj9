@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef jvmti_internal_h
@@ -35,7 +35,6 @@
 
 #include "j9.h"
 #include "j9comp.h"
-#include "jvmti_api.h"
 #include "jni.h"
 #include "jvmti.h"
 #include "jvmtiInternal.h"
@@ -263,7 +262,7 @@ jvmtiGetConstantPool(jvmtiEnv* env,
 jvmtiError 
 jvmtiGetConstantPool_translateCP(J9PortLibrary *privatePortLibrary, 
 				 jvmtiGcp_translation *translation,
-				 J9Class *class,
+				 J9Class *clazz,
 				 jboolean translateUTF8andNAS);
 
 /** 
@@ -902,6 +901,15 @@ jvmtiIterateOverReachableObjects(jvmtiEnv* env,
 /* ---------------- jvmtiHelpers.c ---------------- */
 
 /**
+* @brief Make the heap walkable, assume exclusive VM access is held
+* @param currentThread The current J9VMThread
+* @return void
+*/
+void
+ensureHeapWalkable(J9VMThread *currentThread);
+
+
+/**
 * @brief
 * @param state
 * @return J9JVMTIAgentBreakpoint *
@@ -1168,7 +1176,7 @@ prepareForEvent(J9JVMTIEnv * j9env, J9VMThread * currentThread, J9VMThread * eve
 /**
  * Switch away from the zAAP processor if running there.
  *
- * @param[in] *j9env - pointer the current JVMTI enviroment
+ * @param[in] *j9env - pointer the current JVMTI environment
  * @param[in] *currentThread - current thread
  * @param[in] eventNumber - the event ID
  * @param[in] *javaOffloadOldState - the old offload state of current thread
@@ -1496,6 +1504,17 @@ jvmtiGetLocalInstance(jvmtiEnv* env,
 	jint depth,
 	jobject* value_ptr);
 
+/**
+* @brief Set the allocation sampling interval
+* @param env The JVMTI environment pointer.
+* @param samplingInterval The sampling interval in bytes.
+* @return jvmtiError Error code returned by JVMTI function
+*/
+#if JAVA_SPEC_VERSION >= 11
+jvmtiError JNICALL 
+jvmtiSetHeapSamplingInterval(jvmtiEnv *env,
+	jint samplingInterval);
+#endif /* JAVA_SPEC_VERSION >= 11 */
 
 /**
 * @brief
@@ -2491,6 +2510,7 @@ jvmtiSetFieldModificationWatch(jvmtiEnv* env,
 	jclass klass,
 	jfieldID field);
 
+#if JAVA_SPEC_VERSION >= 9
 /* ---------------- jvmtiModules.c ---------------- */
 /**
 * @brief
@@ -2550,6 +2570,19 @@ jvmtiError JNICALL
 jvmtiIsModifiableModule(jvmtiEnv* env,
 		jobject module,
 		jboolean* is_modifiable_module_ptr);
+
+#endif /* JAVA_SPEC_VERSION >= 9 */
+/* ---------------- suspendhelper.cpp ---------------- */
+/**
+* @brief
+* @param currentThread
+* @param thread
+* @param allowNull
+* @param currentThreadSuspended
+* @return jvmtiError
+*/
+jvmtiError
+suspendThread(J9VMThread *currentThread, jthread thread, UDATA allowNull, UDATA *currentThreadSuspended);
 
 #ifdef __cplusplus
 }

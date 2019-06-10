@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2016 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <assert.h>
@@ -129,7 +129,7 @@ handle_error(JNIEnv *env, IDATA error, jint type)
 
 	/* If out of memory setup a pending OutOfMemoryError */
 	if (J9PORT_ERROR_SYSINFO_MEMORY_ALLOC_FAILED == error) {
-		throwNativeOOMError(env, J9NLS_PORT_SYSINFO_OUT_OF_MEMORY_ERROR_MSG);
+		((J9VMThread *)env)->javaVM->internalVMFunctions->throwNativeOOMError(env, J9NLS_PORT_SYSINFO_OUT_OF_MEMORY_ERROR_MSG);
 		return 0;
 	}
 
@@ -222,7 +222,7 @@ Java_com_ibm_lang_management_internal_ExtendedOperatingSystemMXBeanImpl_getTotal
 	/* Now obtain the processor usage statistics on the underlying platform. */
 	rc = getProcessorUsage(env, &procInfo);
 	if (0 != rc) {
-		/* If processor usage statistics retieval failed for some reason, there is already a
+		/* If processor usage statistics retrieval failed for some reason, there is already a
 		 * pending exception. Returning a NULL anyway.
 		 */
 		return NULL;
@@ -287,7 +287,7 @@ Java_com_ibm_lang_management_internal_ExtendedOperatingSystemMXBeanImpl_getProce
 	/* Now obtain the processor usage statistics on the underlying platform. */
 	rc = getProcessorUsage(env, &procInfo);
 	if (0 != rc) {
-		/* If processor usage statistics retieval failed for some reason, there is already a
+		/* If processor usage statistics retrieval failed for some reason, there is already a
 		 * pending exception. Returning a NULL anyway.
 		 */
 		return NULL;
@@ -381,7 +381,7 @@ Java_com_ibm_lang_management_internal_ExtendedOperatingSystemMXBeanImpl_getMemor
 
 	PORT_ACCESS_FROM_ENV(env);
 
-	/* Check whether MemoryUsage class has already been reseolved and cached. If not, do so now.*/
+	/* Check whether MemoryUsage class has already been resolved and cached. If not, do so now.*/
 	if (NULL == JCL_CACHE_GET(env, MID_com_ibm_lang_management_MemoryUsage_updateValues)) {
 		jclass localMemoryUsageRef;
 
@@ -538,10 +538,10 @@ Java_com_ibm_lang_management_internal_UnixExtendedOperatingSystem_getMaxFileDesc
 	U_64 limit = 0;
 	PORT_ACCESS_FROM_ENV(env);
 	rc = j9sysinfo_get_limit(OMRPORT_RESOURCE_FILE_DESCRIPTORS, &limit);
-	if (OMRPORT_LIMIT_UNLIMITED == rc) { /* No limit set (i.e., "unlimited"). */
+	if (OMRPORT_LIMIT_UNKNOWN == rc) { /* The port library failed! */
+		limit = ((U_64) -1);
+	} else if (OMRPORT_LIMIT_UNLIMITED == rc) { /* No limit set (i.e., "unlimited"). */
 		limit = ((U_64) LLONG_MAX);
-	} else if (OMRPORT_LIMIT_UNKNOWN == rc) { /* The port library failed! */
-    	limit = ((U_64) -1);
 	}
 	return ((jlong) limit);
 }
@@ -561,13 +561,13 @@ Java_com_ibm_lang_management_internal_UnixExtendedOperatingSystem_getMaxFileDesc
 jlong JNICALL
 Java_com_ibm_lang_management_internal_UnixExtendedOperatingSystem_getOpenFileDescriptorCountImpl(JNIEnv *env, jclass theClass)
 {
-    I_32 ret = 0;
+	I_32 ret = 0;
 	U_64 count = 0;
 	PORT_ACCESS_FROM_ENV(env);
-    ret = j9sysinfo_get_open_file_count(&count);
-   	/* Check if an error occurred while obtaining the open file count. */
-    if (ret < 0) {
-    	count = ((U_64) -1);
-    }
+	ret = j9sysinfo_get_open_file_count(&count);
+	/* Check if an error occurred while obtaining the open file count. */
+	if (ret < 0) {
+		count = ((U_64) -1);
+	}
 	return ((jlong) count);
 }

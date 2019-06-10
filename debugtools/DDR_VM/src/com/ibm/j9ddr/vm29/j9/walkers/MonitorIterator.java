@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.j9.walkers;
 
@@ -33,9 +33,7 @@ import com.ibm.j9ddr.logging.LoggerNames;
 import com.ibm.j9ddr.vm29.j9.ObjectAccessBarrier;
 import com.ibm.j9ddr.vm29.j9.ObjectMonitor;
 import com.ibm.j9ddr.vm29.pointer.generated.J9AbstractThreadPointer;
-import com.ibm.j9ddr.vm29.pointer.generated.J9BuildFlags;
 import com.ibm.j9ddr.vm29.pointer.generated.J9JavaVMPointer;
-import com.ibm.j9ddr.vm29.pointer.generated.J9ObjectMonitorPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ObjectPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ThreadAbstractMonitorPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ThreadLibraryPointer;
@@ -51,11 +49,10 @@ import com.ibm.j9ddr.vm29.types.UDATA;
  * walks the heap in order to find any flat object monitors.
  * 
  * @author Adam Pilkington
- *
  */
 @SuppressWarnings("rawtypes")
 public class MonitorIterator implements Iterator {
-	private static final long freeTag = new UDATA(-1).longValue();
+	private static final UDATA FREE_TAG = new UDATA(-1);
 	private final Logger log = Logger.getLogger(LoggerNames.LOGGER_WALKERS);
 	private J9ThreadMonitorPoolPointer pool;
 	private int index = 0;
@@ -109,7 +106,7 @@ public class MonitorIterator implements Iterator {
 			while(index < poolSize) {
 				J9ThreadMonitorPointer monitor = J9ThreadMonitorPointer.cast(poolEntries.add(index));
 				index++;
-				if(freeTag != monitor.count().longValue()) {
+				if (!FREE_TAG.eq(monitor.count())) {
 					J9ThreadAbstractMonitorPointer lock = J9ThreadAbstractMonitorPointer.cast(monitor);
 					if (lock.flags().allBitsIn(J9ThreadAbstractMonitor.J9THREAD_MONITOR_OBJECT)) {
 						if(!lock.userData().eq(0)) {	//this is an object monitor in the system monitor table

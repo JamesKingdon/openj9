@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 /*
  * ROMClassBuilder.cpp
@@ -64,6 +64,8 @@ ROMClassBuilder::ROMClassBuilder(J9JavaVM *javaVM, J9PortLibrary *portLibrary, U
 	_bufferManagerSize(INITIAL_BUFFER_MANAGER_SIZE),
 	_classFileBuffer(NULL),
 	_bufferManagerBuffer(NULL),
+	_anonClassNameBuffer(NULL),
+	_anonClassNameBufferSize(0),
 	_stringInternTable(javaVM, portLibrary, maxStringInternTableSize)
 {
 }
@@ -81,6 +83,7 @@ ROMClassBuilder::~ROMClassBuilder()
 	}
 	j9mem_free_memory(_classFileBuffer);
 	j9mem_free_memory(_bufferManagerBuffer);
+	j9mem_free_memory(_anonClassNameBuffer);
 }
 
 ROMClassBuilder *
@@ -248,6 +251,105 @@ ROMClassBuilder::buildROMClass(ROMClassCreationContext *context)
 	return result;
 }
 
+BuildResult
+ROMClassBuilder::handleAnonClassName(J9CfrClassFile *classfile)
+{
+	J9CfrConstantPoolInfo* constantPool = classfile->constantPool;
+	U_32 cpThisClassUTF8Slot = constantPool[classfile->thisClass].slot1;
+	U_32 originalStringLength = constantPool[cpThisClassUTF8Slot].slot1;
+	const char* originalStringBytes = (const char*)constantPool[cpThisClassUTF8Slot].bytes;
+	U_16 newUtfCPEntry = classfile->constantPoolCount - 1; /* last cpEntry is reserved for anonClassName utf */
+	U_32 i = 0;
+	BOOLEAN stringOrNASReferenceToClassName = FALSE;
+	BOOLEAN newCPEntry = TRUE;
+	UDATA newAnonClassNameLength = originalStringLength + 1 + ROM_ADDRESS_LENGTH + 1;
+	BuildResult result = OK;
+	PORT_ACCESS_FROM_PORT(_portLibrary);
+
+	/* Find if there are any Constant_String or CFR_CONSTANT_NameAndType references to the className.
+	 * If there are none we don't need to make a new cpEntry, we can overwrite the existing
+	 * one since the only reference to it is the classRef
+	 */
+	for (i = 0; i < classfile->constantPoolCount; i++) {
+		if ((CFR_CONSTANT_String == constantPool[i].tag)
+			|| (CFR_CONSTANT_NameAndType == constantPool[i].tag)
+		) {
+			if (cpThisClassUTF8Slot == constantPool[i].slot1) {
+				stringOrNASReferenceToClassName = TRUE;
+			}
+		}
+	}
+
+
+	if (!stringOrNASReferenceToClassName) {
+		/* do not need the new cpEntry so fix up classfile->constantPoolCount */
+		newCPEntry = FALSE;
+		newUtfCPEntry = cpThisClassUTF8Slot;
+		classfile->constantPoolCount -= 1;
+	}
+
+	J9CfrConstantPoolInfo *anonClassName = &classfile->constantPool[newUtfCPEntry];
+	/*
+	 * alloc an array for the new name with the following format:
+	 * [className]/[ROMClassAddress]\0
+	 */
+
+	if ((0 == _anonClassNameBufferSize) || (newAnonClassNameLength > _anonClassNameBufferSize)) {
+		j9mem_free_memory(_anonClassNameBuffer);
+		_anonClassNameBuffer = (U_8 *)j9mem_allocate_memory(newAnonClassNameLength, J9MEM_CATEGORY_CLASSES);
+		if (NULL == _anonClassNameBuffer) {
+			result = OutOfMemory;
+			goto done;
+		}
+		_anonClassNameBufferSize = newAnonClassNameLength;
+	}
+	constantPool[newUtfCPEntry].bytes = _anonClassNameBuffer;
+
+	if (newCPEntry) {
+		constantPool[classfile->lastUTF8CPIndex].nextCPIndex = newUtfCPEntry;
+	}
+
+	/* calculate the size of the new string and create new cpEntry*/
+	anonClassName->slot1 = originalStringLength + ROM_ADDRESS_LENGTH + 1;
+	if (newCPEntry) {
+		anonClassName->slot2 = 0;
+		anonClassName->tag = CFR_CONSTANT_Utf8;
+		anonClassName->flags1 = 0;
+		anonClassName->nextCPIndex = 0;
+		anonClassName->romAddress = 0;
+	}
+
+	constantPool[classfile->thisClass].slot1 = newUtfCPEntry;
+
+	/* copy the name into the new location and add the special character, fill the rest with zeroes */
+	memcpy (constantPool[newUtfCPEntry].bytes, originalStringBytes, originalStringLength);
+	*(U_8*)((UDATA) constantPool[newUtfCPEntry].bytes + originalStringLength) = ANON_CLASSNAME_CHARACTER_SEPARATOR;
+	memset(constantPool[newUtfCPEntry].bytes + originalStringLength + 1, '0', ROM_ADDRESS_LENGTH);
+	*(U_8*)((UDATA) constantPool[newUtfCPEntry].bytes + originalStringLength + 1 + ROM_ADDRESS_LENGTH) = '\0';
+
+	/* search constantpool for all other identical classRefs. We have not actually
+	 * tested this scenario as javac will not output more than one classRef or utfRef of the
+	 * same kind.
+	 */
+	for (i = 0; i < classfile->constantPoolCount; i++) {
+		if (CFR_CONSTANT_Class == constantPool[i].tag) {
+			U_32 classNameSlot = constantPool[i].slot1;
+			if (classNameSlot != newUtfCPEntry) {
+				U_32 classNameLength = constantPool[classNameSlot].slot1;
+				if ((classNameLength == originalStringLength)
+					&& (0 == strncmp(originalStringBytes, (const char*)constantPool[classNameSlot].bytes, originalStringLength)))
+				{
+					/* if it is the same class, point to original class name slot */
+					constantPool[i].slot1 = newUtfCPEntry;
+				}
+			}
+		}
+	}
+
+done:
+	return result;
+}
+
 U_8 *
 ROMClassBuilder::releaseClassFileBuffer()
 {
@@ -321,6 +423,14 @@ ROMClassBuilder::prepareAndLaydown( BufferManager *bufferManager, ClassFileParse
 	 * modified by the BCI agent.
 	 */
 	Trc_BCU_Assert_False(context->isRetransforming() && !context->isRetransformAllowed());
+
+	if (context->isClassAnon()) {
+		BuildResult res = handleAnonClassName(classFileParser->getParsedClassFile());
+		if (OK != res) {
+			return res;
+		}
+	}
+
 
 	ConstantPoolMap constantPoolMap(bufferManager, context);
 	ClassFileOracle classFileOracle(bufferManager, classFileParser->getParsedClassFile(), &constantPoolMap, _verifyExcludeAttribute, context);
@@ -424,7 +534,7 @@ ROMClassBuilder::prepareAndLaydown( BufferManager *bufferManager, ClassFileParse
 			 *
 			 * Attempt to find it.
 			 * 
-			 * Note: When comparing classes it is expected that the context conatins the 
+			 * Note: When comparing classes it is expected that the context contains the 
 			 * rom class being compared to. 'prevROMClass' is used to backup the romClass 
 			 * currently in the context, so the compare loop can set the romClass in the 
 			 * context accordingly.
@@ -440,8 +550,8 @@ ROMClassBuilder::prepareAndLaydown( BufferManager *bufferManager, ClassFileParse
 					&& ((U_8 *)existingROMClass == context->intermediateClassData())
 				) {
 					/* 'existingROMClass' is same as the ROMClass corresponding to intermediate class data.
-					 * Based on the assumption that an agent is actually modifing the class file
-					 * instead of just returning a copy of the classbytes it recieves,
+					 * Based on the assumption that an agent is actually modifying the class file
+					 * instead of just returning a copy of the classbytes it receives,
 					 * this comparison can be avoided.
 					 */
 					continue;
@@ -474,13 +584,16 @@ ROMClassBuilder::prepareAndLaydown( BufferManager *bufferManager, ClassFileParse
 			sizeRequirements.romClassMinimalSize =
 					U_32(sizeInformation.rcWithOutUTF8sSize
 					+ sizeInformation.utf8sSize + sizeInformation.rawClassDataSize + sizeInformation.varHandleMethodTypeLookupTableSize);
+			/* round up to sizeof(U_64) */
+			sizeRequirements.romClassMinimalSize += (sizeof(U_64) - 1);
+			sizeRequirements.romClassMinimalSize &= ~(sizeof(U_64) - 1);
 
 			sizeRequirements.romClassSizeFullSize =
 					U_32(sizeRequirements.romClassMinimalSize
 					+ sizeInformation.lineNumberSize
 					+ sizeInformation.variableInfoSize);
 			/* round up to sizeof(U_64) */
-			sizeRequirements.romClassSizeFullSize += sizeof(U_64);
+			sizeRequirements.romClassSizeFullSize += (sizeof(U_64) - 1);
 			sizeRequirements.romClassSizeFullSize &= ~(sizeof(U_64)-1);
 
 
@@ -914,6 +1027,9 @@ ROMClassBuilder::finishPrepareAndLaydown(
 	 * Record the romSize as the final size of the ROMClass with interned strings space removed.
 	 */
 	U_32 romSize = U_32(sizeInformation->rcWithOutUTF8sSize + sizeInformation->utf8sSize + sizeInformation->rawClassDataSize + sizeInformation->varHandleMethodTypeLookupTableSize);
+	/* round up to sizeof(U_64) */
+	romSize += (sizeof(U_64) - 1);
+	romSize &= ~(sizeof(U_64) - 1);
 
 	/*
 	 * update the SRP Offset Table with the base addresses for main ROMClass section (RC_TAG),
@@ -954,24 +1070,24 @@ ROMClassBuilder::finishPrepareAndLaydown(
  *                             + UNUSED
  *                            + UNUSED
  *                           + UNUSED
- *                          + AccClassAnonClass;
+ *                          + AccClassAnonClass
  *
  *                        + AccSynthetic (matches Oracle modifier position)
  *                       + AccClassUseBisectionSearch
  *                      + AccClassInnerClass
  *                     + UNUSED
  *
- *                   + UNUSED
+ *                   + AccClassNeedsStaticConstantInit
  *                  + AccClassIntermediateDataIsClassfile
  *                 + AccClassUnsafe
  *                + AccClassAnnnotionRefersDoubleSlotEntry
  *
  *              + AccClassBytecodesModified
  *             + AccClassHasEmptyFinalize
- *            + UNUSED
+ *            + AccClassIsUnmodifiable
  *           + AccClassHasVerifyData
  *
- *         + J9AccClassIsContended
+ *         + AccClassIsContended
  *        + AccClassHasFinalFields
  *       + AccClassHasClinit
  *      + AccClassHasNonStaticNonAbstractMethods
@@ -1017,11 +1133,9 @@ ROMClassBuilder::computeExtraModifiers(ClassFileOracle *classFileOracle, ROMClas
 		modifiers |= J9AccClassIsContended;
 	}
 
-#if defined(J9VM_OPT_VALHALLA_MVT)
-	if (classFileOracle->isClassValueCapable()) {
-		modifiers |= J9AccClassIsValueCapable;
+	if ( classFileOracle->isClassUnmodifiable() ) {
+		modifiers |= J9AccClassIsUnmodifiable;
 	}
-#endif /* J9VM_OPT_VALHALLA_MVT */
 
 	U_32 classNameindex = classFileOracle->getClassNameIndex();
 
@@ -1089,6 +1203,10 @@ ROMClassBuilder::computeExtraModifiers(ClassFileOracle *classFileOracle, ROMClas
 
 	if (classFileOracle->isInnerClass()) {
 		modifiers |= J9AccClassInnerClass;
+	}
+
+	if (classFileOracle->needsStaticConstantInit()) {
+		modifiers |= J9AccClassNeedsStaticConstantInit;
 	}
 
 	return modifiers;

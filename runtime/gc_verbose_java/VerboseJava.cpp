@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #include "j9.h"
 #include "j9cfg.h"
@@ -62,7 +62,7 @@ J9MemoryManagerVerboseInterface functionTable = {
  * Initializes the verbose function table.
  */
 void
-initialiseVerboseFunctionTable(J9JavaVM *javaVM)
+initializeVerboseFunctionTable(J9JavaVM *javaVM)
 {
 	J9MemoryManagerVerboseInterface *mmFuncTable;
 	J9MemoryManagerVerboseInterface *verboseTable = &functionTable;
@@ -138,7 +138,7 @@ queryVerbosegc(J9JavaVM *javaVM)
  * @param filename The name of the file or output stream to log to.
  * @param numFiles The number of files to log to.
  * @param numCycles The number of gc cycles to log to each file.
- * @return 1 if succesfull, 0 otherwise.
+ * @return 1 if successful, 0 otherwise.
  */
 static UDATA
 gcDebugVerboseStartupLogging(J9JavaVM *javaVM, char* filename, UDATA numFiles, UDATA numCycles)
@@ -229,11 +229,14 @@ gcDumpMemorySizes(J9JavaVM *javaVM)
 	gcDumpQualifiedSize(PORTLIB, javaVM->ramClassAllocationIncrement, "-Xmca", J9NLS_GC_VERB_SIZES_XMCA);
 	gcDumpQualifiedSize(PORTLIB, javaVM->romClassAllocationIncrement, "-Xmco", J9NLS_GC_VERB_SIZES_XMCO);
 
-#if defined(J9VM_GC_COMPRESSED_POINTERS)	/* This should be J9VM_INTERP_COMPRESSED_OBJECT_HEADER */
-	gcDumpQualifiedSize(PORTLIB, extensions->suballocatorInitialSize, "-Xmcrs", J9NLS_GC_VERB_SIZES_XMCRS);
-#else /* defined(J9VM_GC_COMPRESSED_POINTERS) */
-	gcDumpQualifiedSize(PORTLIB, 0, "-Xmcrs", J9NLS_GC_VERB_SIZES_XMCRS);
-#endif /* defined(J9VM_GC_COMPRESSED_POINTERS) */
+#if defined(OMR_GC_COMPRESSED_POINTERS)
+	if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(javaVM)) {
+		gcDumpQualifiedSize(PORTLIB, extensions->suballocatorInitialSize, "-Xmcrs", J9NLS_GC_VERB_SIZES_XMCRS);
+	} else
+#endif /* defined(OMR_GC_COMPRESSED_POINTERS) */
+	{
+		gcDumpQualifiedSize(PORTLIB, 0, "-Xmcrs", J9NLS_GC_VERB_SIZES_XMCRS);
+	}
 
 	if (extensions->isVLHGC()) {
 #if defined (J9VM_GC_VLHGC)

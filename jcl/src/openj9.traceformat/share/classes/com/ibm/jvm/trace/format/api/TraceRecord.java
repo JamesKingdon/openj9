@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar18-SE]*/
 /*******************************************************************************
- * Copyright (c) 2009, 2016 IBM Corp. and others
+ * Copyright (c) 2009, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jvm.trace.format.api;
 
@@ -529,7 +529,6 @@ public class TraceRecord implements Comparable<TraceRecord> {
 							debugOffsets.add(Integer.valueOf(indexTarget));
 						}
 					} else {
-						/* oh crap */
 						context.error(this, "Special tracepoint (length is 8) and neither sequence wrap or lost record");
 					}
 				}
@@ -681,7 +680,7 @@ public class TraceRecord implements Comparable<TraceRecord> {
 			/* The amount of data we expect in the previous buffer and the amount actually there don't match.
 			 * This implies:
 			 *   a. missing data inbetween the end of the stream and the start of this buffer
-			 *   b. corrputed trace data
+			 *   b. corrupted trace data
 			 *   c. incorrect parsing
 			 *   
 			 * We throw away the mismatched parts as they're inconsistent.

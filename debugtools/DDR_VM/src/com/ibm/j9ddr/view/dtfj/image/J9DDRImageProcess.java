@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2016 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.view.dtfj.image;
 
@@ -294,7 +294,7 @@ public class J9DDRImageProcess implements ImageProcess {
 		if (process.getPlatform() == Platform.LINUX) {
 			//On Linux, the core file reader can easily fail to get the correct command line and executable
 			//(because of 80 char limit on command line in the ELF header).
-			//We pre-empt this by looking for the command line in the environment
+			//We preempt this by looking for the command line in the environment
 			String executableName = getExecutablePath();
 			
 			if (null == executableName) {
@@ -430,7 +430,7 @@ public class J9DDRImageProcess implements ImageProcess {
 			Object[] passbackArray = new Object[1];
 			
 			try {
-				//attempt to load a default bootstrap class which will allow different implementations to provide their own initialisers
+				//attempt to load a default bootstrap class which will allow different implementations to provide their own initializers
 				data.bootstrapRelative("view.dtfj.DTFJBootstrapShim", (Object)passbackArray, this);
 			} catch (ClassNotFoundException e) {
 				//no specific class was found, so use a generic native one instead

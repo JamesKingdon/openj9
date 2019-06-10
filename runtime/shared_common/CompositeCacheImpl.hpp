@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if !defined(COMPOSITECACHEIMPL_H_INCLUDED)
@@ -226,6 +226,8 @@ public:
 
 	bool isAddressInROMClassSegment(const void* address);
 
+	bool isAddressInMetaDataArea(const void* address) const;
+
 	bool isAddressInCache(const void* address);
 
 	void runExitCode(J9VMThread *currentThread);
@@ -396,7 +398,7 @@ public:
 	bool canStoreClasspaths(void) const;
 
 	IDATA restoreFromSnapshot(J9JavaVM* vm, const char* cacheName, bool* cacheExist);
-	void dontNeedMetadata(J9VMThread *currentThread, const void* startAddress, size_t length);
+	void dontNeedMetadata(J9VMThread *currentThread);
 
 	void changePartialPageProtection(J9VMThread *currentThread, void *addr, bool readOnly, bool phaseCheck = true);
 
@@ -409,6 +411,12 @@ public:
 	void updateRuntimeFullFlags(J9VMThread* currentThread);
 	
 	void increaseUnstoredBytes(U_32 blockBytes, U_32 aotBytes, U_32 jitBytes);
+
+	bool isNewCache(void);
+
+	bool updateAccessedShrCacheMetadataBounds(J9VMThread* currentThread, uintptr_t const * metadataAddress);
+
+	bool isAddressInReleasedMetaDataBounds(J9VMThread* currentThread, UDATA metadataAddress) const;
 
 private:
 	J9SharedClassConfig* _sharedClassConfig;
@@ -494,6 +502,12 @@ private:
 	bool _canStoreClasspaths;
 
 	bool _reduceStoreContentionDisabled;
+
+	bool _initializingNewCache;
+
+	UDATA  _minimumAccessedShrCacheMetadata;
+
+	UDATA _maximumAccessedShrCacheMetadata;
 
 #if defined(J9SHR_CACHELET_SUPPORT)
 	/**
@@ -603,7 +617,7 @@ private:
 		_romClassProtectEnd = pointer;
 	}
 
-	class SH_SharedCacheHeaderInit : public SH_OSCache::SH_OSCacheInitialiser
+	class SH_SharedCacheHeaderInit : public SH_OSCache::SH_OSCacheInitializer
 	{
 	protected:
 		void *operator new(size_t size, void *memoryPtr) { return memoryPtr; };

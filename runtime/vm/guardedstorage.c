@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -28,7 +28,7 @@
 
 #if defined(OMR_GC_CONCURRENT_SCAVENGER) && defined(J9VM_ARCH_S390)
 
-J9_EXTERN_BUILDER_SYMBOL(handleGuardedStorageEvent);
+J9_EXTERN_BUILDER_SYMBOL(handleHardwareReadBarrier);
 
 void
 invokeJ9ReadBarrier(J9VMThread *currentThread)
@@ -48,6 +48,17 @@ j9gs_initializeThread(J9VMThread *vmThread)
 	if (IS_THREAD_GS_INITIALIZED(vmThread)) {
 		success = 1;
 	} else {
+		BOOLEAN supportsGuardedStorageFacility = FALSE;
+		J9JavaVM *vm = vmThread->javaVM;
+		J9MemoryManagerFunctions *mmFuncs = vm->memoryManagerFunctions;
+		J9ProcessorDesc  processorDesc;
+		j9sysinfo_get_processor_description(&processorDesc);
+		if (j9sysinfo_processor_has_feature(&processorDesc, J9PORT_S390_FEATURE_GUARDED_STORAGE) &&
+				j9sysinfo_processor_has_feature(&processorDesc, J9PORT_S390_FEATURE_SIDE_EFFECT_ACCESS) &&
+				!mmFuncs->j9gc_software_read_barrier_enabled(vm)) {
+			supportsGuardedStorageFacility = TRUE;
+		}
+
 		/* Allocate the control block */
 		J9GSControlBlock *gsControlBlock = (J9GSControlBlock *)j9mem_allocate_memory(sizeof(J9GSControlBlock), J9MEM_CATEGORY_VM);
 		if (NULL != gsControlBlock) {
@@ -60,13 +71,18 @@ j9gs_initializeThread(J9VMThread *vmThread)
 			gsControlBlock->designationRegister = 0;
 			gsControlBlock->sectionMask = 0;
 			gsControlBlock->paramListAddr = (uint64_t) &vmThread->gsParameters;
-			vmThread->gsParameters.handlerAddr = (uint64_t)(uintptr_t)J9_BUILDER_SYMBOL(handleGuardedStorageEvent);
-		
+			vmThread->gsParameters.handlerAddr = (uint64_t)(uintptr_t)J9_BUILDER_SYMBOL(handleHardwareReadBarrier);
+
 			/* Initialize the parameters */
 			j9gs_params_init(&vmThread->gsParameters, gsControlBlock);
 		
 			/* Initialize the current thread */
-			success = j9gs_initialize(&vmThread->gsParameters, compressedRefShift);
+
+			if (TRUE == supportsGuardedStorageFacility) {
+				success = j9gs_initialize(&vmThread->gsParameters, compressedRefShift);
+			} else {
+				success = 1;
+			}
 		
 			/* Check to see if initialization was a success */
 			if (0 == success) {
@@ -84,6 +100,16 @@ j9gs_deinitializeThread(J9VMThread *vmThread)
 {
 	PORT_ACCESS_FROM_VMC(vmThread);
 	int32_t success = 0;
+	BOOLEAN supportsGuardedStorageFacility = FALSE;
+	J9JavaVM *vm = vmThread->javaVM;
+	J9MemoryManagerFunctions *mmFuncs = vm->memoryManagerFunctions;
+	J9ProcessorDesc  processorDesc;
+	j9sysinfo_get_processor_description(&processorDesc);
+	if (j9sysinfo_processor_has_feature(&processorDesc, J9PORT_S390_FEATURE_GUARDED_STORAGE) &&
+			j9sysinfo_processor_has_feature(&processorDesc, J9PORT_S390_FEATURE_SIDE_EFFECT_ACCESS) &&
+			!mmFuncs->j9gc_software_read_barrier_enabled(vm)) {
+		supportsGuardedStorageFacility = TRUE;
+	}
 
 	/* Check if thread is already deinitialized */
 	if (!IS_THREAD_GS_INITIALIZED(vmThread)) {
@@ -92,8 +118,11 @@ j9gs_deinitializeThread(J9VMThread *vmThread)
 		J9GSControlBlock *gsControlBlock = (J9GSControlBlock*)((vmThread->gsParameters).controlBlock);
 		if (NULL != gsControlBlock) {
 			/* Deinitialize the current thread */
-			success = j9gs_deinitialize(&vmThread->gsParameters);
-		
+			if (TRUE == supportsGuardedStorageFacility) {
+				success = j9gs_deinitialize(&vmThread->gsParameters);
+			} else {
+				success = 1;
+			}
 			/* Free the Control Block */
 			j9mem_free_memory(gsControlBlock);
 			(vmThread->gsParameters).controlBlock = NULL;

@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -146,6 +146,12 @@
 #define J9MODRON_GCCHK_RC_CLASS_HOT_SWAPPED_POINTS_TO_STATICS ((UDATA) 31)
 #define J9MODRON_GCCHK_RC_CLASS_STATICS_REFERENCE_IS_NOT_IN_SCANNING_RANGE ((UDATA) 32)
 #define J9MODRON_GCCHK_RC_CLASS_STATICS_WRONG_NUMBER_OF_REFERENCES ((UDATA) 33)
+
+/* obsolete code 34 */
+/* obsolete code 35 */
+/* obsolete code 36 */
+/* obsolete code 37 */
+
 #define J9MODRON_GCCHK_RC_CLASS_HOT_SWAPPED_FOR_ARRAY ((UDATA) 39)
 #define J9MODRON_GCCHK_RC_REPLACED_CLASS_HAS_NO_HOTSWAP_FLAG ((UDATA) 40)
 #define J9MODRON_GCCHK_RC_CLASS_IS_UNLOADED ((UDATA) 48)

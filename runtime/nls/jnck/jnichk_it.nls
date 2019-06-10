@@ -17,7 +17,7 @@
 # [1] https://www.gnu.org/software/classpath/license.html
 # [2] http://openjdk.java.net/legal/assembly-exception.html
 #
-# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 #
 
 # Externalised messages for the JNICHK module.
@@ -67,7 +67,7 @@ J9NLS_JNICHK_UNABLE_TO_HOOK=Programma di utilit\u00e0 di controllo JNI: impossib
 # START NON-TRANSLATABLE
 J9NLS_JNICHK_UNABLE_TO_HOOK.explanation=Initialization of the JNI check utility has failed because it was unable to intercept native method calls.
 J9NLS_JNICHK_UNABLE_TO_HOOK.system_action=The JVM terminates.
-J9NLS_JNICHK_UNABLE_TO_HOOK.user_response=Contact your IBM service representative.
+J9NLS_JNICHK_UNABLE_TO_HOOK.user_response=Contact your service representative.
 # END NON-TRANSLATABLE
 
 # JNI is not translatable
@@ -506,7 +506,7 @@ J9NLS_JNICHK_INCORRECT_PUSH_COUNT.sample_input_2=80
 J9NLS_JNICHK_INCORRECT_PUSH_COUNT.sample_input_3=120
 J9NLS_JNICHK_INCORRECT_PUSH_COUNT.explanation=An internal JVM error has occurred while checking a JNI PopLocalFrame function call.
 J9NLS_JNICHK_INCORRECT_PUSH_COUNT.system_action=If -Xcheck:jni:nonfatal has been specified, the JVM continues, otherwise it terminates.
-J9NLS_JNICHK_INCORRECT_PUSH_COUNT.user_response=Contact your IBM service representative.
+J9NLS_JNICHK_INCORRECT_PUSH_COUNT.user_response=Contact your service representative.
 # END NON-TRANSLATABLE
 
 # JNI is not translatable
@@ -763,7 +763,7 @@ J9NLS_JNICHK_BAD_DESCRIPTOR.sample_input_1=methodName
 J9NLS_JNICHK_BAD_DESCRIPTOR.sample_input_2=255
 J9NLS_JNICHK_BAD_DESCRIPTOR.explanation=An internal JVM error has occurred while checking a JNI function parameter.
 J9NLS_JNICHK_BAD_DESCRIPTOR.system_action=If -Xcheck:jni:nonfatal has been specified, the JVM continues, otherwise it terminates.
-J9NLS_JNICHK_BAD_DESCRIPTOR.user_response=Contact your IBM service representative.
+J9NLS_JNICHK_BAD_DESCRIPTOR.user_response=Contact your service representative.
 # END NON-TRANSLATABLE
 
 # jnichk is not translatable
@@ -974,7 +974,7 @@ J9NLS_JNICHK_HELP_15.system_action=
 J9NLS_JNICHK_HELP_15.user_response=
 # END NON-TRANSLATABLE
 
-J9NLS_JNICHK_PACKED_MISMATCH=Errore JNI in %1$s: l'argomento #%2$d prevede %3$s %4$s, l'argomento attuale \u00e8 %5$s %6$s
+J9NLS_JNICHK_PACKED_MISMATCH=Errore JNI in %1$s: l'argomento #%2$d prevede %3$s %4$s, l'argomento effettivo \u00e8 %5$s %6$s
 # START NON-TRANSLATABLE
 J9NLS_JNICHK_PACKED_MISMATCH.sample_input_1=SetObjectField
 J9NLS_JNICHK_PACKED_MISMATCH.sample_input_2=3
@@ -996,7 +996,7 @@ J9NLS_JNICHK_NON_ARRAY_REQUIRED.system_action=If -Xcheck:jni:nonfatal has been s
 J9NLS_JNICHK_NON_ARRAY_REQUIRED.user_response=Check and correct the JNI application code.
 # END NON-TRANSLATABLE
 
-J9NLS_JNICHK_NON_PACKED_API_USED_FOR_PACKED_OBJECTS=Notifica JNI in %1$s: questa funzione non pu\u00f2 essere utilizzata con oggetti impacchettati. Al suo posto, utilizzare %2$s
+J9NLS_JNICHK_NON_PACKED_API_USED_FOR_PACKED_OBJECTS=Avviso JNI in %1$s: questa funzione non pu\u00f2 essere utilizzata con oggetti compressi. Utilizzare %2$s
 # START NON-TRANSLATABLE
 J9NLS_JNICHK_NON_PACKED_API_USED_FOR_PACKED_OBJECTS.sample_input_1=GetPrimitiveArrayCritical
 J9NLS_JNICHK_NON_PACKED_API_USED_FOR_PACKED_OBJECTS.sample_input_2=GetPackedArrayElements

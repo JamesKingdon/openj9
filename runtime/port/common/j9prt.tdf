@@ -1,5 +1,5 @@
 //*******************************************************************************
-// Copyright (c) 2015, 2017 IBM Corp. and others
+// Copyright (c) 2015, 2019 IBM Corp. and others
 //
 // This program and the accompanying materials are made available under
 // the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
 // [1] https://www.gnu.org/software/classpath/license.html
 // [2] http://openjdk.java.net/legal/assembly-exception.html
 //
-// SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+// SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 //******************************************************************************
 
 Executable=j9prt
@@ -96,7 +96,7 @@ TraceExit=Trc_PRT_shmem_j9shmem_open_Exit Group=j9shmem Overhead=1 Level=1 NoEnv
 
 TraceEntry=Trc_PRT_shmem_j9shmem_stat_Entry Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_stat entered, name = %s"
 TraceExit=Trc_PRT_shmem_j9shmem_stat_Exit1 Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_stat exit - controlFile %s is a directory not a file"
-TraceExit=Trc_PRT_shmem_j9shmem_stat_Exit2 Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_stat exit - contents of controlFile %s is corrupted"
+TraceExit=Trc_PRT_shmem_j9shmem_stat_Exit2 Obsolete Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_stat exit - contents of controlFile %s is corrupted"
 TraceExit=Trc_PRT_shmem_j9shmem_stat_Exit3 Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_stat exit shmctl fails, portable error=%d"
 TraceExit=Trc_PRT_shmem_j9shmem_stat_Exit Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_stat exit - return success"
 
@@ -711,7 +711,7 @@ TraceEvent=Trc_PRT_sig_can_protect_J9PORT_SIG_FLAG_MAY_CONTINUE_EXECUTION_suppor
 
 TraceException=Trc_PRT_vmem_j9vmem_reserve_memory_ex_requested_large_page_outside_available_range Obsolete Group=j9mem Overhead=1 Level=1 NoEnv Template="j9vmem_reserve_memory_ex requested large pages outside of available range, startAddress=%p, endAddress=%p"
 TraceException=Trc_PRT_vmem_j9vmem_reserve_memory_ex_reverting_to_default_page_size Obsolete Group=j9mem Overhead=1 Level=1 NoEnv Template="j9vmem_reserve_memory_ex reverting to default page size"
-TraceException=Trc_PRT_vmem_j9vmem_reserve_memory_ex_large_page_request_failed_reverting_to_default_page_size Obsolete Group=j9mem Overhead=1 Level=1 NoEnv Template="j9vmem_reserve_memory_ex_large_page_request_failed_reverting_to_default_page_size, byteAmout: %u, numPages: %u"
+TraceException=Trc_PRT_vmem_j9vmem_reserve_memory_ex_large_page_request_failed_reverting_to_default_page_size Obsolete Group=j9mem Overhead=1 Level=1 NoEnv Template="j9vmem_reserve_memory_ex_large_page_request_failed_reverting_to_default_page_size, byteAmount: %u, numPages: %u"
 
 TraceException=Trc_PRT_file_open_Exception1 Obsolete Group=j9file Overhead=1 Level=1 NoEnv Template="j9file_open returns failure, filename = %s, flags (%d) are incorrect"
 TraceException=Trc_PRT_file_open_Exception2 Obsolete Group=j9file Overhead=1 Level=1 NoEnv Template="j9file_open returns failure, filename = %s, os errno = %d, portable errno = %d"
@@ -2126,3 +2126,13 @@ TraceException=Trc_PRT_process_machine_speed_file_path_is_malformed Group=j9hype
 TraceException=Trc_PRT_get_hypfs_attribute_file_path_size_exceeds_limit Group=j9hypervisor Overhead=1 Level=1 NoEnv Template="get_hypfs_attribute: the size of file path exceeds the limit, %zu >= %zu, ret=%d"
 TraceException=Trc_PRT_read_hypfs_data_file_path_size_exceeds_limit Group=j9hypervisor Overhead=1 Level=1 NoEnv Template="read_hypfs_data: the size of file path exceeds the limit, %zu >= %zu, ret=%d"
 TraceException=Trc_PRT_check_and_update_stat_file_path_size_exceeds_limit Group=j9hypervisor Overhead=1 Level=1 NoEnv Template="check_and_update_stat: the size of file path exceeds the limit, %zu >= %zu, ret=%d"
+
+TraceException=Trc_PRT_j9shmem_getDir_tryHomeDirFailed_homeDirTooLong Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_getDir: The length of the environment variable HOME is %zu, it should be greater than 0 and less than %zu"
+TraceException=Trc_PRT_j9shmem_getDir_tryHomeDirFailed_getEnvHomeFailed Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_getDir: omrsysinfo_get_env() failed to get environment variable HOME"
+TraceException=Trc_PRT_j9shmem_getDir_tryHomeDirFailed_pw_dirDirTooLong Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_getDir: The length of the home directory is %zu, it should be greater than 0 and less than %zu"
+TraceException=Trc_PRT_j9shmem_getDir_tryHomeDirFailed_getpwuidFailed Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_getDir: getpwuid() returns NULL"
+TraceException=Trc_PRT_j9shmem_getDir_tryHomeDirFailed_homeOnNFS Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_getDir: User's home directory %s is on a network file system"
+TraceException=Trc_PRT_j9shmem_getDir_tryHomeDirFailed_cannotStat Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_getDir: omrfile_stat() failed on the user's home directory %s"
+TraceExit=Trc_PRT_shared_createDir_Exit8 Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_createDir file_attr reported isDir, directory exists, cacheDirPerm is not present and it is not the default directory"
+
+TraceExit=Trc_PRT_shmem_j9shmem_stat_Exit2_V2 Group=j9shmem Overhead=1 Level=1 NoEnv Template="j9shmem_stat exit - contents of controlFile %s is corrupted, error code is %u"

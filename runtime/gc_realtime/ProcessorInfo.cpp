@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,33 +17,17 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
-#include "j9.h"
-#include "j9cfg.h"
-#include "j9protos.h"
-#include "j9consts.h"
-#include "modronopt.h"
+#include "omr.h"
+#include "omrcfg.h"
 
 #include <string.h>
-#include <math.h>
 
-#include "OSInterface.hpp"
-#include "AtomicOperations.hpp"
-#include "ClassModel.hpp"
-#include "Dispatcher.hpp"
 #include "EnvironmentBase.hpp"
-#include "GCExtensions.hpp"
-#include "Heap.hpp"
-#include "MemoryPoolSegregated.hpp"
-#include "MemorySubSpace.hpp"
-#include "modronapi.hpp"
-#include "ObjectModel.hpp"
-#include "RootScanner.hpp"
-#include "Task.hpp"
+#include "ModronAssertions.h"
 #include "ProcessorInfo.hpp"
-#include "RealtimeGC.hpp"
 
 /**
  * Initialization.
@@ -51,7 +35,7 @@
 MM_ProcessorInfo*
 MM_ProcessorInfo::newInstance(MM_EnvironmentBase *env)
 {
-	MM_ProcessorInfo *processorInfo = (MM_ProcessorInfo *)env->getForge()->allocate(sizeof(MM_ProcessorInfo), MM_AllocationCategory::FIXED, J9_GET_CALLSITE());
+	MM_ProcessorInfo *processorInfo = (MM_ProcessorInfo *)env->getForge()->allocate(sizeof(MM_ProcessorInfo), MM_AllocationCategory::FIXED, OMR_GET_CALLSITE());
 	if (processorInfo) {
 		new(processorInfo) MM_ProcessorInfo();
 		if (!processorInfo->initialize(env)) {
@@ -69,7 +53,7 @@ bool
 MM_ProcessorInfo::initialize(MM_EnvironmentBase *env)
 {
 #if defined(AIXPPC) || defined(WIN32)
-	/* on AIX and Windows we don't use tick based timer so no need to calculte CPU clock frequency */
+	/* on AIX and Windows we don't use tick based timer so no need to calculate CPU clock frequency */
 	return true;
 #else
 	_freq = readFrequency();

@@ -1,5 +1,5 @@
 ##############################################################################
-#  Copyright (c) 2016, 2017 IBM Corp. and others
+#  Copyright (c) 2016, 2019 IBM Corp. and others
 #
 #  This program and the accompanying materials are made available under
 #  the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,48 +17,27 @@
 #  [1] https://www.gnu.org/software/classpath/license.html
 #  [2] http://openjdk.java.net/legal/assembly-exception.html
 #
-#  SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+#  SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 ##############################################################################
 
-.PHONY: autoconfig autogen clean help
+#
+# If AUTO_DETECT is turned on, compile and execute envDetector in build_envInfo.xml.
+# Otherwise, call makeGen.mk
+#
 
-.DEFAULT_GOAL := autogen
+.PHONY: testconfig
 
-help:
-	@echo "This makefile is used to run perl script which generates makefiles for JVM tests before being built and executed."
-	@echo "OPTS=help     Display help information for more options."
-
-CURRENT_DIR := $(shell pwd)
-OPTS=
-
-D=/
-
-ifneq (,$(findstring Win,$(OS)))
-CURRENT_DIR := $(subst \,/,$(CURRENT_DIR))
-endif
-
-ifndef SPEC
-$(error Please provide SPEC that matches the current platform (e.g. SPEC=linux_x86-64))
+ifndef TEST_JDK_HOME
+$(error Please provide TEST_JDK_HOME value.)
 else
-export SPEC:=$(SPEC)
-$(info set SPEC to $(SPEC))
+export TEST_JDK_HOME:=$(subst \,/,$(TEST_JDK_HOME))
 endif
 
-autoconfig:
-	perl configure.pl
-
-autogen: autoconfig
-	cd $(CURRENT_DIR)$(D)scripts$(D)testKitGen; \
-	perl testKitGen.pl --graphSpecs=$(SPEC) $(OPTS); \
-	cd $(CURRENT_DIR);
-
-AUTOGEN_FILES = $(wildcard $(CURRENT_DIR)$(D)jvmTest.mk)
-AUTOGEN_FILES += $(wildcard $(CURRENT_DIR)$(D)machineConfigure.mk)
-AUTOGEN_FILES += $(wildcard $(CURRENT_DIR)$(D)..$(D)*$(D)autoGenTest.mk)
-
-clean:
-ifneq (,$(findstring .mk,$(AUTOGEN_FILES)))
-	$(RM) $(AUTOGEN_FILES);
+testconfig:
+ifneq ($(AUTO_DETECT), false)
+	@echo "AUTO_DETECT is set to true"
+	ant -f ./src/build_envInfo.xml -DTEST_JDK_HOME=$(TEST_JDK_HOME)
 else
-	@echo "Nothing to clean";
+	@echo "AUTO_DETECT is set to false"
 endif
+	$(MAKE) -f makeGen.mk AUTO_DETECT=$(AUTO_DETECT)

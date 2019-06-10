@@ -1,8 +1,6 @@
 /*[INCLUDE-IF Sidecar16]*/
-package java.lang;
-
 /*******************************************************************************
- * Copyright (c) 1998, 2017 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -20,8 +18,9 @@ package java.lang;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
+package java.lang;
 
 import java.io.*;
 import java.util.Map;
@@ -32,14 +31,14 @@ import java.lang.reflect.Method;
 
 /*[IF Sidecar19-SE]*/
 import jdk.internal.misc.Unsafe;
+/*[IF Java12]*/
+import jdk.internal.access.SharedSecrets;
+/*[ELSE]
 import jdk.internal.misc.SharedSecrets;
+/*[ENDIF] Java12 */
 import jdk.internal.misc.VM;
 import java.lang.StackWalker.Option;
-/*[IF Sidecar19-SE-B165]
 import java.lang.Module;
-/*[ELSE]
-import java.lang.reflect.Module;
-/*[ENDIF]*/
 import jdk.internal.reflect.Reflection;
 import jdk.internal.reflect.CallerSensitive;
 import java.util.*;
@@ -50,6 +49,10 @@ import sun.misc.SharedSecrets;
 import sun.misc.VM;
 import sun.reflect.CallerSensitive;
 /*[ENDIF]*/
+/*[IF Sidecar19-SE]*/
+import com.ibm.gpu.spi.GPUAssist;
+import com.ibm.gpu.spi.GPUAssistHolder;
+/*[ENDIF] Sidecar19-SE */
 
 /**
  * Class System provides a standard place for programs
@@ -102,11 +105,7 @@ public final class System {
 	private static String osEncoding;
 
 /*[IF Sidecar19-SE]*/
-/*[IF Sidecar19-SE-B165]
 	static java.lang.ModuleLayer	bootLayer;
-/*[ELSE]*/
-	static java.lang.reflect.Layer	bootLayer;
-/*[ENDIF]*/
 /*[ENDIF]*/
 	
 	// Initialize all the slots in System on first use.
@@ -145,16 +144,10 @@ public final class System {
 		}
 
 		// Fill in the properties from the VM information.
-		ensureProperties();
+		ensureProperties(true);
 
 		/*[PR CMVC 150472] sun.misc.SharedSecrets needs access to java.lang. */
 		SharedSecrets.setJavaLangAccess(new Access());
-
-		/*[PR CMVC 179976] System.setProperties(null) throws IllegalStateException */
-		try {
-			VM.saveAndRemoveProperties(systemProperties);
-		} catch (NoSuchMethodError e) {
-		}
 		
 		/*[REM] Initialize the JITHelpers needed in J9VMInternals since the class can't do it itself */
 		try {
@@ -203,6 +196,7 @@ native static void startSNMPAgent();
 	
 static void completeInitialization() {
 	/*[IF !Sidecar19-SE_RAWPLUSJ9]*/	
+	/*[IF !Sidecar18-SE-OpenJ9]*/
 	Class<?> systemInitialization = null;
 	Method hook;
 	try {
@@ -218,7 +212,6 @@ static void completeInitialization() {
 		throw new InternalError(e.toString());
 	} 	
 	try {
-		/*[PR 111936] Give Hursley hooks into JCL startup */
 		if (null != systemInitialization) {
 			hook = systemInitialization.getMethod("firstChanceHook");	//$NON-NLS-1$
 			hook.invoke(null);
@@ -226,20 +219,25 @@ static void completeInitialization() {
 	} catch (Exception e) {
 		throw new InternalError(e.toString());
 	}
+	/*[ENDIF]*/ // Sidecar18-SE-OpenJ9
+	
 	/*[IF Sidecar18-SE-OpenJ9|Sidecar19-SE]*/
 	setIn(new BufferedInputStream(new FileInputStream(FileDescriptor.in)));
 	/*[ELSE]*/
 	/*[PR 100718] Initialize System.in after the main thread*/
 	setIn(com.ibm.jvm.io.ConsoleInputStream.localize(new BufferedInputStream(new FileInputStream(FileDescriptor.in))));
-	/*[ENDIF]*/
-	/*[ENDIF] */
+	/*[ENDIF]*/ //Sidecar18-SE-OpenJ9|Sidecar19-SE
+	/*[ENDIF]*/ //!Sidecar19-SE_RAWPLUSJ9
 		
 	/*[PR 102344] call Terminator.setup() after Thread init */
 	Terminator.setup();
-	
-	/*[IF !Sidecar19-SE_RAWPLUSJ9]*/
+
+	/*[IF Sidecar19-SE]*/
+	initGPUAssist();
+	/*[ENDIF] Sidecar19-SE */
+
+	/*[IF !Sidecar19-SE_RAWPLUSJ9&!Sidecar18-SE-OpenJ9]*/
 	try {
-		/*[PR 111936] Give Hursley hooks into JCL startup */
 		if (null != systemInitialization) {
 			hook = systemInitialization.getMethod("lastChanceHook");	//$NON-NLS-1$
 			hook.invoke(null);
@@ -247,9 +245,43 @@ static void completeInitialization() {
 	} catch (Exception e) {
 		throw new InternalError(e.toString());
 	}
-	/*[ENDIF]*/	
+	/*[ENDIF]*/	//!Sidecar19-SE_RAWPLUSJ9&!Sidecar18-SE-OpenJ9
 }
 
+/*[IF Sidecar19-SE]*/
+private static void initGPUAssist() {
+	Properties props = internalGetProperties();
+
+	if ((props.getProperty("com.ibm.gpu.enable") == null) //$NON-NLS-1$
+	&& (props.getProperty("com.ibm.gpu.enforce") == null) //$NON-NLS-1$
+	) {
+		/*
+		 * The CUDA implementation of GPUAssist is not enabled by default:
+		 * one of the above properties must be set.
+		 */
+		return;
+	}
+
+	PrivilegedAction<GPUAssist> finder = new PrivilegedAction<GPUAssist>() {
+		@Override
+		public GPUAssist run() {
+			ServiceLoader<GPUAssist.Provider> loaded = ServiceLoader.load(GPUAssist.Provider.class);
+
+			for (GPUAssist.Provider provider : loaded) {
+				GPUAssist assist = provider.getGPUAssist();
+
+				if (assist != null) {
+					return assist;
+				}
+			}
+
+			return GPUAssist.NONE;
+		}
+	};
+
+	GPUAssistHolder.instance = AccessController.doPrivileged(finder);
+}
+/*[ENDIF] Sidecar19-SE */
 
 /**
  * Sets the value of the static slot "in" in the receiver
@@ -350,73 +382,130 @@ private static final int PlatformEncoding = 1;
 private static final int FileEncoding = 2;
 private static final int OSEncoding = 3;
 
+/*[IF OpenJ9-RawBuild]*/
+	/* This is a JCL native required only by OpenJ9 raw build.
+	 * OpenJ9 raw build is a combination of OpenJ9 and OpenJDK binaries without JCL patches within extension repo.
+	 * Currently OpenJ9 depends on a JCL patch to initialize platform encoding which is not available to raw build.
+	 * A workaround for raw build is to invoke this JCL native which initializes platform encoding.
+	 * This workaround can be removed if that JCL patch is not required.
+	 */
+private static native Properties initProperties(Properties props);
+/*[ENDIF] OpenJ9-RawBuild */
+
 /**
  * If systemProperties is unset, then create a new one based on the values 
  * provided by the virtual machine.
  */
 @SuppressWarnings("nls")
-private static void ensureProperties() {
-	systemProperties = new Properties();
+private static void ensureProperties(boolean isInitialization) {
+/*[IF OpenJ9-RawBuild]*/
+	// invoke JCL native to initialize platform encoding
+	initProperties(new Properties());
+/*[ENDIF] OpenJ9-RawBuild */
+	
+/*[IF Java12]*/
+	Map<String, String> initializedProperties = new Hashtable<String, String>();
+/*[ELSE]
+	Properties initializedProperties = new Properties();
+/*[ENDIF] Java12 */
 
-	if (osEncoding != null)
-		systemProperties.put("os.encoding", osEncoding); //$NON-NLS-1$
+	if (osEncoding != null) {
+		initializedProperties.put("os.encoding", osEncoding); //$NON-NLS-1$
+	}
 	/*[PR The launcher apparently needs sun.jnu.encoding property or it does not work]*/
-	systemProperties.put("ibm.system.encoding", platformEncoding); //$NON-NLS-1$
-	systemProperties.put("sun.jnu.encoding", platformEncoding); //$NON-NLS-1$
-	
-	systemProperties.put("file.encoding", fileEncoding); //$NON-NLS-1$
-
-	systemProperties.put("file.encoding.pkg", "sun.io"); //$NON-NLS-1$ //$NON-NLS-2$
-
-	/*[IF Sidecar19-SE]*/
-	systemProperties.put("java.specification.version", "9"); //$NON-NLS-1$ //$NON-NLS-2$
-	/*[ELSE]*/ 
-	systemProperties.put("java.specification.version", "1.8"); //$NON-NLS-1$ //$NON-NLS-2$
-	/*[ENDIF] Sidecar19-SE */
-	
-
-	systemProperties.put("java.specification.vendor", "Oracle Corporation"); //$NON-NLS-1$ //$NON-NLS-2$
-	systemProperties.put("java.specification.name", "Java Platform API Specification"); //$NON-NLS-1$ //$NON-NLS-2$
-
-	systemProperties.put("com.ibm.oti.configuration", "scar"); //$NON-NLS-1$
-	/*[IF] Clear
-	systemProperties.put("com.ibm.oti.configuration", "clear"); //$NON-NLS-1$
-	systemProperties.put("com.ibm.oti.configuration.dir", "jclClear"); //$NON-NLS-1$ //$NON-NLS-2$
-	/*[ENDIF]*/
+	initializedProperties.put("ibm.system.encoding", platformEncoding); //$NON-NLS-1$
+	initializedProperties.put("sun.jnu.encoding", platformEncoding); //$NON-NLS-1$
+	initializedProperties.put("file.encoding", fileEncoding); //$NON-NLS-1$
+	initializedProperties.put("file.encoding.pkg", "sun.io"); //$NON-NLS-1$ //$NON-NLS-2$
+	/*[IF !Java12]*/
+	/* System property java.specification.vendor is set via VersionProps.init(systemProperties) since JDK12 */
+	initializedProperties.put("java.specification.vendor", "Oracle Corporation"); //$NON-NLS-1$ //$NON-NLS-2$
+	/*[ENDIF] !Java12 */
+	initializedProperties.put("java.specification.name", "Java Platform API Specification"); //$NON-NLS-1$ //$NON-NLS-2$
+	initializedProperties.put("com.ibm.oti.configuration", "scar"); //$NON-NLS-1$
 
 	String[] list = getPropertyList();
-	for (int i=0; i<list.length; i+=2) {
+	for (int i = 0; i < list.length; i += 2) {
 		String key = list[i];
 		/*[PR 100209] getPropertyList should use fewer local refs */
-		if (key == null) break;
-		systemProperties.put(key, list[i+1]);
+		if (key == null) {
+			break;
+		}
+		initializedProperties.put(key, list[i+1]);
 	}
 	
-	propertiesInitialized = true;
-	
-	/*[IF Sidecar19-SE]*/
 	/* java.lang.VersionProps.init() eventually calls into System.setProperty() where propertiesInitialized needs to be true */
+	propertiesInitialized = true;
+
+/*[IF Java12]*/
+	java.lang.VersionProps.init(initializedProperties);
+/*[ELSE]
+	/* VersionProps.init requires systemProperties to be set */
+	systemProperties = initializedProperties;
+
+/*[IF Sidecar19-SE]*/
 	java.lang.VersionProps.init();
-	/*[ELSE]*/
+/*[ELSE]
 	sun.misc.Version.init();
-	/*[ENDIF] Sidecar19-SE */
 
 	StringBuffer.initFromSystemProperties(systemProperties);
 	StringBuilder.initFromSystemProperties(systemProperties);
+/*[ENDIF] Sidecar19-SE */
+/*[ENDIF] Java12 */
 
-	String javaRuntimeVersion = systemProperties.getProperty("java.runtime.version"); //$NON-NLS-1$
+/*[IF Java12]*/
+	String javaRuntimeVersion = initializedProperties.get("java.runtime.version"); //$NON-NLS-1$
+/*[ELSE]
+	String javaRuntimeVersion = initializedProperties.getProperty("java.runtime.version"); //$NON-NLS-1$
+/*[ENDIF] Java12 */
 	if (null != javaRuntimeVersion) {
-		String fullVersion = systemProperties.getProperty("java.fullversion"); //$NON-NLS-1$
+	/*[IF Java12]*/
+		String fullVersion = initializedProperties.get("java.fullversion"); //$NON-NLS-1$
+	/*[ELSE]
+		String fullVersion = initializedProperties.getProperty("java.fullversion"); //$NON-NLS-1$
+	/*[ENDIF] Java12 */
 		if (null != fullVersion) {
-			systemProperties.put("java.fullversion", (javaRuntimeVersion + "\n" + fullVersion)); //$NON-NLS-1$ //$NON-NLS-2$
+			initializedProperties.put("java.fullversion", (javaRuntimeVersion + "\n" + fullVersion)); //$NON-NLS-1$ //$NON-NLS-2$
 		}
 		rasInitializeVersion(javaRuntimeVersion);
 	}
 
-	lineSeparator = systemProperties.getProperty("line.separator", "\n"); //$NON-NLS-1$
+/*[IF Java12]*/
+	lineSeparator = initializedProperties.getOrDefault("line.separator", "\n"); //$NON-NLS-1$
+/*[ELSE]
+	lineSeparator = initializedProperties.getProperty("line.separator", "\n"); //$NON-NLS-1$
+/*[ENDIF] Java12 */
 	/*[IF Sidecar19-SE]*/
-	useLegacyVerPresents = systemProperties.containsKey("use.legacy.version");
+	useLegacyVerPresents = initializedProperties.containsKey("use.legacy.version");
 	/*[ENDIF]*/
+
+	if (isInitialization) {
+		/*[PR CMVC 179976] System.setProperties(null) throws IllegalStateException */
+		/*[IF Java12]*/
+		VM.saveProperties(initializedProperties);
+		/*[ELSE]
+		VM.saveAndRemoveProperties(initializedProperties);
+		/*[ENDIF] Java12 */
+	}
+
+	/* create systemProperties from properties Map */
+/*[IF Java12]*/
+	initializeSystemProperties(initializedProperties);
+/*[ELSE]
+	systemProperties = initializedProperties;
+/*[ENDIF] Java12 */
+}
+
+/* Converts a Map<String, String> to a properties object.
+ * 
+ * The system properties will be initialized as a Map<String, String> type to be compatible
+ * with jdk.internal.misc.VM and java.lang.VersionProps APIs.
+ */
+private static void initializeSystemProperties(Map<String, String> mapProperties) {
+	systemProperties = new Properties();
+	for (Map.Entry<String, String> property : mapProperties.entrySet()) {
+		systemProperties.put(property.getKey(), property.getValue());
+	}
 }
 
 private static native void rasInitializeVersion(String javaRuntimeVersion);
@@ -500,12 +589,14 @@ static Properties internalGetProperties() {
  * The properties currently provided by the virtual
  * machine are:
  * <pre>
+/*[IF !Java12]
+ *     java.vendor
  *     java.vendor.url
+ /*[ENDIF] Java12
  *     java.class.path
  *     user.home
  *     java.class.version
  *     os.version
- *     java.vendor
  *     user.dir
  *     user.timezone
  *     path.separator
@@ -679,6 +770,7 @@ public static void runFinalization() {
 	RUNTIME.runFinalization();
 }
 
+/*[IF !Java11]*/
 /**
  * Ensure that, when the virtual machine is about to exit,
  * all objects are finalized. Note that all finalization
@@ -690,13 +782,14 @@ public static void runFinalization() {
  * @deprecated 	This method is unsafe.
  */
 /*[IF Sidecar19-SE]*/
-@Deprecated(forRemoval=false, since="1.2")
+@Deprecated(forRemoval=true, since="1.2")
 /*[ELSE]
 @Deprecated
 /*[ENDIF]*/
 public static void runFinalizersOnExit(boolean flag) {
 	Runtime.runFinalizersOnExit(flag);
 }
+/*[ENDIF]*/
 
 /**
  * Answers the system properties. Note that the object
@@ -714,7 +807,7 @@ public static void setProperties(Properties p) {
 	if (security != null)
 		security.checkPropertiesAccess();
 	if (p == null) {
-		ensureProperties();
+		ensureProperties(false);
 	} else {
 		systemProperties = p;
 	}
@@ -728,36 +821,59 @@ public static void setProperties(Properties p) {
  *
  * @param		s			the new security manager
  * 
- * @throws		SecurityException 	if the security manager has already been set.
+ * @throws		SecurityException 	if the security manager has already been set and its checkPermission method doesn't allow it to be replaced.
+ /*[IF Java12]
+ * @throws		UnsupportedOperationException 	if s is non-null and a special token "disallow" has been set for system property "java.security.manager"
+ * 												which indicates that a security manager is not allowed to be set dynamically.
+ /*[ENDIF] Java12
  */
 public static void setSecurityManager(final SecurityManager s) {
 	/*[PR 113606] security field could be modified by another Thread */
 	final SecurityManager currentSecurity = security;
 	
 	if (s != null) {
-		try {
-			/*[PR 95057] preload classes required for checkPackageAccess() */
-			// Preload classes used for checkPackageAccess(),
-			// otherwise we could go recursive 
-			s.checkPackageAccess("java.lang"); //$NON-NLS-1$
-		} catch (Exception e) {}
+		/*[IF Java12]*/
+		if ("disallow".equals(systemProperties.getProperty("java.security.manager"))) { //$NON-NLS-1$ //$NON-NLS-2$
+			/*[MSG "K0B00", "`-Djava.security.manager=disallow` has been specified"]*/
+			throw new UnsupportedOperationException(com.ibm.oti.util.Msg.getString("K0B00")); //$NON-NLS-1$
+		}
+		/*[ENDIF] Java12 */
+		if (currentSecurity == null) {
+			// only preload classes when current security manager is null
+			// not adding an extra static field to preload only once
+			try {
+				/*[PR 95057] preload classes required for checkPackageAccess() */
+				// Preload classes used for checkPackageAccess(),
+				// otherwise we could go recursive 
+				s.checkPackageAccess("java.lang"); //$NON-NLS-1$
+			} catch (Exception e) {
+				// ignore any potential exceptions
+			}
+		}
+		
 		try {
 			/*[PR 97686] Preload the policy permission */
-			AccessController.doPrivileged(new PrivilegedAction() {
-				public Object run() {
+			AccessController.doPrivileged(new PrivilegedAction<Void>() {
+				@Override
+				public Void run() {
+					if (currentSecurity == null) {
+						// initialize external messages and 
+						// also load security sensitive classes 
+						com.ibm.oti.util.Msg.getString("K002c"); //$NON-NLS-1$
+					}
 					ProtectionDomain oldDomain = currentSecurity == null ?
 						System.class.getPDImpl() : currentSecurity.getClass().getPDImpl();
-						ProtectionDomain newDomain = s.getClass().getPDImpl();
+					ProtectionDomain newDomain = s.getClass().getPDImpl();
 					if (oldDomain != newDomain) {
-						// initialize external messages
-						com.ibm.oti.util.Msg.getString("K002c"); //$NON-NLS-1$
 						// initialize the protection domain, which may include preloading the
 						// dynamic permissions from the policy before installing
 						newDomain.implies(new AllPermission());
 					}
 					return null;
 				}});
-		} catch (Exception e) {}
+		} catch (Exception e) {
+			// ignore any potential exceptions
+		}
 	}
 	if (currentSecurity != null) {
 		currentSecurity.checkPermission(com.ibm.oti.util.RuntimePermissions.permissionSetSecurityManager);
@@ -1264,12 +1380,34 @@ public interface Logger {
 	 * System loggers levels
 	 */
 	public enum Level {
+		/**
+		 * Enable all logging level messages
+		 */
 		ALL(Integer.MIN_VALUE),
+		/**
+		 * Enable TRACE level messages
+		 */
 		TRACE(400),
+		/**
+		 * Enable DEBUG level messages
+		 */
 		DEBUG(500),
+		/**
+		 * Enable INFO level messages
+		 */
 		INFO(800),
+		/**
+		 * Enable WARNING level messages
+		 */
 		WARNING(900),
+		/**
+		 * Enable ERROR level messages
+		 */
 		ERROR(1000),
+		/**
+		 *
+		 * Disable logging 
+		 */
 		OFF(Integer.MAX_VALUE);
 		
 		final int severity;

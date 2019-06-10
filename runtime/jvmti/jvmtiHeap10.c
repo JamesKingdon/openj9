@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "jvmtiHelpers.h"
@@ -91,6 +91,7 @@ jvmtiIterateOverHeap(jvmtiEnv* env,
 		ENSURE_NON_NULL(heap_object_callback);
 
 		vm->internalVMFunctions->acquireExclusiveVMAccess(currentThread);
+		ensureHeapWalkable(currentThread);
 
 		iteratorData.env = (J9JVMTIEnv *)env;
 		iteratorData.filter = object_filter;
@@ -104,7 +105,7 @@ jvmtiIterateOverHeap(jvmtiEnv* env,
 		vm->internalVMFunctions->releaseExclusiveVMAccess(currentThread);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	TRACE_JVMTI_RETURN(jvmtiIterateOverHeap);
@@ -137,6 +138,7 @@ jvmtiIterateOverInstancesOfClass(jvmtiEnv* env,
 		ENSURE_NON_NULL(heap_object_callback);
 
 		vm->internalVMFunctions->acquireExclusiveVMAccess(currentThread);
+		ensureHeapWalkable(currentThread);
 
 		iteratorData.env = (J9JVMTIEnv *)env;
 		iteratorData.filter = object_filter;
@@ -154,7 +156,7 @@ jvmtiIterateOverInstancesOfClass(jvmtiEnv* env,
 		vm->internalVMFunctions->releaseExclusiveVMAccess(currentThread);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	TRACE_JVMTI_RETURN(jvmtiIterateOverInstancesOfClass);
@@ -186,6 +188,7 @@ jvmtiIterateOverObjectsReachableFromObject(jvmtiEnv* env,
 		ENSURE_NON_NULL(object_reference_callback);
 
 		vm->internalVMFunctions->acquireExclusiveVMAccess(currentThread);
+		ensureHeapWalkable(currentThread);
 
 		slot = *(j9object_t*)object;
 
@@ -205,7 +208,7 @@ jvmtiIterateOverObjectsReachableFromObject(jvmtiEnv* env,
 		vm->internalVMFunctions->releaseExclusiveVMAccess(currentThread);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	TRACE_JVMTI_RETURN(jvmtiIterateOverObjectsReachableFromObject);
@@ -235,6 +238,7 @@ jvmtiIterateOverReachableObjects(jvmtiEnv* env,
 		ENSURE_CAPABILITY(env, can_tag_objects);
 
 		vm->internalVMFunctions->acquireExclusiveVMAccess(currentThread);
+		ensureHeapWalkable(currentThread);
 
 		iteratorData.env = (J9JVMTIEnv *)env;
 		iteratorData.heapRootCallback = (jvmtiHeapRootCallback) J9_COMPATIBLE_FUNCTION_POINTER( heap_root_callback );
@@ -249,7 +253,7 @@ jvmtiIterateOverReachableObjects(jvmtiEnv* env,
 		vm->internalVMFunctions->releaseExclusiveVMAccess(currentThread);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	TRACE_JVMTI_RETURN(jvmtiIterateOverReachableObjects);
@@ -500,12 +504,7 @@ processStackRoot(J9JVMTIObjectIteratorData * data, J9JVMTIObjectTag * entry, jlo
 	/* Find thread tag */
 
 	search.ref = (j9object_t) walkState->walkThread->threadObject;
-	if (!AUTOTAGGING_OBJECTS(data->env)) {
-		result = hashTableFind(data->env->objectTagTable, &search);
-	} else {
-		search.tag = (jlong)(UDATA)search.ref;
-		result = &search;
-	}
+	result = hashTableFind(data->env->objectTagTable, &search);
 	
 	/* Call the callback */
 
@@ -538,12 +537,7 @@ wrapHeapIterationCallback(J9JavaVM * vm, J9MM_IterateObjectDescriptor *objectDes
 		}
 
 		entry.ref = object;
-		if ( OBJECT_IS_TAGGABLE(iteratorData->env, vm, object) ) {
-			objectTag = hashTableFind(iteratorData->env->objectTagTable, &entry);
-		} else {
-			entry.tag = (jlong)(UDATA)entry.ref;
-			objectTag = &entry;
-		}
+		objectTag = hashTableFind(iteratorData->env->objectTagTable, &entry);
 
 		if ( (iteratorData->filter == JVMTI_HEAP_OBJECT_EITHER) ||
 		     (iteratorData->filter == JVMTI_HEAP_OBJECT_TAGGED && objectTag != NULL) ||
@@ -567,29 +561,26 @@ wrapHeapIterationCallback(J9JavaVM * vm, J9MM_IterateObjectDescriptor *objectDes
 					&tag,
 					iteratorData->userData);
 
-			/* Update the tag only if not autotagging or if it is a class, i.e., if the object is taggable */
-			if ( OBJECT_IS_TAGGABLE(iteratorData->env, vm, object) ) {
-				if (objectTag) {
-					/* object was tagged before callback */
-					if (tag) {
-						/* still tagged, update the tag */
-						objectTag->tag = tag;
-					} else {
-						/* no longer tagged, remove the table entry */
-						entry.ref = object;
-						hashTableRemove(iteratorData->env->objectTagTable, &entry);
-					}
+			if (objectTag) {
+				/* object was tagged before callback */
+				if (tag) {
+					/* still tagged, update the tag */
+					objectTag->tag = tag;
 				} else {
-					/* object was untagged before callback */
-					if (tag) {
-						/* now tagged, add table entry */
-						entry.ref = object;
-						entry.tag = tag;
-						hashTableAdd(iteratorData->env->objectTagTable, &entry);
-					}
+					/* no longer tagged, remove the table entry */
+					entry.ref = object;
+					hashTableRemove(iteratorData->env->objectTagTable, &entry);
+				}
+			} else {
+				/* object was untagged before callback */
+				if (tag) {
+					/* now tagged, add table entry */
+					entry.ref = object;
+					entry.tag = tag;
+					hashTableAdd(iteratorData->env->objectTagTable, &entry);
 				}
 			}
-			
+		
 			return rc;
 		}
 	}
@@ -628,12 +619,7 @@ wrapObjectIterationCallback(j9object_t *slotPtr, j9object_t referrer, void *user
 
 		if ( referrer && (event.type != J9JVMTI_HEAP_EVENT_STACK)) {
 			entry.ref = referrer;
-			if ( OBJECT_IS_TAGGABLE(iteratorData->env, vm, referrer) ) {
-				result = hashTableFind(iteratorData->env->objectTagTable, &entry);
-			} else {
-				entry.tag = (jlong)(UDATA)entry.ref;
-				result = &entry;
-			}
+			result = hashTableFind(iteratorData->env->objectTagTable, &entry);
 			referrerTag = result ? result->tag : 0;
 		}
 
@@ -641,14 +627,8 @@ wrapObjectIterationCallback(j9object_t *slotPtr, j9object_t referrer, void *user
 
 		entry.ref = object;
 		entry.tag = 0;
-
-		if ( OBJECT_IS_TAGGABLE(iteratorData->env, vm, object) ) {
-			result = hashTableFind(iteratorData->env->objectTagTable, &entry);
-			if ( result == NULL ) {
-				result = &entry;
-			}
-		} else {
-			entry.tag = (jlong)(UDATA)entry.ref;
+		result = hashTableFind(iteratorData->env->objectTagTable, &entry);
+		if ( result == NULL ) {
 			result = &entry;
 		}
 
@@ -666,19 +646,15 @@ wrapObjectIterationCallback(j9object_t *slotPtr, j9object_t referrer, void *user
 				break;
 		}
 
-		/* Update the tag only if not autotagging or if it is a class, i.e., if the object is taggable */
-
-		if ( OBJECT_IS_TAGGABLE(iteratorData->env, vm, object) ) {
-			if ( &entry == result ) {
-				/* Tag wasn't set, but now is... */
-				if (result->tag != 0) {
-					hashTableAdd(iteratorData->env->objectTagTable, result);
-				}
-			} else {
-				/* Tag was set, but now isn't... */
-				if (result->tag == 0) {
-					hashTableRemove(iteratorData->env->objectTagTable, result);
-				}
+		if ( &entry == result ) {
+			/* Tag wasn't set, but now is... */
+			if (result->tag != 0) {
+				hashTableAdd(iteratorData->env->objectTagTable, result);
+			}
+		} else {
+			/* Tag was set, but now isn't... */
+			if (result->tag == 0) {
+				hashTableRemove(iteratorData->env->objectTagTable, result);
 			}
 		}
 	} else if (J9JVMTI_HEAP_EVENT_NONE_NOFOLLOW == event.type) {

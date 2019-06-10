@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
  
  /**
@@ -62,7 +61,7 @@ extern "C" {
 static uintptr_t stackIterator(J9VMThread *currentThread, J9StackWalkState *walkState);
 static void dumpStackFrames(J9VMThread *currentThread);
 static void traceAllocateIndexableObject(J9VMThread *vmThread, J9Class* clazz, uintptr_t objSize, uintptr_t numberOfIndexedFields);
-static void traceAllocateObject(J9VMThread *vmThread, J9Class* clazz, uintptr_t objSize, uintptr_t numberOfIndexedFields=0);
+static J9Object * traceAllocateObject(J9VMThread *vmThread, J9Object * object, J9Class* clazz, uintptr_t objSize, uintptr_t numberOfIndexedFields=0);
 static bool traceObjectCheck(J9VMThread *vmThread);
 
 #define STACK_FRAMES_TO_DUMP	8
@@ -89,7 +88,7 @@ J9AllocateObjectNoGC(J9VMThread *vmThread, J9Class *clazz, uintptr_t allocateFla
 
 #if defined(J9VM_GC_THREAD_LOCAL_HEAP)
 	MM_GCExtensions *extensions = MM_GCExtensions::getExtensions(env);
-	if (extensions->instrumentableAllocateHookEnabled ) {
+	if (extensions->instrumentableAllocateHookEnabled || !env->isInlineTLHAllocateEnabled()) {
 		/* This function is restricted to only being used for instrumentable allocates so we only need to check that one allocation hook.
 		 * Note that we can't handle hooked allocates since we might be called without a JIT resolve frame and that is required for us to
 		 * report the allocation event.
@@ -114,6 +113,9 @@ J9AllocateObjectNoGC(J9VMThread *vmThread, J9Class *clazz, uintptr_t allocateFla
 			if (NULL != objectPtr) {
 				uintptr_t allocatedBytes = env->getExtensions()->objectModel.getConsumedSizeInBytesWithHeader(objectPtr);
 				Assert_MM_true(allocatedBytes == mixedOAM.getAllocateDescription()->getContiguousBytes());
+				if (J9_ARE_ANY_BITS_SET(J9CLASS_EXTENDED_FLAGS(clazz), J9ClassReservableLockWordInit)) {
+					*J9OBJECT_MONITOR_EA(vmThread, objectPtr) = OBJECT_HEADER_LOCK_RESERVED;
+				}
 			}
 			env->_isInNoGCAllocationCall = false;
 		}
@@ -213,10 +215,11 @@ traceAllocateIndexableObject(J9VMThread *vmThread, J9Class* clazz, uintptr_t obj
 	return;
 }
 
-static void
-traceAllocateObject(J9VMThread *vmThread, J9Class* clazz, uintptr_t objSize, uintptr_t numberOfIndexedFields)
+static J9Object *
+traceAllocateObject(J9VMThread *vmThread, J9Object * object, J9Class* clazz, uintptr_t objSize, uintptr_t numberOfIndexedFields)
 {
 	if(traceObjectCheck(vmThread)){
+		PORT_ACCESS_FROM_VMC(vmThread);
 		MM_EnvironmentBase *env = MM_EnvironmentBase::getEnvironment(vmThread->omrVMThread);
 		MM_GCExtensions *extensions = MM_GCExtensions::getExtensions(env);
 		uintptr_t byteGranularity = extensions->oolObjectSamplingBytesGranularity;
@@ -228,11 +231,22 @@ traceAllocateObject(J9VMThread *vmThread, J9Class* clazz, uintptr_t objSize, uin
 			Trc_MM_J9AllocateObject_outOfLineObjectAllocation(
 				vmThread, clazz, J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(romClass)), J9UTF8_DATA(J9ROMCLASS_CLASSNAME(romClass)), objSize);
 		}
+
+		TRIGGER_J9HOOK_MM_OBJECT_ALLOCATION_SAMPLING(
+			extensions->hookInterface,
+			vmThread,
+			j9time_hires_clock(),
+			J9HOOK_MM_OBJECT_ALLOCATION_SAMPLING,
+			object,
+			clazz,
+			objSize);
+
 		/* Keep the remainder, want this to happen so that we don't miss objects
 		 * after seeing large objects
 		 */
 		env->_oolTraceAllocationBytes = (env->_oolTraceAllocationBytes) % byteGranularity;
 	}
+	return object;
 }
 
 /* Required to check if we're going to trace or not since a java stack trace needs
@@ -279,7 +293,7 @@ J9AllocateIndexableObjectNoGC(J9VMThread *vmThread, J9Class *clazz, uint32_t num
 	
 #if defined(J9VM_GC_THREAD_LOCAL_HEAP)
 	MM_GCExtensions *extensions = MM_GCExtensions::getExtensions(env);
-	if (extensions->instrumentableAllocateHookEnabled ) {
+	if (extensions->instrumentableAllocateHookEnabled || !env->isInlineTLHAllocateEnabled()) {
 		/* This function is restricted to only being used for instrumentable allocates so we only need to check that one allocation hook.
 		 * Note that we can't handle hooked allocates since we might be called without a JIT resolve frame and that is required for us to
 		 * report the allocation event.
@@ -341,12 +355,20 @@ J9AllocateObject(J9VMThread *vmThread, J9Class *clazz, uintptr_t allocateFlags)
 	Assert_MM_false(allocateFlags & OMR_GC_ALLOCATE_OBJECT_NO_GC);
 
 	J9Object *objectPtr = NULL;
+	/* Replaced classes have poisoned the totalInstanceSize such that they are not allocatable,
+	 * so inline allocate and NoGC allocate have already failed. If this allocator is reached
+	 * with a replaced class, update to the current version and allocate that.
+	 */
+	clazz = J9_CURRENT_CLASS(clazz);
 	MM_MixedObjectAllocationModel mixedOAM(env, clazz, allocateFlags);
 	if (mixedOAM.initializeAllocateDescription(env)) {
 		objectPtr = OMR_GC_AllocateObject(vmThread->omrVMThread, &mixedOAM);
 		if (NULL != objectPtr) {
 			uintptr_t allocatedBytes = env->getExtensions()->objectModel.getConsumedSizeInBytesWithHeader(objectPtr);
 			Assert_MM_true(allocatedBytes == mixedOAM.getAllocateDescription()->getContiguousBytes());
+			if (J9_ARE_ANY_BITS_SET(J9CLASS_EXTENDED_FLAGS(clazz), J9ClassReservableLockWordInit)) {
+				*J9OBJECT_MONITOR_EA(vmThread, objectPtr) = OBJECT_HEADER_LOCK_RESERVED;
+			}
 		}
 	}
 
@@ -415,7 +437,7 @@ J9AllocateObject(J9VMThread *vmThread, J9Class *clazz, uintptr_t allocateFlags)
 		dumpStackFrames(vmThread);
 		TRIGGER_J9HOOK_MM_PRIVATE_OUT_OF_MEMORY(extensions->privateHookInterface, vmThread->omrVMThread, j9time_hires_clock(), J9HOOK_MM_PRIVATE_OUT_OF_MEMORY, memorySpace, memorySpace->getName());
 	} else {
-		traceAllocateObject(vmThread, clazz, sizeInBytesRequired);
+		objectPtr = traceAllocateObject(vmThread, objectPtr, clazz, sizeInBytesRequired);
 		if (extensions->isStandardGC()) {
 			if (OMR_GC_ALLOCATE_OBJECT_TENURED == (allocateFlags & OMR_GC_ALLOCATE_OBJECT_TENURED)) {
 				/* Object must be allocated in Tenure if it is requested */
@@ -424,7 +446,7 @@ J9AllocateObject(J9VMThread *vmThread, J9Class *clazz, uintptr_t allocateFlags)
 #if defined(J9VM_GC_REALTIME) 
 		} else if (extensions->isMetronomeGC()) {
 			if (env->saveObjects((omrobjectptr_t)objectPtr)) {
-				j9gc_startGCIfTimeExpired(vmThread);
+				j9gc_startGCIfTimeExpired(vmThread->omrVMThread);
 				env->restoreObjects((omrobjectptr_t*)&objectPtr);
 			}
 #endif /* defined(J9VM_GC_REALTIME) */
@@ -498,9 +520,8 @@ J9AllocateIndexableObject(J9VMThread *vmThread, J9Class *clazz, uint32_t numberO
 		Trc_MM_ArrayObjectAllocationFailedDueToExcessiveGC(vmThread);
 	}
 
+	sizeInBytesRequired = indexableOAM.getAllocateDescription()->getBytesRequested();
 	if (NULL != objectPtr) {
-		sizeInBytesRequired = indexableOAM.getAllocateDescription()->getBytesRequested();
-		
 		/* The hook could release access and so the object address could change (the value is preserved).  Since this
 		 * means the hook could write back a different value to the variable, it must be a valid lvalue (ie: not cast).
 		 */
@@ -539,7 +560,7 @@ J9AllocateIndexableObject(J9VMThread *vmThread, J9Class *clazz, uint32_t numberO
 				highThreshold);
 		}
 		
-		traceAllocateObject(vmThread, clazz, sizeInBytesRequired, (uintptr_t)numberOfIndexedFields);
+		objectPtr = traceAllocateObject(vmThread, objectPtr, clazz, sizeInBytesRequired, (uintptr_t)numberOfIndexedFields);
 		if (extensions->isStandardGC()) {
 			if (OMR_GC_ALLOCATE_OBJECT_TENURED == (allocateFlags & OMR_GC_ALLOCATE_OBJECT_TENURED)) {
 				/* Object must be allocated in Tenure if it is requested */
@@ -548,7 +569,7 @@ J9AllocateIndexableObject(J9VMThread *vmThread, J9Class *clazz, uint32_t numberO
 #if defined(J9VM_GC_REALTIME)
 		} else if (extensions->isMetronomeGC()) {
 			if (env->saveObjects((omrobjectptr_t)objectPtr)) {
-				j9gc_startGCIfTimeExpired(vmThread);
+				j9gc_startGCIfTimeExpired(vmThread->omrVMThread);
 				env->restoreObjects((omrobjectptr_t*)&objectPtr);
 			}
 #endif /* defined(J9VM_GC_REALTIME) */

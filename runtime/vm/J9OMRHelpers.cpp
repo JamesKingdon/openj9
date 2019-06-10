@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "omr.h"
@@ -57,16 +57,18 @@ destroyOMRVMThread(J9JavaVM *vm, J9VMThread *vmThread)
 jint
 attachVMThreadToOMR(J9JavaVM *vm, J9VMThread *vmThread, omrthread_t osThread)
 {
-	jint rc = JNI_OK;
+	jint rc = JNI_ERR;
 	OMR_VM *omrVM = vm->omrVM;
 	OMR_VMThread *omrVMThread = (OMR_VMThread*)(((UDATA)vmThread) + J9_VMTHREAD_SEGREGATED_ALLOCATION_CACHE_OFFSET + vm->segregatedAllocationCacheSize);
 	omrVMThread->_vm = omrVM;
 	omrVMThread->_language_vmthread = vmThread;
 	omrVMThread->_os_thread = osThread;
+#if defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS)
+	omrVMThread->_compressObjectReferences = J9VMTHREAD_COMPRESS_OBJECT_REFERENCES(vmThread);
+#endif /* defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS) */
 	if (OMR_ERROR_NONE == omr_attach_vmthread_to_vm(omrVMThread)) {
 		vmThread->omrVMThread = omrVMThread;
-	} else {
-		rc = JNI_ERR;
+		rc = JNI_OK;
 	}
 	return rc;
 }
@@ -94,7 +96,7 @@ allocateJavaVMWithOMR(J9PortLibrary *portLibrary)
 	UDATA vmAllocationSize = omrVMOffset + sizeof(OMR_VM);
 	J9JavaVM *vm = (J9JavaVM *)j9mem_allocate_memory(vmAllocationSize, OMRMEM_CATEGORY_VM);
 	if (vm != NULL) {
-			memset(vm, 0, vmAllocationSize);
+		memset(vm, 0, vmAllocationSize);
 	}
 	return vm;
 }
@@ -102,7 +104,7 @@ allocateJavaVMWithOMR(J9PortLibrary *portLibrary)
 jint
 attachVMToOMR(J9JavaVM *vm)
 {
-	jint rc = JNI_OK;
+	jint rc = JNI_ERR;
 	UDATA omrRuntimeOffset = ROUND_TO(8, sizeof(J9JavaVM));
 	UDATA omrVMOffset = ROUND_TO(8, omrRuntimeOffset + sizeof(OMR_Runtime));
 	OMR_Runtime *omrRuntime = (OMR_Runtime*)(((UDATA)vm) + omrRuntimeOffset);
@@ -113,6 +115,9 @@ attachVMToOMR(J9JavaVM *vm)
 		omrVM->_configuration._maximum_thread_count = 0;
 		omrVM->_language_vm = (void*)vm;
 		omrVM->_runtime = omrRuntime;
+#if defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS)
+		omrVM->_compressObjectReferences = J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm);
+#endif /* defined(OMR_GC_COMPRESSED_POINTERS) && defined(OMR_GC_FULL_POINTERS) */
 		if (OMR_ERROR_NONE == omr_attach_vm_to_runtime(omrVM)) {
 			vm->omrRuntime = omrRuntime;
 			vm->omrVM = omrVM;

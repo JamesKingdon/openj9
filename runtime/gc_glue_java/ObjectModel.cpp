@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
@@ -107,16 +107,16 @@ GC_ObjectModel::internalClassLoadHook(J9HookInterface** hook, UDATA eventNum, vo
 		const char * const abstractOwnableSynchronizer = "java/util/concurrent/locks/AbstractOwnableSynchronizer";
 
 		if (0 == compareUTF8Length(J9UTF8_DATA(className), J9UTF8_LENGTH(className), (U_8*)atomicMarkableReference, strlen(atomicMarkableReference))) {
-			clazz->classDepthAndFlags |= J9_JAVA_CLASS_GC_SPECIAL;
+			clazz->classDepthAndFlags |= J9AccClassGCSpecial;
 			objectModel->_atomicMarkableReferenceClass = clazz;
 		} else if (0 == compareUTF8Length(J9UTF8_DATA(className), J9UTF8_LENGTH(className), (U_8*)javaLangClassLoader, strlen(javaLangClassLoader))) {
-			clazz->classDepthAndFlags |= J9_JAVA_CLASS_GC_SPECIAL;
+			clazz->classDepthAndFlags |= J9AccClassGCSpecial;
 			objectModel->_classLoaderClass = clazz;
 		} else if (0 == compareUTF8Length(J9UTF8_DATA(className), J9UTF8_LENGTH(className), (U_8*)javaLangClass, strlen(javaLangClass))) {
-			clazz->classDepthAndFlags |= J9_JAVA_CLASS_GC_SPECIAL;
+			clazz->classDepthAndFlags |= J9AccClassGCSpecial;
 			objectModel->_classClass = clazz;
 		} else if (0 == compareUTF8Length(J9UTF8_DATA(className), J9UTF8_LENGTH(className), (U_8*)abstractOwnableSynchronizer, strlen(abstractOwnableSynchronizer))) {
-			 clazz->classDepthAndFlags |= J9_JAVA_CLASS_OWNABLE_SYNCHRONIZER;
+			 clazz->classDepthAndFlags |= J9AccClassOwnableSynchronizer;
 		}
 	}
 }

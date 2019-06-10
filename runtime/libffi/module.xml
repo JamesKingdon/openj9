@@ -1,35 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<module>
-	<exports group="raw_api">
-		<export name="ffi_raw_call" />
-		<export name="ffi_ptrarray_to_raw" />
-	</exports>
+<!--
+Copyright (c) 2014, 2019 IBM Corp. and others
 
-	<artifact type="shared" name="ffi" bundle="jvm" loadgroup="">
-		<options>
-			<option name="isRequired" />
-			<option name="prototypeHeaderFileNames" data="ffi.h" />
-			<option name="nonIBMCopyright" data="libFFI foreign function interface library Copyright (C) 2011 Anthony Green" />
-			<option name="dllDescription" data="libFFI" />
-		</options>
+This program and the accompanying materials are made available under
+the terms of the Eclipse Public License 2.0 which accompanies this
+distribution and is available at https://www.eclipse.org/legal/epl-2.0/
+or the Apache License, Version 2.0 which accompanies this distribution and
+is available at https://www.apache.org/licenses/LICENSE-2.0.
+
+This Source Code may also be made available under the following
+Secondary Licenses when the conditions for such availability set
+forth in the Eclipse Public License, v. 2.0 are satisfied: GNU
+General Public License, version 2 with the GNU Classpath
+Exception [1] and GNU General Public License, version 2 with the
+OpenJDK Assembly Exception [2].
+
+[1] https://www.gnu.org/software/classpath/license.html
+[2] http://openjdk.java.net/legal/assembly-exception.html
+
+SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
+-->
+<module>
+	<artifact type="static" name="ffi" bundle="jvm" loadgroup="">
 		<phase>core</phase>
-		<exports>
-			<group name="raw_api">
-				<exclude-if condition="spec.win_x86-64.*" />
-			</group>
-			<export name="ffi_prep_cif" />
-			<export name="ffi_call" />
-			<export name="ffi_type_void" />
-			<export name="ffi_type_uint8" />
-			<export name="ffi_type_sint8" />
-			<export name="ffi_type_sint16" />
-			<export name="ffi_type_uint16" />
-			<export name="ffi_type_sint32" />
-			<export name="ffi_type_sint64" />
-			<export name="ffi_type_float" />
-			<export name="ffi_type_double" />
-			<export name="ffi_type_pointer" />
-		</exports>
 		<includes>
 			<include path="j9include" />
 		</includes>
@@ -41,6 +34,7 @@
 			<!-- override makefile default rule for building .S files -->
 			<makefilestub data="COMPILE.S=$(CC) $(addprefix -Xassembler ,$(ASFLAGS)) $(CPPFLAGS) $(TARGET_MACH) -c">
 				<include-if condition="spec.linux.*" />
+				<include-if condition="spec.osx_x86.*" />
 				<exclude-if condition="spec.flags.arch_power and not spec.flags.env_gcc or spec.flags.arch_s390" />
 			</makefilestub>
 
@@ -51,7 +45,7 @@
 
 			<!-- override makefile default rule for building .S files on zLinux 31 bit-->
 			<makefilestub data="sysv.o : ASFLAGS=-z noexecstack -mzarch -march=z9-109 -m31">
-				<include-if condition="spec.linux_390" />
+				<include-if condition="spec.linux_390.* and not spec.flags.J9VM_ENV_DATA64" />
 			</makefilestub>
 
 			<!-- Build .S files on AIX -->
@@ -79,6 +73,9 @@
 			<makefilestub data="FFI_TARGET_DIR := arm">
 				<include-if condition="spec.linux_arm.*" />
 			</makefilestub>
+			<makefilestub data="FFI_TARGET_DIR := aarch64">
+				<include-if condition="spec.linux_aarch64.*" />
+			</makefilestub>
 			<makefilestub data="FFI_TARGET_DIR := powerpc">
 				<include-if condition="spec.flags.arch_power" />
 			</makefilestub>
@@ -105,12 +102,21 @@
 				<include-if condition="spec.linux_arm.*" />
 			</makefilestub>
 
+			<makefilestub data="FFI_PRECONF_DIR := xr64">
+				<include-if condition="spec.linux_aarch64.*" />
+			</makefilestub>
+
 			<makefilestub data="FFI_PRECONF_DIR := mz31">
 				<include-if condition="spec.zos_390.* and not spec.flags.J9VM_ENV_DATA64" />
 			</makefilestub>
 			<makefilestub data="FFI_PRECONF_DIR := mz64">
 				<include-if condition="spec.zos_390.* and spec.flags.J9VM_ENV_DATA64" />
 			</makefilestub>
+
+			<makefilestub data="FFI_PRECONF_DIR := oa">
+				<include-if condition="spec.osx_x86.* and spec.flags.J9VM_ENV_DATA64" />
+			</makefilestub>
+
 
 			<makefilestub data="FFI_PRECONF_DIR := wa">
 				<include-if condition="spec.win_x86.* and spec.flags.J9VM_ENV_DATA64" />
@@ -196,9 +202,20 @@
 				<include-if condition="spec.linux_arm.*" />
 			</vpath>
 
+			<!-- vpaths for aarch64 -->
+			<vpath pattern="ffi.c" path="aarch64" augmentObjects="true" type="relativepath">
+				<include-if condition="spec.linux_aarch64.*" />
+			</vpath>
+			<vpath pattern="sysv.S" path="aarch64" augmentObjects="true" type="relativepath">
+				<include-if condition="spec.linux_aarch64.*" />
+			</vpath>
+
 			<!-- vpaths for x86 -->
 			<vpath pattern="ffi64.c" path="x86" augmentObjects="true" type="relativepath">
 				<include-if condition="spec.flags.arch_x86 and spec.flags.J9VM_ENV_DATA64" />
+			</vpath>
+			<vpath pattern="darwin64.S" path="x86" augmentObjects="true" type="relativepath">
+				<include-if condition="spec.osx_x86.* and spec.flags.J9VM_ENV_DATA64" />
 			</vpath>
 			<vpath pattern="unix64.S" path="x86" augmentObjects="true" type="relativepath">
 				<include-if condition="spec.linux_x86-64.*" />
@@ -208,6 +225,7 @@
 			</vpath>
 			<vpath pattern="sysv.S" path="x86" augmentObjects="true" type="relativepath">
 				<include-if condition="spec.linux_x86.*" />
+				<include-if condition="spec.osx_x86.*" />
 			</vpath>
 			<!-- Yes, we need to include this even on linux -->
 			<vpath pattern="win32.S" path="x86" augmentObjects="true" type="relativepath">

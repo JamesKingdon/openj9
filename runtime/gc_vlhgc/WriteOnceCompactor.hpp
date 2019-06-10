@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -69,7 +69,7 @@ private:
 	MM_MarkMap *_nextMarkMap;	/**< The next mark map which will be passed to the compactor (it uses it as temporary storage for fixup data) */
 
 public:
-	virtual UDATA getVMStateID() { return J9VMSTATE_GC_COMPACT; };
+	virtual UDATA getVMStateID() { return OMRVMSTATE_GC_COMPACT; };
 	
 	virtual void run(MM_EnvironmentBase *env);
 	virtual void setup(MM_EnvironmentBase *env);
@@ -119,7 +119,7 @@ private:
 	UDATA _threadsWaiting;	/**< The number of threads waiting for work on _workListMonitor */
 	bool _moveFinished;	/**< A flag set when all move work is done to allow all threads waiting for work to exit the monitor */
 	bool _rebuildFinished;	/**< A flag set when all mark map rebuilding work is done to allow all threads waiting for work to exit the monitor */
-	UDATA _lockCount; /**< Number of locks initialized for compact groups, based on NUMA. Stored for control to make sure that we dealocate same number that we allocated in initialize. */
+	UDATA _lockCount; /**< Number of locks initialized for compact groups, based on NUMA. Stored for control to make sure that we deallocate same number that we allocated in initialize. */
 
 	class MM_CompactGroupDestinations {
 		/* Fields */
@@ -175,7 +175,7 @@ private:
 	 * @note inlined in the implementation so this method MUST be private
 	 * @param env[in] A GC thread
 	 * @param objectPtr[in] The pointer to look up to see its new, forwarded, location
-	 * @param cache[in] The cache to use for fast resolve attmpets for objectPtr (may be NULL)
+	 * @param cache[in] The cache to use for fast resolve attempts for objectPtr (may be NULL)
 	 * @return The forwarded location of the given objectPtr
 	 */
 	J9Object *getForwardWrapper(MM_EnvironmentVLHGC *env, J9Object *objectPtr, J9MM_FixupCache *cache);
@@ -503,7 +503,7 @@ private:
 	 */
 	MMINLINE void addOwnableSynchronizerObjectInList(MM_EnvironmentVLHGC *env, J9Object *objectPtr)
 	{
-		/* if isObjectInOwnableSynchronizerList() return NULL, it means the object isn't in OwanbleSynchronizerList,
+		/* if isObjectInOwnableSynchronizerList() return NULL, it means the object isn't in OwnableSynchronizerList,
 		 * it could be the constructing object which would be added in the list after the construction finish later. ignore the object to avoid duplicated reference in the list. 
 		 */
 		if (NULL != _extensions->accessBarrier->isObjectInOwnableSynchronizerList(objectPtr)) {

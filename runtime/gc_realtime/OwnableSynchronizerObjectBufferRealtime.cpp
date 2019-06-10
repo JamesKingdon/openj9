@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -27,8 +26,9 @@
 
 #include "OwnableSynchronizerObjectBufferRealtime.hpp"
 
-#include "HeapRegionDescriptorRealtime.hpp"
 #include "OwnableSynchronizerObjectList.hpp"
+#include "RealtimeGC.hpp"
+#include "MetronomeDelegate.hpp"
 
 MM_OwnableSynchronizerObjectBufferRealtime::MM_OwnableSynchronizerObjectBufferRealtime(MM_GCExtensions *extensions, UDATA maxObjectCount)
 	: MM_OwnableSynchronizerObjectBuffer(extensions, maxObjectCount)
@@ -74,7 +74,7 @@ MM_OwnableSynchronizerObjectBufferRealtime::flushImpl(MM_EnvironmentBase* env)
 	MM_OwnableSynchronizerObjectList *ownableSynchronizerObjectList = &extensions->ownableSynchronizerObjectLists[_ownableSynchronizerObjectListIndex];
 	ownableSynchronizerObjectList->addAll(env, _head, _tail);
 	_ownableSynchronizerObjectListIndex += 1;
-	if (MM_HeapRegionDescriptorRealtime::getOwnableSynchronizerObjectListCount(env) == _ownableSynchronizerObjectListIndex) {
+	if (extensions->realtimeGC->getRealtimeDelegate()->getOwnableSynchronizerObjectListCount(env) == _ownableSynchronizerObjectListIndex) {
 		_ownableSynchronizerObjectListIndex = 0;
 	}
 }

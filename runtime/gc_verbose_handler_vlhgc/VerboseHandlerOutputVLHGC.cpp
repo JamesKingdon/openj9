@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "VerboseHandlerOutputVLHGC.hpp"
@@ -90,19 +90,12 @@ MM_VerboseHandlerOutputVLHGC::initialize(MM_EnvironmentBase *env, MM_VerboseMana
 
 	_mmHooks = J9_HOOK_INTERFACE(MM_GCExtensions::getExtensions(_extensions)->hookInterface);
 
-	if (initSuccess) {
-		if (!_outputLock.initialize(env, &MM_GCExtensions::getExtensions(env)->lnrlOptions, "MM_VerboseHandlerOutputVLHGC:_outputLock")) {
-			initSuccess = false;
-		}
-	}
-
 	return initSuccess;
 }
 
 void
 MM_VerboseHandlerOutputVLHGC::tearDown(MM_EnvironmentBase *env)
 {
-	_outputLock.tearDown();
 	MM_VerboseHandlerOutput::tearDown(env);
 }
 
@@ -400,13 +393,21 @@ MM_VerboseHandlerOutputVLHGC::handleCopyForwardEnd(J9HookInterface** hook, UDATA
 				copyForwardStats->_copyObjectsNonEden, copyForwardStats->_copyBytesNonEden, copyForwardStats->_copyDiscardBytesNonEden);
 	writer->formatAndOutput(env, 1, "<memory-cardclean objects=\"%zu\" bytes=\"%zu\" />",
 				copyForwardStats->_objectsCardClean, copyForwardStats->_bytesCardClean);
-	if(copyForwardStats->_aborted) {
+	if(copyForwardStats->_aborted || (0 != copyForwardStats->_nonEvacuateRegionCount)) {
 		writer->formatAndOutput(env, 1, "<memory-traced type=\"eden\" objects=\"%zu\" bytes=\"%zu\" />",
 					copyForwardStats->_scanObjectsEden, copyForwardStats->_scanBytesEden);
 		writer->formatAndOutput(env, 1, "<memory-traced type=\"other\" objects=\"%zu\" bytes=\"%zu\" />",
 					copyForwardStats->_scanObjectsNonEden, copyForwardStats->_scanBytesNonEden);
 	}
-
+	if (0 == copyForwardStats->_nonEvacuateRegionCount) {
+		writer->formatAndOutput(env, 1, "<regions eden=\"%zu\" other=\"%zu\" />",
+				copyForwardStats->_edenEvacuateRegionCount, copyForwardStats->_nonEdenEvacuateRegionCount);
+	} else {
+		writer->formatAndOutput(env, 1, "<regions eden=\"%zu\" other=\"%zu\" evacuated=\"%zu\" marked=\"%zu\" />",
+				copyForwardStats->_edenEvacuateRegionCount, copyForwardStats->_nonEdenEvacuateRegionCount,
+				(copyForwardStats->_edenEvacuateRegionCount + copyForwardStats->_nonEdenEvacuateRegionCount - copyForwardStats->_nonEvacuateRegionCount),
+				copyForwardStats->_nonEvacuateRegionCount);
+	}
 	outputRememberedSetClearedInfo(env, irrsStats);
 
 	outputUnfinalizedInfo(env, 1, copyForwardStats->_unfinalizedCandidates, copyForwardStats->_unfinalizedEnqueued);
@@ -426,6 +427,7 @@ MM_VerboseHandlerOutputVLHGC::handleCopyForwardEnd(J9HookInterface** hook, UDATA
 	if(copyForwardStats->_scanCacheOverflow) {
 		writer->formatAndOutput(env, 1, "<warning details=\"scan cache overflow (storage acquired from heap)\" />");
 	}
+
 	if(copyForwardStats->_aborted) {
 		writer->formatAndOutput(env, 1, "<warning details=\"operation aborted due to insufficient free space\" />");
 	}
@@ -741,20 +743,6 @@ MM_VerboseHandlerOutputVLHGC::getCycleType(UDATA type)
 
 	return cycleType;
 }
-
-void
-MM_VerboseHandlerOutputVLHGC::enterAtomicReportingBlock()
-{
-	_outputLock.acquire();
-}
-
-void
-MM_VerboseHandlerOutputVLHGC::exitAtomicReportingBlock()
-{
-	_outputLock.release();
-}
-
-
 
 void
 verboseHandlerTaxationEntryPoint(J9HookInterface** hook, UDATA eventNum, void* eventData, void* userData)

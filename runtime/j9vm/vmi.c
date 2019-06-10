@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2002, 2017 IBM Corp. and others
+ * Copyright (c) 2002, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -68,10 +68,18 @@ JVM_LatestUserDefinedLoader(JNIEnv *env)
 
 
 jobject JNICALL
+#if JAVA_SPEC_VERSION >= 11
+JVM_GetCallerClass(JNIEnv *env)
+#else /* JAVA_SPEC_VERSION >= 11 */
 JVM_GetCallerClass(JNIEnv *env, jint depth)
+#endif /* JAVA_SPEC_VERSION >= 11 */
 {
 	ENSURE_VMI();
+#if JAVA_SPEC_VERSION >= 11
+	return g_VMI->JVM_GetCallerClass(env);
+#else /* JAVA_SPEC_VERSION >= 11 */
 	return g_VMI->JVM_GetCallerClass(env, depth);
+#endif /* JAVA_SPEC_VERSION >= 11 */
 }
 
 
@@ -168,7 +176,7 @@ JVM_GetSystemPackages(JNIEnv* env)
  *
  * @return Package information as a string.
  *
- * @note In the current implementation, the spearator is not guaranteed to be '/', not is a directory guaranteed to be
+ * @note In the current implementation, the separator is not guaranteed to be '/', not is a directory guaranteed to be
  * terminated with a slash. It is also unclear what the expected implementation is for UNC paths.
  *
  * @note see CMVC defects 81175 and 92979

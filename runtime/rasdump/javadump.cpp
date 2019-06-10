@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2003, 2017 IBM Corp. and others
+ * Copyright (c) 2003, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /* Includes */
@@ -120,7 +120,7 @@ UDATA handlerIterateStackTrace      (struct J9PortLibrary *, U_32, void *, void 
 UDATA handlerWriteJavaLangThreadInfo(struct J9PortLibrary *, U_32, void *, void *);
 UDATA handlerWriteStacks            (struct J9PortLibrary *, U_32, void *, void *);
 
-/* associated structures for passing arguements are below the JavaCoreDumpWriter declaration */
+/* associated structures for passing arguments are below the JavaCoreDumpWriter declaration */
 }
 
 static IDATA vmthread_comparator(struct J9AVLTree *tree, struct J9AVLTreeNode *insertNode, struct J9AVLTreeNode *walkNode);
@@ -314,6 +314,9 @@ private :
 	IDATA       getOwnedObjectMonitors       (J9VMThread* vmThread, J9ObjectMonitorInfo* monitorInfos);
 	void 		writeJavaLangThreadInfo		 (J9VMThread* vmThread);
 	void		writeCPUinfo				 (void);
+#if defined(LINUX)
+	void 		writeCgroupMetrics(void);
+#endif
 	void 		writeThreadsWithNativeStacks(void);
 	void 		writeThreadsJavaOnly(void);
 	void        writeThreadTime              (const char * timerName, I_64 nanoTime);
@@ -969,6 +972,13 @@ JavaCoreDumpWriter::writeEnvironmentSection(void)
 	_OutputStream.writeCharacters(EsBuildVersionString);
 	_OutputStream.writeCharacters("\n");
 
+#if defined(OPENJ9_TAG)
+	/* Write the OpenJ9 tag when it has a value */
+	if (strlen(OPENJ9_TAG) > 0) {
+		_OutputStream.writeCharacters("1CIJ9VMTAG     " OPENJ9_TAG "\n");
+	}
+#endif
+
 	/* Write the VM version data */
 	_OutputStream.writeCharacters("1CIJ9VMVERSION ");
 	_OutputStream.writeCharacters(_VirtualMachine->internalVMFunctions->getJ9VMVersionString(_VirtualMachine));
@@ -998,6 +1008,11 @@ JavaCoreDumpWriter::writeEnvironmentSection(void)
 	/* Write the Vendor version data */
 	_OutputStream.writeCharacters("1CI" VENDOR_SHORT_NAME "VERSION  " VENDOR_SHA "\n");
 #endif /* VENDOR_SHORT_NAME && VENDOR_SHA */
+
+#if defined(OPENJDK_TAG) && defined(OPENJDK_SHA)
+	/* Write the JCL version data */
+	_OutputStream.writeCharacters("1CIJCLVERSION  " OPENJDK_SHA " based on " OPENJDK_TAG "\n");
+#endif
 
 #ifdef J9VM_INTERP_NATIVE_SUPPORT
 	_OutputStream.writeCharacters("1CIJITMODES    ");
@@ -1044,6 +1059,14 @@ JavaCoreDumpWriter::writeEnvironmentSection(void)
 	_OutputStream.writeCharacters("1CIVMIDLESTATE VM Idle State: ");
 	writeVMRuntimeState(_VirtualMachine->internalVMFunctions->getVMRuntimeState(_VirtualMachine));
 	_OutputStream.writeCharacters("\n");
+
+	OMRPORT_ACCESS_FROM_J9PORT(_PortLibrary);
+	BOOLEAN inContainer = omrsysinfo_is_running_in_container();
+	_OutputStream.writeCharacters("1CICONTINFO    Running in container : ");
+	_OutputStream.writeCharacters( inContainer ? "TRUE\n" : "FALSE\n");
+	uint64_t availableSubsystems = omrsysinfo_cgroup_get_enabled_subsystems();
+	_OutputStream.writeCharacters("1CICGRPINFO    JVM support for cgroups enabled : ");
+	_OutputStream.writeCharacters((availableSubsystems > 0) ? "TRUE\n" : "FALSE\n");
 
 	PORT_ACCESS_FROM_JAVAVM(_VirtualMachine);
 
@@ -1221,7 +1244,7 @@ JavaCoreDumpWriter::writeEnvironmentSection(void)
 			}
 		}
 	} else {
-		/* the iterator didn't initialise so no user limits to print */
+		/* the iterator didn't initialize so no user limits to print */
 		_OutputStream.writeCharacters("2CIULIMITERR   Not supported on this platform\n");
 	}
 
@@ -1323,6 +1346,11 @@ JavaCoreDumpWriter::writeEnvironmentSection(void)
 
 	/* Write section for entitled CPU information */
 	writeCPUinfo();
+
+#if defined(LINUX)
+	/* Write section for Cgroup Information */
+ 	writeCgroupMetrics();
+#endif
 
 	/* Write the section trailer */
 	_OutputStream.writeCharacters(
@@ -1720,7 +1748,7 @@ JavaCoreDumpWriter::writeMonitorSection(void)
 		UDATA stateFault = stateClean;
 
 		if (i == 0) {
-			// The walk may have started or restarted which is why initialisation is in the loop.
+			// The walk may have started or restarted which is why initialization is in the loop.
 			memset(threadStore, 0, (_AllocatedVMThreadCount+1) * sizeof(blocked_thread_record));
 		}
 
@@ -1825,6 +1853,7 @@ JavaCoreDumpWriter::writeThreadSection(void)
 	_OutputStream.writeInteger(_VirtualMachine->daemonThreadCount, "%i");
 	_OutputStream.writeCharacters("\n");
 
+#if !defined(OSX)
 	/* if thread preempt is enabled, and we have the lock, then collect the native stacks */
 	if ((_Agent->requestMask & J9RAS_DUMP_DO_PREEMPT_THREADS) && _PreemptLocked
 #if defined(WIN32)
@@ -1833,7 +1862,7 @@ JavaCoreDumpWriter::writeThreadSection(void)
 		 */
 		&& !(_Context->eventFlags & J9RAS_DUMP_ON_THREAD_START)
 		&& !(_Context->eventFlags & J9RAS_DUMP_ON_THREAD_END)
-#endif
+#endif /* defined(WIN32) */
 	) {
 		struct walkClosure closure;
 		UDATA sink = 0;
@@ -1844,6 +1873,7 @@ JavaCoreDumpWriter::writeThreadSection(void)
 				J9PORT_SIG_FLAG_SIGALLSYNC|J9PORT_SIG_FLAG_MAY_RETURN,
 				&sink);
 	}
+#endif /* !defined(OSX) */
 
 	if( !_ThreadsWalkStarted ) {
 		struct walkClosure closure;
@@ -2896,6 +2926,11 @@ JavaCoreDumpWriter::writeSharedClassSection(void)
 		_OutputStream.writeInteger(javacoreData.cacheSize, "%zu");
 
 		_OutputStream.writeCharacters(
+			"\n2SCLTEXTSMB        Softmx bytes                              = "
+		);
+		_OutputStream.writeInteger(javacoreData.softMaxBytes, "%zu");
+
+		_OutputStream.writeCharacters(
 			"\n2SCLTEXTFRB        Free bytes                                = "
 		);
 		_OutputStream.writeInteger(javacoreData.freeBytes, "%zu");
@@ -2964,6 +2999,11 @@ JavaCoreDumpWriter::writeSharedClassSection(void)
 			"\n2SCLTEXTZCB        Zip cache bytes                           = "
 		);
 		_OutputStream.writeInteger(javacoreData.zipCacheDataBytes, "%zu");
+		
+		_OutputStream.writeCharacters(
+			"\n2SCLTEXTSHB        Startup hint bytes                        = "
+		);
+		_OutputStream.writeInteger(javacoreData.startupHintBytes, "%zu");
 
 		_OutputStream.writeCharacters(
 			"\n2SCLTEXTRWB        ReadWrite bytes                           = "
@@ -3080,6 +3120,11 @@ JavaCoreDumpWriter::writeSharedClassSection(void)
 		_OutputStream.writeInteger(javacoreData.numZipCaches, "%zu");
 
 		_OutputStream.writeCharacters(
+			"\n2SCLTEXTNSH        Number Startup Hint Entries               = "
+		);
+		_OutputStream.writeInteger(javacoreData.numStartupHints, "%zu");
+
+		_OutputStream.writeCharacters(
 			"\n2SCLTEXTNJC        Number JCL Entries                        = "
 		);
 		_OutputStream.writeInteger(javacoreData.numJclEntries, "%zu");
@@ -3100,7 +3145,12 @@ JavaCoreDumpWriter::writeSharedClassSection(void)
 			"2SCLTEXTCPF        Cache is "
 		);
 		_OutputStream.writeInteger(javacoreData.percFull, "%zu");
-		_OutputStream.writeCharacters("% full\n");
+		
+		if (javacoreData.softMaxBytes == javacoreData.cacheSize) {
+			_OutputStream.writeCharacters("% full\n");
+		} else {
+			_OutputStream.writeCharacters("% soft full\n");
+		}
 
 		_OutputStream.writeCharacters(
 				"NULL\n"
@@ -3213,22 +3263,11 @@ JavaCoreDumpWriter::writeExceptionDetail(j9object_t* exceptionRef)
 
 	if (exceptionRef && *exceptionRef) {
 		j9object_t message = J9VMJAVALANGTHROWABLE_DETAILMESSAGE(vmThread, *exceptionRef);
-		if (message) {
-			/* length is in jchars. 3x is enough for worst case UTF8 encoding */
-			len = J9VMJAVALANGSTRING_LENGTH(vmThread, message) * 3;
-			if (len > sizeof(stackBuffer)) {
-				buf = (char *)j9mem_allocate_memory(len, OMRMEM_CATEGORY_VM);
-			}
-
-			if (buf) {
-				len = _VirtualMachine->internalVMFunctions->copyStringToUTF8Helper(vmThread, message, FALSE, J9_STR_NONE, (U_8*)buf, len);
-			} else {
-				buf = stackBuffer;
-				len = 0;
-			}
+		if (NULL != message) {
+			buf = _VirtualMachine->internalVMFunctions->copyStringToUTF8WithMemAlloc(vmThread, message, J9_STR_NULL_TERMINATE_RESULT, "", 0, stackBuffer, _MaximumExceptionNameLength, &len);
 		}
 
-		if (len) {
+		if (0 != len) {
 			_OutputStream.writeCharacters(" \"");
 			_OutputStream.writeCharacters(buf, len);
 			_OutputStream.writeCharacters("\"");
@@ -3242,14 +3281,19 @@ JavaCoreDumpWriter::writeExceptionDetail(j9object_t* exceptionRef)
 		eiieClass = _VirtualMachine->internalVMFunctions->internalFindKnownClass(vmThread, J9VMCONSTANTPOOL_JAVALANGEXCEPTIONININITIALIZERERROR, J9_FINDKNOWNCLASS_FLAG_EXISTING_ONLY);
 
 		if (J9OBJECT_CLAZZ(vmThread, *exceptionRef) == eiieClass) {
+			char detailMessageStackBuffer[_MaximumExceptionNameLength];
 			char*                  nestedBuf = NULL;
-			IDATA                  nestedLen = 0;
+			UDATA                  nestedLen = 0;
 			j9object_t             nestedException = NULL;
 			J9UTF8*                nestedExceptionClassName = NULL;
 
+#if JAVA_SPEC_VERSION >= 12
+			nestedException = J9VMJAVALANGTHROWABLE_CAUSE(vmThread, *exceptionRef);
+#else
 			nestedException = J9VMJAVALANGEXCEPTIONININITIALIZERERROR_EXCEPTION(vmThread, *exceptionRef);
+#endif /* JAVA_SPEC_VERSION */
 
-			if (nestedException){
+			if (nestedException) {
 				nestedExceptionClassName = J9ROMCLASS_CLASSNAME(J9OBJECT_CLAZZ(vmThread, nestedException)->romClass);
 				if (nestedExceptionClassName) {
 					_OutputStream.writeCharacters(" Nested Exception: \"");
@@ -3258,15 +3302,18 @@ JavaCoreDumpWriter::writeExceptionDetail(j9object_t* exceptionRef)
 				}
 
 				message = J9VMJAVALANGTHROWABLE_DETAILMESSAGE(vmThread, nestedException);
-				/* length is in jchars. 3x is enough for worst case UTF8 encoding */
-				nestedLen = J9VMJAVALANGSTRING_LENGTH(vmThread, message) * 3;
-				nestedBuf = (char *)j9mem_allocate_memory(nestedLen, OMRMEM_CATEGORY_VM);
-				if (nestedBuf) {
-					nestedLen = _VirtualMachine->internalVMFunctions->copyStringToUTF8Helper(vmThread, message, FALSE, J9_STR_NONE, (U_8*)nestedBuf, nestedLen);
+				if (NULL != message) {
+					nestedBuf = _VirtualMachine->internalVMFunctions->copyStringToUTF8WithMemAlloc(vmThread, message, J9_STR_NULL_TERMINATE_RESULT, "", 0, detailMessageStackBuffer, _MaximumExceptionNameLength, &nestedLen);
+				}
+				
+				if (0 != nestedLen) {
 					_OutputStream.writeCharacters(" Detail:  \"");
 					_OutputStream.writeCharacters(nestedBuf, nestedLen);
 					_OutputStream.writeCharacters("\"");
-					j9mem_free_memory( nestedBuf );
+				}
+
+				if (nestedBuf != detailMessageStackBuffer) {
+					j9mem_free_memory(nestedBuf);
 				}
 			}
 		}	
@@ -4046,7 +4093,7 @@ JavaCoreDumpWriter::writeThread(J9VMThread* vmThread, J9PlatformThread *nativeTh
 	PORT_ACCESS_FROM_PORT(_PortLibrary);
 	J9AbstractThread* osThread =  NULL;
 
-	/* Extract the corrseponding OS thread */
+	/* Extract the corresponding OS thread */
 	if (vmThread != NULL) {
 		osThread = (J9AbstractThread*)vmThread->osThread;
 
@@ -5103,6 +5150,9 @@ JavaCoreDumpWriter::writeCPUinfo(void)
 {
 	PORT_ACCESS_FROM_PORT(_PortLibrary);
 
+	UDATA bound = j9sysinfo_get_number_CPUs_by_type(J9PORT_CPU_BOUND);
+	UDATA target = j9sysinfo_get_number_CPUs_by_type(J9PORT_CPU_TARGET);
+
 	_OutputStream.writeCharacters(
 			"NULL           \n");
 	_OutputStream.writeCharacters(
@@ -5115,13 +5165,79 @@ JavaCoreDumpWriter::writeCPUinfo(void)
 	_OutputStream.writeInteger(j9sysinfo_get_number_CPUs_by_type(J9PORT_CPU_ONLINE), "%i\n");
 	_OutputStream.writeCharacters(
 			"2CIBOUNDCPU    Bound CPUs: ");
-	_OutputStream.writeInteger(j9sysinfo_get_number_CPUs_by_type(J9PORT_CPU_BOUND), "%i\n");
+	_OutputStream.writeInteger(bound, "%i\n");
+	_OutputStream.writeCharacters(
+			"2CIACTIVECPU   Active CPUs: ");
+	if (bound != target) {
+		_OutputStream.writeInteger(target, "%i\n");
+	} else {
+		/* target is not being overridden by active CPUs, so print 0 */
+		_OutputStream.writeCharacters("0\n");
+	}
 	_OutputStream.writeCharacters(
 			"2CITARGETCPU   Target CPUs: ");
-	_OutputStream.writeInteger(j9sysinfo_get_number_CPUs_by_type(J9PORT_CPU_TARGET), "%i\n");
+	_OutputStream.writeInteger(target, "%i\n");
 
 	return;
 }
+
+#if defined(LINUX)
+void
+JavaCoreDumpWriter::writeCgroupMetrics(void)
+{
+	OMRPORT_ACCESS_FROM_J9PORT(_PortLibrary);
+	BOOLEAN isCgroupSystemAvailable = omrsysinfo_cgroup_is_system_available();
+	if (isCgroupSystemAvailable) {
+		const OMRCgroupEntry *entryHead = omrsysinfo_get_cgroup_subsystem_list();
+		OMRCgroupEntry *cgEntry = (OMRCgroupEntry *)entryHead;
+		int32_t rc = 0;
+		if (NULL != cgEntry) {
+			_OutputStream.writeCharacters("NULL \n");
+			_OutputStream.writeCharacters("1CICGRPINFO    Cgroup Information \n");
+			_OutputStream.writeCharacters("NULL           ------------------------------------------------------------------------\n");
+			do {
+				_OutputStream.writeCharacters("2CICGRPINFO    subsystem : ");
+				_OutputStream.writeCharacters(cgEntry->subsystem);
+				_OutputStream.writeCharacters("\n");
+				_OutputStream.writeCharacters("2CICGRPINFO    cgroup name : ");
+				_OutputStream.writeCharacters(cgEntry->cgroup);
+				_OutputStream.writeCharacters("\n");
+				OMRCgroupMetricIteratorState cgroupState = {0};
+				rc = omrsysinfo_cgroup_subsystem_iterator_init(cgEntry->flag, &cgroupState);
+				if (0 == rc) {
+					if (0 != cgroupState.numElements) {
+						OMRCgroupMetricElement metricElement = {0};
+						while (0 != omrsysinfo_cgroup_subsystem_iterator_hasNext(&cgroupState)) {
+							const char *metricKey = NULL;
+							rc = omrsysinfo_cgroup_subsystem_iterator_metricKey(&cgroupState, &metricKey);
+							if (0 == rc) {
+								rc = omrsysinfo_cgroup_subsystem_iterator_next(&cgroupState, &metricElement);
+								if (rc == 0) {
+									_OutputStream.writeCharacters("3CICGRPINFO        ");
+									_OutputStream.writeCharacters(metricKey);
+									_OutputStream.writeCharacters(" : ");
+									_OutputStream.writeCharacters(metricElement.value);
+									if (NULL != metricElement.units) {
+										_OutputStream.writeCharacters(" ");
+										_OutputStream.writeCharacters(metricElement.units);
+									}
+									_OutputStream.writeCharacters("\n");
+								} else {
+									_OutputStream.writeCharacters("3CICGRPINFO        ");
+									_OutputStream.writeCharacters(metricKey);
+									_OutputStream.writeCharacters(" : Unavailable\n");
+								}
+							}
+						}
+					}
+					omrsysinfo_cgroup_subsystem_iterator_destroy(&cgroupState);
+				}
+				cgEntry = cgEntry->next;
+			} while (cgEntry != entryHead);
+		}
+	}
+}
+#endif
 
 /**************************************************************************************************/
 /*                                                                                                */

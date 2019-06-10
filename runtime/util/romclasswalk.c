@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9consts.h"
@@ -137,7 +137,7 @@ void allSlotsInROMClassDo(J9ROMClass* romClass,
 	SLOT_CALLBACK(romClass, J9ROM_U32,  romClass, innerClassCount);
 	SLOT_CALLBACK(romClass, J9ROM_SRP,  romClass, innerClasses);
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
-	SLOT_CALLBACK(romClass, J9ROM_SRP,  romClass, memberOfNest);
+	SLOT_CALLBACK(romClass, J9ROM_SRP,  romClass, nestHost);
 	SLOT_CALLBACK(romClass, J9ROM_U16,  romClass, nestMemberCount);
 	SLOT_CALLBACK(romClass, J9ROM_U16,  romClass, unused);
 	SLOT_CALLBACK(romClass, J9ROM_SRP,  romClass, nestMembers);
@@ -164,7 +164,7 @@ void allSlotsInROMClassDo(J9ROMClass* romClass,
 		}
 	}
 
-	/* walk innner classes SRPs block */
+	/* walk inner classes SRPs block */
 	srpCursor = J9ROMCLASS_INNERCLASSES(romClass);
 	count = romClass->innerClassCount;
 	rangeValid = callbacks->validateRangeCallback(romClass, srpCursor, count * sizeof(J9SRP), userData);
@@ -609,7 +609,7 @@ static void allSlotsInCPShapeDescriptionDo(J9ROMClass* romClass, J9ROMClassWalkC
 	U_32 *cpShapeDescription = J9ROMCLASS_CPSHAPEDESCRIPTION(romClass);
 	BOOLEAN rangeValid;
 
-	count = (romClass->romConstantPoolCount + (sizeof(U_32) * 2) - 1) / (sizeof(U_32) * 2);
+	count = (romClass->romConstantPoolCount + J9_CP_DESCRIPTIONS_PER_U32 - 1) / J9_CP_DESCRIPTIONS_PER_U32;
 
 	rangeValid = callbacks->validateRangeCallback(romClass, cpShapeDescription, count * sizeof(U_32), userData);
 	if (rangeValid) {
@@ -673,6 +673,8 @@ static void allSlotsInConstantPoolDo(J9ROMClass* romClass, J9ROMClassWalkCallbac
 			case J9CPTYPE_INSTANCE_METHOD:
 			case J9CPTYPE_STATIC_METHOD:
 			case J9CPTYPE_INTERFACE_METHOD:
+			case J9CPTYPE_INTERFACE_INSTANCE_METHOD:
+			case J9CPTYPE_INTERFACE_STATIC_METHOD:
 				callbacks->slotCallback(romClass, J9ROM_NAS, &((J9ROMMethodRef *)&constantPool[index])->nameAndSignature, "cpFieldNAS", userData);
 				callbacks->slotCallback(romClass, J9ROM_U32, &((J9ROMMethodRef *)&constantPool[index])->classRefCPIndex, "cpFieldClassRef", userData);
 				break;

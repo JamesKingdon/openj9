@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2017 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
@@ -34,9 +34,6 @@
 #include "jni.h"
 #include "j9protos.h"
 #include "jvminit.h"
-/* Avoid renaming malloc/free */
-#define LAUNCHERS
-#include "../../j9vm/jvm.h"
 #include "jclprots.h"
 #include "omrlinkedlist.h"
 #include "ut_j9jcl.h"
@@ -46,18 +43,10 @@
 #include "sunvmi_api.h"
 #include "jcl_internal.h"
 
-#define OPT_XJCL_COLON "-Xjcl:"
-#define JAVA_ASSISTIVE_STR "JAVA_ASSISTIVE"
 #define JAVA_FONTS_STR "JAVA_FONTS"
 #define OFFLOAD_PREFIX "offload_"
 
-#if defined(J9VM_JCL_SE7_BASIC)
-#define J9_DLL_NAME J9_JAVA_SE_7_BASIC_DLL_NAME
-#elif defined(J9VM_JCL_SE9)
-#define J9_DLL_NAME J9_JAVA_SE_9_DLL_NAME
-#else
-#error Unknown J9VM_JCL_SE
-#endif
+#define J9_DLL_NAME J9_JAVA_SE_DLL_NAME
 
 /* this file is owned by the VM-team.  Please do not modify it without consulting the VM team */
 
@@ -71,7 +60,7 @@
 #define MAX_PROPSFILE_BOOTPATH_ENTRIES 64
 
 /* Reserved for entries added by addVMSpecificDirectories(). */
-#define NUM_RESERVED_BOOTPATH_ENTRIES 4
+#define NUM_RESERVED_BOOTPATH_ENTRIES 2
 
 /* Maximum entries on the bootpath. */
 #define MAX_BOOTPATH_ENTRIES (MAX_PROPSFILE_BOOTPATH_ENTRIES+NUM_RESERVED_BOOTPATH_ENTRIES)
@@ -96,6 +85,24 @@ char *iniBootpath = NULL;
 
 const U_64 jclConfig = J9CONST64(0x7363617237306200);		/* 'scar70b' */
 
+#if defined(WIN32)
+#define J9_AWTPRINTERJOB_VALUE	"sun.awt.windows.WPrinterJob"
+#define J9_AWTTOOLKIT_VALUE	"sun.awt.windows.WToolkit"
+#define J9_AWTGRAPHICSENV_VALUE	"sun.awt.Win32GraphicsEnvironment"
+#elif defined(OSX) /* WIN32 */
+#define J9_AWTPRINTERJOB_VALUE	"sun.lwawt.macosx.CPrinterJob"
+#define J9_AWTTOOLKIT_VALUE	"sun.lwawt.macosx.LWCToolkit"
+#define J9_AWTGRAPHICSENV_VALUE	"sun.awt.CGraphicsEnvironment"
+#else /* OSX */
+/* defined(J9VM_UNIX) */
+#define J9_AWTPRINTERJOB_VALUE	"sun.print.PSPrinterJob"
+#define J9_AWTGRAPHICSENV_VALUE	"sun.awt.X11GraphicsEnvironment"
+#if defined(J9ZTPF)
+#define J9_AWTTOOLKIT_VALUE	"sun.awt.HToolkit"
+#else /* defined(J9ZTPF) */
+#define J9_AWTTOOLKIT_VALUE	"sun.awt.X11.XToolkit"
+#endif /* defined(J9ZTPF) */
+#endif /* WIN32 */
 
 jint scarInit(J9JavaVM *vm);
 jint scarPreconfigure(J9JavaVM *vm);
@@ -136,43 +143,36 @@ addBFUSystemProperties(J9JavaVM* javaVM)
 	}
 	
 #ifdef WIN32
-	if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "java.awt.graphicsenv", NULL)) {
-		rc = vmfunc->addSystemProperty(javaVM, "java.awt.graphicsenv", "sun.awt.Win32GraphicsEnvironment", 0);
-		if (J9SYSPROP_ERROR_NONE != rc) {
-			return rc;
-		}
-	}
-
 	if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "java.awt.fonts", NULL)) {
 		rc = vmfunc->addSystemProperty(javaVM, "java.awt.fonts", fontPathBuffer, 0);
 		if (J9SYSPROP_ERROR_NONE != rc) {
 			return rc;
 		}
 	}
-
-	if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "awt.toolkit", NULL)) {
-		rc = vmfunc->addSystemProperty(javaVM, "awt.toolkit", "sun.awt.windows.WToolkit", 0);
-		if (J9SYSPROP_ERROR_NONE != rc) {
-			return rc;
-		}
-	}
-
-	if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "java.awt.printerjob", NULL)) {
-		rc = vmfunc->addSystemProperty(javaVM, "java.awt.printerjob", "sun.awt.windows.WPrinterJob", 0);
-		if (J9SYSPROP_ERROR_NONE != rc) {
-			return rc;
-		}
-	}
 #endif /* WIN32 */
 
-#ifdef J9VM_UNIX
 	if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "java.awt.graphicsenv", NULL)) {
-		rc = vmfunc->addSystemProperty(javaVM, "java.awt.graphicsenv", "sun.awt.X11GraphicsEnvironment", 0);
+		rc = vmfunc->addSystemProperty(javaVM, "java.awt.graphicsenv", J9_AWTGRAPHICSENV_VALUE, 0);
 		if (J9SYSPROP_ERROR_NONE != rc) {
 			return rc;
 		}
 	}
 
+	if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "awt.toolkit", NULL)) {
+		rc = vmfunc->addSystemProperty(javaVM, "awt.toolkit", J9_AWTTOOLKIT_VALUE, 0);
+		if (J9SYSPROP_ERROR_NONE != rc) {
+			return rc;
+		}
+	}
+	
+	if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "java.awt.printerjob", NULL)) {
+		rc = vmfunc->addSystemProperty(javaVM, "java.awt.printerjob", J9_AWTPRINTERJOB_VALUE, 0);
+		if (J9SYSPROP_ERROR_NONE != rc) {
+			return rc;
+		}
+	}
+
+#ifdef J9VM_UNIX
 	if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "java.awt.fonts", NULL)) {
 		rc = vmfunc->addSystemProperty(javaVM, "java.awt.fonts", "", 0);
 		if (J9SYSPROP_ERROR_NONE != rc) {
@@ -189,29 +189,6 @@ addBFUSystemProperties(J9JavaVM* javaVM)
 	}
 #endif
 
-	if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "awt.toolkit", NULL)) {
-#if defined(J9ZTPF)
-		rc = vmfunc->addSystemProperty(javaVM, "awt.toolkit", "sun.awt.HToolkit", 0);
-#else /* defined(J9ZTPF) */
-		rc = vmfunc->addSystemProperty(javaVM, "awt.toolkit", "sun.awt.X11.XToolkit", 0);
-#endif /* defined(J9ZTPF) */
-		if (J9SYSPROP_ERROR_NONE != rc) {
-			return rc;
-		}
-	}
-
-	if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "java.awt.printerjob", NULL)) {
-		rc = vmfunc->addSystemProperty(javaVM, "java.awt.printerjob", "sun.print.PSPrinterJob", 0);
-		if (J9SYSPROP_ERROR_NONE != rc) {
-			return rc;
-		}
-	}
-	if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "java.util.prefs.PreferencesFactory", NULL)) {
-		rc = vmfunc->addSystemProperty(javaVM, "java.util.prefs.PreferencesFactory", "java.util.prefs.FileSystemPreferencesFactory", 0);
-		if (J9SYSPROP_ERROR_NONE != rc) {
-			return rc;
-		}
-	}
 	if (fontPathSize >= 0) {
 		if (J9SYSPROP_ERROR_NOT_FOUND == vmfunc->getSystemProperty(javaVM, "sun.java2d.fontpath", NULL)) {
 			rc = vmfunc->addSystemProperty(javaVM, "sun.java2d.fontpath", fontPathBuffer, 0);
@@ -276,16 +253,16 @@ jint
 scarInit(J9JavaVM * vm)
 {
 	J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
-	UDATA handle;
-	jint result;
+	UDATA handle = 0;
+	jint result = 0;
 #if defined(WIN32)
 	char *dbgwrapperStr = NULL;
 	UDATA jclVersion = J2SE_VERSION(vm) & J2SE_VERSION_MASK;
 #endif
 
 	/* We need to overlay java.dll functions */
-	result = (jint)vmFuncs->registerBootstrapLibrary( vm->mainThread, J9_DLL_NAME, (J9NativeLibrary**)&handle, FALSE);
-	if( result != 0 ) {
+	result = (jint)vmFuncs->registerBootstrapLibrary(vm->mainThread, J9_DLL_NAME, (J9NativeLibrary **)&handle, FALSE);
+	if (0 != result) {
 		return result;
 	}
 	((J9NativeLibrary*)handle)->flags |= J9NATIVELIB_FLAG_ALLOW_INL;
@@ -300,11 +277,7 @@ scarInit(J9JavaVM * vm)
 
 #if defined(WIN32) && !defined(OPENJ9_BUILD)
 	switch (jclVersion) {
-	case J2SE_17:
-		dbgwrapperStr = "dbgwrapper70";
-		break;
 	case J2SE_18:
-	case J2SE_19:	/* This will need to be modified when the JCL team provides a dbgwrapper90 */
 		dbgwrapperStr = "dbgwrapper80";
 		break;
 	default:
@@ -319,7 +292,6 @@ scarInit(J9JavaVM * vm)
 		j9nls_printf(PORTLIB, J9NLS_WARNING, J9NLS_JCL_WARNING_DLL_COULDNOT_BE_REGISTERED_AS_BOOTSTRAP_LIB, dbgwrapperStr, result);
 	}
 #endif /* defined(WIN32) && !defined(OPENJ9_BUILD) */
-
 	
 #if defined(J9VM_INTERP_MINIMAL_JCL)
 	result = standardInit(vm, J9_DLL_NAME);
@@ -387,7 +359,7 @@ J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved)
 			break;
 
 		case ALL_VM_ARGS_CONSUMED :
-			FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, OPT_XJCL_COLON, NULL);
+			FIND_AND_CONSUME_ARG(STARTSWITH_MATCH, VMOPT_XJCL_COLON, NULL);
 			break;
 
 		case JCL_INITIALIZED :
@@ -457,7 +429,7 @@ J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved)
 static void
 setFatalErrorStringInDLLTableEntry(J9JavaVM* vm, char *errorString)
 {
-	J9VMDllLoadInfo* loadInfo = FIND_DLL_TABLE_ENTRY( J9_DLL_NAME );
+	J9VMDllLoadInfo *loadInfo = FIND_DLL_TABLE_ENTRY(J9_DLL_NAME);
 	if (NULL != loadInfo) {
 		loadInfo->fatalErrorStr = errorString;
 	}
@@ -475,7 +447,7 @@ scarPreconfigure(J9JavaVM * vm)
 		return JNI_ERR;
 	}
 
-	if (J2SE_VERSION(vm) < J2SE_19) {
+	if (J2SE_VERSION(vm) < J2SE_V11) {
 		char *vmSpecificDirectoryPath = "jclSC180";
 
 		rc = addVMSpecificDirectories(vm, &i, vmSpecificDirectoryPath);
@@ -485,7 +457,7 @@ scarPreconfigure(J9JavaVM * vm)
 
 		rc = loadClasslibPropertiesFile(vm, &i);
 		if (rc <= 0) {
-			/* loadClasslibPropertiesFile can't find any bootpath from classlib.properties, bail. */
+			/* loadClasslibPropertiesFile can't find any bootpath from classlib.properties, fail. */
 			goto error;
 		}
 
@@ -653,27 +625,6 @@ addVMSpecificDirectories(J9JavaVM *vm, UDATA *cursor, char * subdirName)
 		strcat(serviceJarPath, SE_SERVICE_JAR);
 		jclBootstrapClassPath[(*cursor)++] = serviceJarPath;
 	}
-
-#if defined(J9VM_OPT_CUDA)
-#define CUDA4J_JAR "cuda4j.jar"
-	if (NULL != vm->j2seRootDirectory) {
-		/* Format: '!' + vm->javaHome + '/' + 'lib' + '/' + 'cuda4j.jar' + NUL-terminator */
-		int cuda4jPathLength = 1 + javaHomePathLength + 1 + LITERAL_STRLEN("lib") + 1 + LITERAL_STRLEN(CUDA4J_JAR) + 1;
-		char * cuda4jJarPath = j9mem_allocate_memory(cuda4jPathLength, J9MEM_CATEGORY_VM_JCL);
-		if (NULL == cuda4jJarPath) {
-			setFatalErrorStringInDLLTableEntry(vm, "failed to allocate memory for cuda4j jar path");
-			return JNI_ENOMEM;
-		}
-		strcpy(cuda4jJarPath, "!");
-		strcat(cuda4jJarPath, (char*)vm->javaHome);
-		strcat(cuda4jJarPath, DIR_SEPARATOR_STR);
-		strcat(cuda4jJarPath, "lib");
-		strcat(cuda4jJarPath, DIR_SEPARATOR_STR);
-		strcat(cuda4jJarPath, CUDA4J_JAR);
-		jclBootstrapClassPath[(*cursor)++] = cuda4jJarPath;
-	}
-#undef CUDA4J_JAR
-#endif /* J9VM_OPT_CUDA */
 
 	return 0;
 }

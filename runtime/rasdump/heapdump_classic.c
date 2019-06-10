@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "dmpsup.h"
@@ -289,8 +289,8 @@ writeClasses(J9RASHeapdumpContext *ctx)
 	
 	while (clazz) {
 		/* Ignore redefined and dying classes */
-		if (!(J9CLASS_FLAGS(clazz) & J9_JAVA_CLASS_HOT_SWAPPED_OUT)
-		 && !(J9CLASS_FLAGS(clazz) & J9_JAVA_CLASS_DYING)) {
+		if (!(J9CLASS_FLAGS(clazz) & J9AccClassHotSwappedOut)
+		 && !(J9CLASS_FLAGS(clazz) & J9AccClassDying)) {
 			j9object_t currentObject = J9VM_J9CLASS_TO_HEAPCLASS(clazz);
 			
 			if (J9VM_IS_INITIALIZED_HEAPCLASS_VM(vm, currentObject)) {

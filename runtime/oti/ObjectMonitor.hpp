@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if !defined(OBJECTMONITOR_HPP_)
@@ -216,11 +216,11 @@ done:
 	static VMINLINE j9objectmonitor_t
 	compareAndSwapLockword(j9objectmonitor_t volatile *lockEA, j9objectmonitor_t oldValue, j9objectmonitor_t newValue, bool readBeforeCAS = false)
 	{
-#if defined(J9VM_INTERP_SMALL_MONITOR_SLOT)
+#if defined(OMR_GC_COMPRESSED_POINTERS)
 		j9objectmonitor_t contents = VM_AtomicSupport::lockCompareExchangeU32(lockEA, oldValue, newValue, readBeforeCAS);
-#else /* J9VM_INTERP_SMALL_MONITOR_SLOT */
+#else /* OMR_GC_COMPRESSED_POINTERS */
 		j9objectmonitor_t contents = VM_AtomicSupport::lockCompareExchange(lockEA, oldValue, newValue, readBeforeCAS);
-#endif /* J9VM_INTERP_SMALL_MONITOR_SLOT */
+#endif /* OMR_GC_COMPRESSED_POINTERS */
 		return contents;
 	}
 
@@ -230,14 +230,22 @@ done:
 	 * @param currentThread[in] the current J9VMThread
 	 * @param lockEA[in] the location of the lockword
 	 * @param readBeforeCAS[in] Controls whether a pre-read occurs before the CAS attempt (default false)
+	 * @param lock[in] the value expected in lockEA when uncontended - either 0 or OBJECT_HEADER_LOCK_RESERVED
 	 *
 	 * @returns	true if the lock was acquired, false if not
 	 */
 	static VMINLINE bool
-	inlineFastInitAndEnterMonitor(J9VMThread *currentThread, j9objectmonitor_t volatile *lockEA, bool readBeforeCAS = false)
+	inlineFastInitAndEnterMonitor(J9VMThread *currentThread, j9objectmonitor_t volatile *lockEA, bool readBeforeCAS = false, j9objectmonitor_t lock = 0)
 	{
 		bool locked = false;
-		if (0 == compareAndSwapLockword(lockEA, 0, (j9objectmonitor_t)(UDATA)currentThread, readBeforeCAS)) {
+		j9objectmonitor_t mine = (j9objectmonitor_t)(UDATA)currentThread;
+		if (0 != lock) {
+			/* Monitor is reservable. Make a reservation to give long-lived
+			 * objects a chance even if first locked in the interpreter
+			 */
+			mine |= (lock | OBJECT_HEADER_LOCK_FIRST_RECURSION_BIT);
+		}
+		if (lock == compareAndSwapLockword(lockEA, lock, mine, readBeforeCAS)) {
 			VM_AtomicSupport::monitorEnterBarrier();
 			locked = true;
 		}
@@ -384,7 +392,7 @@ done:
 	 *
 	 * @param currentThread[in] the current J9VMThread
 	 * @param object[in] the object whose monitor was just entered
-	 * @param arg0EA[in] the curent arg0EA
+	 * @param arg0EA[in] the current arg0EA
 	 *
 	 * @returns	true on success, false if out of memory
 	 */
@@ -418,7 +426,7 @@ done:
 	 * record for the object is found, nothing happens.
 	 *
 	 * @param currentThread[in] the current J9VMThread
-	 * @param object[in] the object whose monitor was just exitted
+	 * @param object[in] the object whose monitor was just exited
 	 * @param recordList[in/out] pointer to the head of the monitor enter record list to update
 	 */
 	static VMINLINE void
@@ -451,7 +459,7 @@ done:
 	 * record for the object is found, nothing happens.
 	 *
 	 * @param currentThread[in] the current J9VMThread
-	 * @param object[in] the object whose monitor was just exitted
+	 * @param object[in] the object whose monitor was just exited
 	 */
 	static VMINLINE void
 	recordBytecodeMonitorExit(J9VMThread *currentThread, j9object_t object)
@@ -468,7 +476,7 @@ done:
 	 * record for the object is found, nothing happens.
 	 *
 	 * @param currentThread[in] the current J9VMThread
-	 * @param object[in] the object whose monitor was just exitted
+	 * @param object[in] the object whose monitor was just exited
 	 */
 	static VMINLINE void
 	recordJNIMonitorExit(J9VMThread *currentThread, j9object_t object)

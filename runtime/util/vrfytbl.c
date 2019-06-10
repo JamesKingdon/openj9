@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -226,43 +226,30 @@ const U_16 J9JavaBytecodeVerificationTable[] = {
 		0x0E85 /* JBgotow - 200 */,
 		0x1700 /* JBunimplemented - 201 */,
 		0x1700 /* JBbreakpoint - 202 */,
-		0x1401 /* JBiloadw - 203 */,
-		0x1404 /* JBlloadw - 204 */,
-		0x1402 /* JBfloadw - 205 */,
-		0x1403 /* JBdloadw - 206 */,
-		0x1407 /* JBaloadw - 207 */,
-		0x1501 /* JBistorew - 208 */,
-		0x1504 /* JBlstorew - 209 */,
-		0x1502 /* JBfstorew - 210 */,
-		0x1503 /* JBdstorew - 211 */,
-		0x1507 /* JBastorew - 212 */,
+		0x1200 /* JBdefaultvalue = 203 */,
+		0x1000 /* JBwithfield = 204 */,
+		0x1700 /* JBunimplemented - 205 */,
+		0x1700 /* JBunimplemented - 206 */,
+		0x1700 /* JBunimplemented - 207 */,
+		0x1700 /* JBunimplemented - 208 */,
+		0x1700 /* JBunimplemented - 209 */,
+		0x1700 /* JBunimplemented - 210 */,
+		0x1700 /* JBunimplemented - 211 */,
+		0x1700 /* JBunimplemented - 212 */,
 		0x0800 /* JBiincw - 213 */,
 		0x1700 /* JBunimplemented - 214 */,
 		0x0487 /* JBaload0getfield - 215 */,
 		0x1200 /* JBnewdup - 216 */,
-#if defined(J9_VALHALLA_MVT)
-		0x0000 /* JBvload = 217 */ ,
-		0x0000 /* JBvstore = 218 */ ,
-		0x0000 /* JBvreturn = 219 */ ,
-		0x0000 /* JBvbox = 220 */ ,
-		0x0000 /* JBvunbox = 221 */ ,
-		0x0000 /* JBvaload = 222 */ ,
-		0x0000 /* JBvastore = 223 */ ,
-		0x0000 /* JBvdefault = 224 */ ,
-		0x0000 /* JBvgetfield = 225 */ ,
-		0x0000 /* JBvwithfield = 226 */ ,
-#else /* defined(J9_VALHALLA_MVT) */
-		0x1700 /* JBunimplemented - 217 */,
-		0x1700 /* JBunimplemented - 218 */,
-		0x1700 /* JBunimplemented - 219 */,
-		0x1700 /* JBunimplemented - 220 */,
-		0x1700 /* JBunimplemented - 221 */,
-		0x1700 /* JBunimplemented - 222 */,
-		0x1700 /* JBunimplemented - 223 */,
-		0x1700 /* JBunimplemented - 224 */,
-		0x1700 /* JBunimplemented - 225 */,
-		0x1700 /* JBunimplemented - 226 */,
-#endif /* defined(J9_VALHALLA_MVT) */
+		0x1401 /* JBiloadw - 217 */,
+		0x1404 /* JBlloadw - 218 */,
+		0x1402 /* JBfloadw - 219 */,
+		0x1403 /* JBdloadw - 220 */,
+		0x1407 /* JBaloadw - 221 */,
+		0x1501 /* JBistorew - 222 */,
+		0x1504 /* JBlstorew - 223 */,
+		0x1502 /* JBfstorew - 224 */,
+		0x1503 /* JBdstorew - 225 */,
+		0x1507 /* JBastorew - 226 */,
 		0x1700 /* JBunimplemented - 227 */,
 		0x0F00 /* JBreturnFromConstructor - 228 */,
 		0x0F00 /* JBgenericReturn - 229 */,
@@ -272,10 +259,10 @@ const U_16 J9JavaBytecodeVerificationTable[] = {
 		0x1100 /* JBinvokehandlegeneric - 233 */,
 		0x1100 /* JBinvokestaticsplit - 234 */,
 		0x1100 /* JBinvokespecialsplit - 235 */,
-		0x1700 /* JBunimplemented - 236 */,
-		0x1700 /* JBunimplemented - 237 */,
-		0x1700 /* JBunimplemented - 238 */,
-		0x1700 /* JBunimplemented - 239 */,
+		0x0F00 /* JBreturnC - 236 */,
+		0x0F00 /* JBreturnS - 237 */,
+		0x0F00 /* JBreturnB - 238 */,
+		0x0F00 /* JBreturnZ - 239 */,
 		0x1700 /* JBunimplemented - 240 */,
 		0x1700 /* JBunimplemented - 241 */,
 		0x1700 /* JBunimplemented - 242 */,

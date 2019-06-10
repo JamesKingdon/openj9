@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2016, 2017 IBM Corp. and others
+ * Copyright (c) 2016, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,21 +17,16 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j2sever.h"
 #include "j9protos.h"
 #include "ut_j9util.h"
-
-/* Ensure J9VM_JAVA9_BUILD is always defined to simplify conditions. */
-#ifndef J9VM_JAVA9_BUILD
-#define J9VM_JAVA9_BUILD 0
-#endif /* J9VM_JAVA9_BUILD */
+#include "j9java8packages.h"
 
 static J9Package* hashPackageTableAtWithUTF8Name(J9VMThread *currentThread, J9ClassLoader *classLoader, J9UTF8 *packageName);
 static BOOLEAN isPackageExportedToModuleHelper(J9VMThread *currentThread, J9Module *fromModule, J9Package *j9package, J9Module *toModule, BOOLEAN toUnnamed);
-
 
 /* All the helper functions below assume that:
  * a) If VMAccess is required, it assumes the caller has already done so
@@ -41,11 +36,7 @@ static BOOLEAN isPackageExportedToModuleHelper(J9VMThread *currentThread, J9Modu
 BOOLEAN
 isModuleUnnamed(J9VMThread *currentThread, j9object_t moduleObject)
 {
-	if(J2SE_SHAPE(currentThread->javaVM) < J2SE_SHAPE_B165) {
-		return (NULL == J9VMJAVALANGREFLECTMODULE_NAME(currentThread, moduleObject));
-	} else {
-		return (NULL == J9VMJAVALANGMODULE_NAME(currentThread, moduleObject));
-	}
+	return (NULL == J9VMJAVALANGMODULE_NAME(currentThread, moduleObject));
 }
 
 BOOLEAN
@@ -68,7 +59,7 @@ isAllowedReadAccessToModule(J9VMThread *currentThread, J9Module *fromModule, J9M
 	BOOLEAN canRead = FALSE;
 	if ((fromModule == toModule) /* modules are the same, no need to check */
 		|| (toModule == vm->javaBaseModule) /* java.base is implicitly read by every module, no need to check */
-		|| (J9_IS_J9MODULE_UNNAMED(vm, fromModule)) /* unamed Modules can read all other modules */
+		|| (J9_IS_J9MODULE_UNNAMED(vm, fromModule)) /* unnamed Modules can read all other modules */
 	) {
 		canRead = TRUE;
 	} else if (isModuleDefined(currentThread, fromModule)) {
@@ -95,11 +86,7 @@ isAllowedReadAccessToModule(J9VMThread *currentThread, J9Module *fromModule, J9M
 }
 
 J9Package *
-#if J9VM_JAVA9_BUILD >= 156
 getPackageDefinition(J9VMThread *currentThread, J9Module *fromModule, const char *packageName, UDATA *errCode)
-#else /* J9VM_JAVA9_BUILD >= 156 */
-getPackageDefinition(J9VMThread *currentThread, J9Module *fromModule, j9object_t packageName, UDATA *errCode)
-#endif /* J9VM_JAVA9_BUILD >= 156 */
 {
 	J9Package *retval = NULL;
 	if (isModuleDefined(currentThread, fromModule)) {
@@ -115,22 +102,8 @@ getPackageDefinition(J9VMThread *currentThread, J9Module *fromModule, j9object_t
 	return retval;
 }
 
-BOOLEAN
-#if J9VM_JAVA9_BUILD >= 156
-isPackageExportedToModule(J9VMThread *currentThread, J9Module *fromModule, const char *packageName, J9Module *toModule, BOOLEAN toUnnamed, UDATA *errCode)
-#else /* J9VM_JAVA9_BUILD >= 156 */
-isPackageExportedToModule(J9VMThread *currentThread, J9Module *fromModule, j9object_t packageName, J9Module *toModule, BOOLEAN toUnnamed, UDATA *errCode)
-#endif /* J9VM_JAVA9_BUILD >= 156 */
-{
-	return isPackageExportedToModuleHelper(currentThread, fromModule, getPackageDefinition(currentThread, fromModule, packageName, errCode), toModule, toUnnamed);
-}
-
 J9Package*
-#if J9VM_JAVA9_BUILD >= 156
 hashPackageTableAt(J9VMThread *currentThread, J9ClassLoader *classLoader, const char *packageName)
-#else /* J9VM_JAVA9_BUILD >= 156 */
-hashPackageTableAt(J9VMThread *currentThread, J9ClassLoader *classLoader, j9object_t packageName)
-#endif /* J9VM_JAVA9_BUILD >= 156 */
 {
 	J9Package package = {0};
 	J9Package *packagePtr = &package;
@@ -151,39 +124,27 @@ hashPackageTableAt(J9VMThread *currentThread, J9ClassLoader *classLoader, j9obje
 }
 
 BOOLEAN
-#if J9VM_JAVA9_BUILD >= 156
 addUTFNameToPackage(J9VMThread *currentThread, J9Package *j9package, const char *packageName, U_8 *buf, UDATA bufLen)
-#else /* J9VM_JAVA9_BUILD >= 156 */
-addUTFNameToPackage(J9VMThread *currentThread, J9Package *j9package, j9object_t packageName, U_8 *buf, UDATA bufLen)
-#endif /* J9VM_JAVA9_BUILD >= 156 */
 {
 	J9JavaVM * const vm = currentThread->javaVM;
 	J9InternalVMFunctions const * const vmFuncs = vm->internalVMFunctions;
-	U_16 length = 0;
+	UDATA packageNameLength = 0;
 
 	PORT_ACCESS_FROM_JAVAVM(vm);
 	j9package->packageName = (J9UTF8*)buf;
-#if J9VM_JAVA9_BUILD >= 156
-	length = (U_16) strlen(packageName);
-#else /* J9VM_JAVA9_BUILD >= 156 */
-	length = (U_16)vmFuncs->getStringUTF8Length(currentThread, packageName);
-#endif /* J9VM_JAVA9_BUILD >= 156 */
-	if ((NULL == j9package->packageName)
-		|| ((length + sizeof(j9package->packageName->length) + 1) > bufLen)
-	) {
-		j9package->packageName = j9mem_allocate_memory(sizeof(j9package->packageName->length) + length + 1, OMRMEM_CATEGORY_VM);
+	packageNameLength = (UDATA) strlen(packageName);
+	if ((NULL == j9package->packageName) || ((packageNameLength + sizeof(j9package->packageName->length) + 1) > bufLen)) {
+		j9package->packageName = j9mem_allocate_memory(packageNameLength + sizeof(j9package->packageName->length) + 1, OMRMEM_CATEGORY_VM);
 		if (NULL == j9package->packageName) {
 			vmFuncs->setNativeOutOfMemoryError(currentThread, 0, 0);
 			return FALSE;
 		}
 	}
-#if J9VM_JAVA9_BUILD >= 156
-	memcpy(J9UTF8_DATA(j9package->packageName), (void *)packageName, length);
-	J9UTF8_DATA(j9package->packageName)[length] = '\0';
-#else /* J9VM_JAVA9_BUILD >= 156 */
-	vmFuncs->copyStringToUTF8Helper(currentThread, packageName, TRUE, J9_STR_NONE, J9UTF8_DATA(j9package->packageName), length + 1);
-#endif /* J9VM_JAVA9_BUILD >= 156 */
-	J9UTF8_SET_LENGTH(j9package->packageName, length);
+
+	memcpy(J9UTF8_DATA(j9package->packageName), (void *)packageName, packageNameLength);
+	J9UTF8_DATA(j9package->packageName)[packageNameLength] = '\0';
+	J9UTF8_SET_LENGTH(j9package->packageName, (U_16)packageNameLength);
+
 	return TRUE;
 }
 
@@ -246,8 +207,8 @@ isPackageExportedToModuleHelper(J9VMThread *currentThread, J9Module *fromModule,
 	J9JavaVM *vm = currentThread->javaVM;
 	BOOLEAN isExported = FALSE;
 
-	if (J9_IS_J9MODULE_UNNAMED(vm, fromModule)) {
-		/* unnamed modules export all packages */
+	if (J9_IS_J9MODULE_UNNAMED(vm, fromModule) || J9_IS_J9MODULE_OPEN(fromModule)) {
+		/* unnamed & open modules export all packages */
 		isExported = TRUE;
 	} else if (NULL != j9package) {
 		/* First try the general export rules */
@@ -269,9 +230,13 @@ isPackageExportedToModuleHelper(J9VMThread *currentThread, J9Module *fromModule,
 			}
 		} else if (J9_ARE_NO_BITS_SET(vm->runtimeFlags, J9_RUNTIME_DENY_ILLEGAL_ACCESS)) {
 			/* in Java9 --illegal-access=permit is turned on by default. This opens
-			 * each package to all-unnamed modules unless illegal-access=deny is specified
+			 * each package (that existed in java8) to all-unnamed modules unless
+			 * illegal-access=deny is specified.
 			 */
-			isExported = TRUE;
+			J9UTF8 *pkgName = j9package->packageName;
+			if (NULL != lookupJava8Package((const char*) J9UTF8_DATA(pkgName), J9UTF8_LENGTH(pkgName))) {
+				isExported = TRUE;
+			}
 		}
 	}
 	return isExported;

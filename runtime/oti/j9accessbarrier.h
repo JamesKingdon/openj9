@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef J9ACCESSBARRIER_H
@@ -29,20 +29,20 @@
 /*
  * Define type used to represent the class in the 'clazz' slot of an object's header
  */
-#ifdef J9VM_INTERP_COMPRESSED_OBJECT_HEADER
+#ifdef OMR_GC_COMPRESSED_POINTERS
 typedef U_32 j9objectclass_t;
-#else /* J9VM_INTERP_COMPRESSED_OBJECT_HEADER */
+#else /* OMR_GC_COMPRESSED_POINTERS */
 typedef UDATA j9objectclass_t;
-#endif /* J9VM_INTERP_COMPRESSED_OBJECT_HEADER */
+#endif /* OMR_GC_COMPRESSED_POINTERS */
 
 /*
  * Define type used to represent the lock in the 'monitor' slot of an object's header
  */
-#ifdef J9VM_INTERP_SMALL_MONITOR_SLOT
+#ifdef OMR_GC_COMPRESSED_POINTERS
 typedef U_32 j9objectmonitor_t;
-#else /* J9VM_INTERP_SMALL_MONITOR_SLOT */
+#else /* OMR_GC_COMPRESSED_POINTERS */
 typedef UDATA j9objectmonitor_t;
-#endif /* J9VM_INTERP_SMALL_MONITOR_SLOT */
+#endif /* OMR_GC_COMPRESSED_POINTERS */
 
 /*
  * Define the type system for object pointers.
@@ -67,7 +67,7 @@ typedef struct J9IndexableObject* j9array_t;
  * Object reference fields that point to other objects require a different type from root references.  
  * In concrete terms (compressed pointers), this is the 32 bit representation of a pointer.
  */
-#if defined (J9VM_GC_COMPRESSED_POINTERS)
+#if defined (OMR_GC_COMPRESSED_POINTERS)
 typedef U_32 fj9object_t;
 typedef U_32 fj9array_t;
 #else
@@ -96,7 +96,7 @@ typedef struct J9IndexableObject* mm_j9array_t;
 #define J9JAVAVM_VMTHREAD(javaVM) (javaVM->internalVMFunctions->currentVMThread(javaVM))
 
 /* Internal macro - Do not use J9_CONVERT_POINTER_FROM_TOKEN__ or J9_CONVERT_POINTER_TO_TOKEN__! */
-#if defined(J9VM_GC_COMPRESSED_POINTERS)
+#if defined(OMR_GC_COMPRESSED_POINTERS)
 #if defined(J9VM_OUT_OF_PROCESS)
 #define J9_CONVERT_POINTER_FROM_TOKEN_VM__(javaVM, pointer) ((void *) ((UDATA)(pointer) << dbgReadUDATA((UDATA*)&(javaVM->compressedPointersShift))))
 #define J9_CONVERT_POINTER_FROM_TOKEN__(vmThread, pointer) J9_CONVERT_POINTER_FROM_TOKEN_VM__(J9VMTHREAD_JAVAVM(vmThread),pointer)
@@ -108,12 +108,12 @@ typedef struct J9IndexableObject* mm_j9array_t;
 #define J9_CONVERT_POINTER_TO_TOKEN_VM__(javaVM, pointer) ((fj9object_t) ((UDATA)(pointer) >> javaVM->compressedPointersShift))
 #define J9_CONVERT_POINTER_TO_TOKEN__(vmThread, pointer) J9_CONVERT_POINTER_TO_TOKEN_VM__(J9VMTHREAD_JAVAVM(vmThread),pointer)
 #endif /* J9VM_OUT_OF_PROCESS */
-#else /* J9VM_GC_COMPRESSED_POINTERS */
+#else /* OMR_GC_COMPRESSED_POINTERS */
 #define J9_CONVERT_POINTER_FROM_TOKEN__(vmThread, pointer) ((void *) (pointer))
 #define J9_CONVERT_POINTER_FROM_TOKEN_VM__(javaVM, pointer) ((void *) (pointer))
 #define J9_CONVERT_POINTER_TO_TOKEN__(vmThread, pointer) ((fj9object_t)(UDATA)(pointer))
 #define J9_CONVERT_POINTER_TO_TOKEN_VM__(javaVM, pointer) ((fj9object_t)(UDATA)(pointer))
-#endif /* J9VM_GC_COMPRESSED_POINTERS */
+#endif /* OMR_GC_COMPRESSED_POINTERS */
 
 #if defined(J9VM_OUT_OF_PROCESS)
 #define J9JAVAARRAYDISCONTIGUOUS_EA(vmThread, array, index, elemType) (&(((elemType*)J9_CONVERT_POINTER_FROM_TOKEN__(vmThread, dbgReadPrimitiveType((UDATA)&(((fj9object_t*)((J9IndexableObjectDiscontiguous *)array + 1))[((U_32)index)/(dbgReadUDATA((UDATA*)&(J9VMTHREAD_JAVAVM(vmThread)->arrayletLeafSize))/sizeof(elemType))]), sizeof(fj9object_t))))[((U_32)index)%(dbgReadUDATA((UDATA*)&(J9VMTHREAD_JAVAVM(vmThread)->arrayletLeafSize))/sizeof(elemType))]))
@@ -153,15 +153,33 @@ typedef struct J9IndexableObject* mm_j9array_t;
  * Private helpers for reference field types
  */
 #if defined(J9VM_GC_COMBINATION_SPEC)
+#define J9OBJECT__PRE_OBJECT_LOAD_ADDRESS(vmThread, object, address) \
+	((J9_GC_READ_BARRIER_TYPE_NONE != J9VMTHREAD_JAVAVM(vmThread)->gcReadBarrierType) ? \
+	J9VMTHREAD_JAVAVM((vmThread))->memoryManagerFunctions->J9ReadBarrier((vmThread), (fj9object_t*)(address)) : \
+	(void)0)
+#define J9OBJECT__PRE_OBJECT_LOAD_ADDRESS_VM(javaVM, object, address) \
+	((J9_GC_READ_BARRIER_TYPE_NONE != javaVM->gcReadBarrierType) ? \
+	(javaVM)->memoryManagerFunctions->J9ReadBarrier(J9JAVAVM_VMTHREAD(javaVM), (fj9object_t*)(address)) : \
+	(void)0)
+#define J9STATIC__PRE_OBJECT_LOAD(vmThread, clazz, address) \
+	((J9_GC_READ_BARRIER_TYPE_NONE != J9VMTHREAD_JAVAVM(vmThread)->gcReadBarrierType) ? \
+	J9VMTHREAD_JAVAVM((vmThread))->memoryManagerFunctions->J9ReadBarrierJ9Class((vmThread), (j9object_t*)(address)) : \
+	(void)0)
+#define J9STATIC__PRE_OBJECT_LOAD_VM(javaVM, clazz, address) \
+	((J9_GC_READ_BARRIER_TYPE_NONE != javaVM->gcReadBarrierType) ? \
+	(javaVM)->memoryManagerFunctions->J9ReadBarrierJ9Class(J9JAVAVM_VMTHREAD(javaVM), (j9object_t*)(address)) : \
+	(void)0)
 #define J9OBJECT__PRE_OBJECT_STORE_ADDRESS(vmThread, object, address, value) \
 	((void)0, \
-	(OMR_GC_ALLOCATION_TYPE_SEGREGATED == (J9VMTHREAD_JAVAVM((vmThread)))->gcAllocationType) ? \
+	((OMR_GC_WRITE_BARRIER_TYPE_SATB == (J9VMTHREAD_JAVAVM((vmThread)))->gcWriteBarrierType) || \
+	(OMR_GC_WRITE_BARRIER_TYPE_SATB_AND_OLDCHECK == (J9VMTHREAD_JAVAVM((vmThread)))->gcWriteBarrierType)) ? \
 	J9VMTHREAD_JAVAVM((vmThread))->memoryManagerFunctions->J9MetronomeWriteBarrierStore((vmThread), (j9object_t)(object), (fj9object_t*)(address), (j9object_t)(value)) : \
 	(void)0 \
 	)
 #define J9OBJECT__PRE_OBJECT_STORE_ADDRESS_VM(javaVM, object, address, value) \
 	((void)0, \
-	(OMR_GC_ALLOCATION_TYPE_SEGREGATED == javaVM->gcAllocationType) ? \
+	((OMR_GC_WRITE_BARRIER_TYPE_SATB == javaVM->gcWriteBarrierType) || \
+	(OMR_GC_WRITE_BARRIER_TYPE_SATB_AND_OLDCHECK == javaVM->gcWriteBarrierType)) ? \
 	javaVM->memoryManagerFunctions->J9MetronomeWriteBarrierStore(J9JAVAVM_VMTHREAD(javaVM), (j9object_t)(object), (fj9object_t*)(address), (j9object_t)(value)) : \
 	(void)0 \
 	)
@@ -179,13 +197,15 @@ typedef struct J9IndexableObject* mm_j9array_t;
 	)
 #define J9STATIC__PRE_OBJECT_STORE(vmThread, clazz, address, value) \
 	((void)0, \
-	(OMR_GC_ALLOCATION_TYPE_SEGREGATED == (J9VMTHREAD_JAVAVM((vmThread)))->gcAllocationType) ? \
+	((OMR_GC_WRITE_BARRIER_TYPE_SATB == (J9VMTHREAD_JAVAVM((vmThread)))->gcWriteBarrierType) || \
+	(OMR_GC_WRITE_BARRIER_TYPE_SATB_AND_OLDCHECK == (J9VMTHREAD_JAVAVM((vmThread)))->gcWriteBarrierType)) ? \
 	J9VMTHREAD_JAVAVM((vmThread))->memoryManagerFunctions->J9MetronomeWriteBarrierJ9ClassStore((vmThread), J9VM_J9CLASS_TO_HEAPCLASS((clazz)), (j9object_t*)(address), (j9object_t)(value)) : \
 	(void)0 \
 	)
 #define J9STATIC__PRE_OBJECT_STORE_VM(javaVM, object, address, value) \
 	((void)0, \
-	(OMR_GC_ALLOCATION_TYPE_SEGREGATED == javaVM->gcAllocationType) ? \
+	((OMR_GC_WRITE_BARRIER_TYPE_SATB == javaVM->gcWriteBarrierType) || \
+	(OMR_GC_WRITE_BARRIER_TYPE_SATB_AND_OLDCHECK == javaVM->gcWriteBarrierType)) ? \
 	javaVM->memoryManagerFunctions->J9MetronomeWriteBarrierJ9ClassStore(J9JAVAVM_VMTHREAD(javaVM), J9VM_J9CLASS_TO_HEAPCLASS((clazz)), (j9object_t*)(address), (j9object_t)(value)) : \
 	(void)0 \
 	)
@@ -203,6 +223,10 @@ typedef struct J9IndexableObject* mm_j9array_t;
 	)
 #else /* defined(J9VM_GC_COMBINATION_SPEC) */
 #if defined(J9VM_GC_REALTIME)
+#define J9OBJECT__PRE_OBJECT_LOAD_ADDRESS(vmThread, object, address) 0
+#define J9OBJECT__PRE_OBJECT_LOAD_ADDRESS_VM(javaVM, object, address) 0
+#define J9STATIC__PRE_OBJECT_LOAD(vmThread, clazz, address) 0
+#define J9STATIC__PRE_OBJECT_LOAD_VM(javaVM, clazz, address) 0
 #define J9OBJECT__PRE_OBJECT_STORE_ADDRESS(vmThread, object, address, value) J9VMTHREAD_JAVAVM((vmThread))->memoryManagerFunctions->J9MetronomeWriteBarrierStore((vmThread), (j9object_t)(object), (fj9object_t*)address, (j9object_t)(value))
 #define J9OBJECT__PRE_OBJECT_STORE_ADDRESS_VM(javaVM, object, address, value) javaVM->memoryManagerFunctions->J9MetronomeWriteBarrierStore(J9JAVAVM_VMTHREAD(javaVM), (j9object_t)(object), (fj9object_t*)address, (j9object_t)(value))
 #define J9OBJECT__POST_OBJECT_STORE_ADDRESS(vmThread, object, address, value) 0
@@ -212,6 +236,22 @@ typedef struct J9IndexableObject* mm_j9array_t;
 #define J9STATIC__POST_OBJECT_STORE(vmThread, clazz, address, value) 0
 #define J9STATIC__POST_OBJECT_STORE_VM(javaVM, clazz, address, value) 0
 #else /* J9VM_GC_REALTIME */
+#define J9OBJECT__PRE_OBJECT_LOAD_ADDRESS(vmThread, object, address) \
+	((J9_GC_READ_BARRIER_TYPE_NONE != J9VMTHREAD_JAVAVM(vmThread)->gcReadBarrierType) ? \
+	J9VMTHREAD_JAVAVM((vmThread))->memoryManagerFunctions->J9ReadBarrier((vmThread), (fj9object_t*)(address)) : \
+	(void)0)
+#define J9OBJECT__PRE_OBJECT_LOAD_ADDRESS_VM(javaVM, object, address) \
+	((J9_GC_READ_BARRIER_TYPE_NONE != javaVM->gcReadBarrierType) ? \
+	(javaVM)->memoryManagerFunctions->J9ReadBarrier(J9JAVAVM_VMTHREAD(javaVM), (fj9object_t*)(address)) : \
+	(void)0)
+#define J9STATIC__PRE_OBJECT_LOAD(vmThread, clazz, address) \
+	((J9_GC_READ_BARRIER_TYPE_NONE != J9VMTHREAD_JAVAVM(vmThread)->gcReadBarrierType) ? \
+	J9VMTHREAD_JAVAVM((vmThread))->memoryManagerFunctions->J9ReadBarrierJ9Class((vmThread), (j9object_t*)(address)) : \
+	(void)0)
+#define J9STATIC__PRE_OBJECT_LOAD_VM(javaVM, clazz, address) \
+	((J9_GC_READ_BARRIER_TYPE_NONE != javaVM->gcReadBarrierType) ? \
+	(javaVM)->memoryManagerFunctions->J9ReadBarrierJ9Class(J9JAVAVM_VMTHREAD(javaVM), (j9object_t*)(address)) : \
+	(void)0)
 #define J9OBJECT__PRE_OBJECT_STORE_ADDRESS(vmThread, object, address, value) 0
 #define J9OBJECT__PRE_OBJECT_STORE_ADDRESS_VM(javaVM, object, address, value) 0
 #define J9OBJECT__POST_OBJECT_STORE_ADDRESS(vmThread, object, address, value) J9VMTHREAD_JAVAVM((vmThread))->memoryManagerFunctions->J9WriteBarrierStore((vmThread), (j9object_t)(object), (j9object_t)(value))
@@ -222,6 +262,10 @@ typedef struct J9IndexableObject* mm_j9array_t;
 #define J9STATIC__POST_OBJECT_STORE_VM(javaVM, clazz, address, value) javaVM->memoryManagerFunctions->J9WriteBarrierJ9ClassStore(J9JAVAVM_VMTHREAD(javaVM), (clazz), (j9object_t)(value))
 #endif /* J9VM_GC_REALTIME */
 #endif /* defined(J9VM_GC_COMBINATION_SPEC) */
+
+/* Offset API to absolute address API. Only for objects, since for class it's always with absolute address. */
+#define J9OBJECT__PRE_OBJECT_LOAD(vmThread, object, offset) J9OBJECT__PRE_OBJECT_LOAD_ADDRESS(vmThread, object, ((U_8*)(object) + (offset)))
+#define J9OBJECT__PRE_OBJECT_LOAD_VM(javaVM, object, offset) J9OBJECT__PRE_OBJECT_LOAD_ADDRESS_VM(javaVM, object, ((U_8*)(object) + (offset)))
 #define J9OBJECT__PRE_OBJECT_STORE(vmThread, object, offset, value) J9OBJECT__PRE_OBJECT_STORE_ADDRESS(vmThread, object, ((U_8*)(object) + (offset)), value)
 #define J9OBJECT__PRE_OBJECT_STORE_VM(javaVM, object, offset, value) J9OBJECT__PRE_OBJECT_STORE_ADDRESS_VM(javaVM, object, ((U_8*)(object) + (offset)), value)
 #define J9OBJECT__POST_OBJECT_STORE(vmThread, object, offset, value) J9OBJECT__POST_OBJECT_STORE_ADDRESS(vmThread, object, ((U_8*)(object) + (offset)), value)
@@ -236,23 +280,14 @@ typedef struct J9IndexableObject* mm_j9array_t;
 #define J9OBJECT_OBJECT_LOAD_VM(javaVM, object, offset) ((j9object_t)javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectReadObject(J9JAVAVM_VMTHREAD(javaVM), (j9object_t)(object), (offset), 0))
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 
-/* TODO implement HW barriers */
 #define J9OBJECT_OBJECT_LOAD(vmThread, object, offset) \
-		((J9_GC_READ_BARRIER_TYPE_NONE == vmThread->javaVM->gcReadBarrierType) ? \
-		((void)0, (j9object_t)J9_CONVERT_POINTER_FROM_TOKEN__(vmThread, *(fj9object_t*)((U_8*)(object) + (offset)))) : \
-		(J9_GC_READ_BARRIER_TYPE_EVACUATE == vmThread->javaVM->gcReadBarrierType) ? \
-		((j9object_t)J9VMTHREAD_JAVAVM(vmThread)->memoryManagerFunctions->j9gc_objaccess_mixedObjectReadObject((vmThread), (j9object_t)(object), (offset), 0)) : \
-		((j9object_t)J9VMTHREAD_JAVAVM(vmThread)->memoryManagerFunctions->j9gc_objaccess_mixedObjectReadObject((vmThread), (j9object_t)(object), (offset), 0)))
-
-
+	(J9OBJECT__PRE_OBJECT_LOAD(vmThread, object, offset), \
+	 (j9object_t)J9_CONVERT_POINTER_FROM_TOKEN__(vmThread, *(fj9object_t*)((U_8*)(object) + (offset))) \
+	)
 #define J9OBJECT_OBJECT_LOAD_VM(javaVM, object, offset) \
-		((J9_GC_READ_BARRIER_TYPE_NONE == javaVM->gcReadBarrierType) ? \
-		((void)0, (j9object_t)J9_CONVERT_POINTER_FROM_TOKEN_VM__(javaVM, *(fj9object_t*)((U_8*)(object) + (offset)))) : \
-		(J9_GC_READ_BARRIER_TYPE_EVACUATE == javaVM->gcReadBarrierType) ? \
-		((j9object_t)javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectReadObject(J9JAVAVM_VMTHREAD(javaVM), (j9object_t)(object), (offset), 0)) : \
-		((j9object_t)javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectReadObject(J9JAVAVM_VMTHREAD(javaVM), (j9object_t)(object), (offset), 0)))
-
-
+	(J9OBJECT__PRE_OBJECT_LOAD_VM(javaVM, object, offset), \
+	 (j9object_t)J9_CONVERT_POINTER_FROM_TOKEN_VM__(javaVM, *(fj9object_t*)((U_8*)(object) + (offset))) \
+	)
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 
 /* Hard realtime needs to perform SATB; compressed refs needs to compress */
@@ -290,7 +325,10 @@ typedef struct J9IndexableObject* mm_j9array_t;
 
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 
-#define J9STATIC_OBJECT_LOAD_VM(javaVM, clazz, address) ((void)0, *(j9object_t*)(address))
+#define J9STATIC_OBJECT_LOAD_VM(javaVM, clazz, address) \
+	(J9STATIC__PRE_OBJECT_LOAD(javaVM, clazz, address), \
+	 *(j9object_t*)(address) \
+	)
 #define J9STATIC_OBJECT_STORE_VM(javaVM, clazz, address, value) \
 	((void)0, \
 	J9STATIC__PRE_OBJECT_STORE_VM(javaVM, clazz, address, value), \
@@ -298,7 +336,10 @@ typedef struct J9IndexableObject* mm_j9array_t;
 	J9STATIC__POST_OBJECT_STORE_VM(javaVM, clazz, address, value) \
 	)
 
-#define J9STATIC_OBJECT_LOAD(vmThread, clazz, address) ((void)0, *(j9object_t*)(address))
+#define J9STATIC_OBJECT_LOAD(vmThread, clazz, address) \
+	(J9STATIC__PRE_OBJECT_LOAD(vmThread, clazz, address), \
+	 *(j9object_t*)(address) \
+	)
 #define J9STATIC_OBJECT_STORE(vmThread, clazz, address, value) \
 	((void)0, \
 	J9STATIC__PRE_OBJECT_STORE(vmThread, clazz, address, value), \
@@ -320,13 +361,7 @@ typedef struct J9IndexableObject* mm_j9array_t;
 
 #else  /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 
-/* TODO implement HW barriers */
-#define J9JAVAARRAYOFOBJECT_LOAD(vmThread, array, index) \
-		((J9_GC_READ_BARRIER_TYPE_NONE == (vmThread)->javaVM->gcReadBarrierType) ? \
-		((void)0, (j9object_t)J9_CONVERT_POINTER_FROM_TOKEN__(vmThread, *J9JAVAARRAY_EA(vmThread, array, index, fj9object_t))) : \
-		((J9_GC_READ_BARRIER_TYPE_EVACUATE == (vmThread)->javaVM->gcReadBarrierType) ? \
-		((void)0, J9VMTHREAD_JAVAVM(vmThread)->memoryManagerFunctions->j9gc_objaccess_indexableReadObject((vmThread), (J9IndexableObject *)(array), (I_32)(index), 0)) : \
-		((void)0, J9VMTHREAD_JAVAVM(vmThread)->memoryManagerFunctions->j9gc_objaccess_indexableReadObject((vmThread), (J9IndexableObject *)(array), (I_32)(index), 0))))
+#define J9JAVAARRAYOFOBJECT_LOAD(vmThread, array, index) j9javaArrayOfObject_load(vmThread, (J9IndexableObject *)array, (I_32)index)
 
 #define J9JAVAARRAYOFOBJECT_STORE(vmThread, array, index, value) \
 	do { \
@@ -336,12 +371,7 @@ typedef struct J9IndexableObject* mm_j9array_t;
 		J9OBJECT__POST_OBJECT_STORE_ADDRESS(vmThread, array, storeAddress, value); \
 	} while(0)
 
-#define J9JAVAARRAYOFOBJECT_LOAD_VM(vm, array, index) \
-		((J9_GC_READ_BARRIER_TYPE_NONE == (vm)->gcReadBarrierType) ? \
-		((void)0, (j9object_t)J9_CONVERT_POINTER_FROM_TOKEN_VM__(vm, *J9JAVAARRAY_EA_VM(vm, array, index, fj9object_t))) : \
-		((J9_GC_READ_BARRIER_TYPE_EVACUATE == (vm)->gcReadBarrierType) ? \
-		((void)0, vm->memoryManagerFunctions->j9gc_objaccess_indexableReadObject(J9JAVAVM_VMTHREAD(vm), (J9IndexableObject *)(array), (I_32)(index), 0)) : \
-		((void)0, vm->memoryManagerFunctions->j9gc_objaccess_indexableReadObject(J9JAVAVM_VMTHREAD(vm), (J9IndexableObject *)(array), (I_32)(index), 0))))
+#define J9JAVAARRAYOFOBJECT_LOAD_VM(vm, array, index) j9javaArrayOfObject_load_VM(vm, (J9IndexableObject *)array, (I_32)index)
 
 #define J9JAVAARRAYOFOBJECT_STORE_VM(vm, array, index, value) \
 	do { \
@@ -350,7 +380,6 @@ typedef struct J9IndexableObject* mm_j9array_t;
 		*storeAddress = J9_CONVERT_POINTER_TO_TOKEN_VM__(vm, value); \
 		J9OBJECT__POST_OBJECT_STORE_ADDRESS_VM(vm, array, storeAddress, value); \
 	} while(0)
-
 
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 
@@ -568,18 +597,17 @@ typedef struct J9IndexableObject* mm_j9array_t;
 #define J9MONITORTABLE_OBJECT_LOAD(vmThread, objectSlot) ((j9object_t)J9VMTHREAD_JAVAVM(vmThread)->memoryManagerFunctions->j9gc_objaccess_monitorTableReadObject((vmThread), (j9object_t *)(objectSlot)))
 #define J9MONITORTABLE_OBJECT_LOAD_VM(javaVM, objectSlot) ((j9object_t)(javaVM)->memoryManagerFunctions->j9gc_objaccess_monitorTableReadObjectVM(javaVM, (j9object_t *)(objectSlot)))
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
-/* TODO implement HW barriers */
 #define J9MONITORTABLE_OBJECT_LOAD(vmThread, objectSlot) \
 		((J9_GC_READ_BARRIER_TYPE_NONE == (vmThread)->javaVM->gcReadBarrierType) ? \
 		(*(j9object_t *)(objectSlot)) : \
-		((J9_GC_READ_BARRIER_TYPE_EVACUATE == (vmThread)->javaVM->gcReadBarrierType) ? \
+		((J9_GC_READ_BARRIER_TYPE_RANGE_CHECK == (vmThread)->javaVM->gcReadBarrierType) ? \
 		((j9object_t)J9VMTHREAD_JAVAVM(vmThread)->memoryManagerFunctions->j9gc_objaccess_monitorTableReadObject((vmThread), (j9object_t *)(objectSlot))) : \
 		((j9object_t)J9VMTHREAD_JAVAVM(vmThread)->memoryManagerFunctions->j9gc_objaccess_monitorTableReadObject((vmThread), (j9object_t *)(objectSlot)))))
 
 #define J9MONITORTABLE_OBJECT_LOAD_VM(javaVM, objectSlot) \
 		((J9_GC_READ_BARRIER_TYPE_NONE == (javaVM)->gcReadBarrierType) ? \
 		(*(j9object_t *)(objectSlot)) : \
-		((J9_GC_READ_BARRIER_TYPE_EVACUATE == (javaVM)->gcReadBarrierType) ? \
+		((J9_GC_READ_BARRIER_TYPE_RANGE_CHECK == (javaVM)->gcReadBarrierType) ? \
 		((j9object_t)(javaVM)->memoryManagerFunctions->j9gc_objaccess_monitorTableReadObjectVM(javaVM, (j9object_t *)(objectSlot))) : \
 		((j9object_t)(javaVM)->memoryManagerFunctions->j9gc_objaccess_monitorTableReadObjectVM(javaVM, (j9object_t *)(objectSlot)))))
 
@@ -613,7 +641,7 @@ typedef struct J9IndexableObject* mm_j9array_t;
 /*
  * Macros for accessing object header fields
  */
-#if defined (J9VM_INTERP_COMPRESSED_OBJECT_HEADER) || !defined (J9VM_ENV_DATA64)
+#if defined (OMR_GC_COMPRESSED_POINTERS) || !defined (J9VM_ENV_DATA64)
 #define J9OBJECT_CLAZZ(vmThread, object) ((void)0, (struct J9Class*)((UDATA)J9OBJECT_U32_LOAD(vmThread, object, offsetof(J9Object,clazz)) & ~((UDATA)(J9_REQUIRED_CLASS_ALIGNMENT - 1))))
 #define J9OBJECT_CLAZZ_VM(javaVM, object) ((void)0, (struct J9Class*)((UDATA)J9OBJECT_U32_LOAD_VM(javaVM, object, offsetof(J9Object,clazz)) & ~((UDATA)(J9_REQUIRED_CLASS_ALIGNMENT - 1))))
 #define J9OBJECT_FLAGS_FROM_CLAZZ(vmThread, object) ((void)0, ((UDATA)J9OBJECT_U32_LOAD(vmThread, object, offsetof(J9Object,clazz)) & ((UDATA)(J9_REQUIRED_CLASS_ALIGNMENT - 1))))
@@ -639,7 +667,7 @@ typedef struct J9IndexableObject* mm_j9array_t;
 #define J9OBJECT_MONITOR_OFFSET(vmThread,object) offsetof(J9Object,monitor)
 #endif
 
-#if defined (J9VM_INTERP_SMALL_MONITOR_SLOT) || !defined (J9VM_ENV_DATA64)
+#if defined (OMR_GC_COMPRESSED_POINTERS) || !defined (J9VM_ENV_DATA64)
 #define J9OBJECT_MONITOR(vmThread, object) ((void)0, (j9objectmonitor_t)J9OBJECT_U32_LOAD(vmThread, object, J9OBJECT_MONITOR_OFFSET(vmThread,object)))
 #define J9OBJECT_SET_MONITOR(vmThread, object, value) ((void)0, J9OBJECT_U32_STORE(vmThread, object,J9OBJECT_MONITOR_OFFSET(vmThread,object), value))
 #else
@@ -648,7 +676,7 @@ typedef struct J9IndexableObject* mm_j9array_t;
 #endif
 
 #if defined( J9VM_THR_LOCK_NURSERY )
-#if defined (J9VM_INTERP_COMPRESSED_OBJECT_HEADER) || !defined (J9VM_ENV_DATA64)
+#if defined (OMR_GC_COMPRESSED_POINTERS) || !defined (J9VM_ENV_DATA64)
 #define TMP_LOCKWORD_OFFSET(object) (dbgReadUDATA((UDATA*)((U_8*)(((UDATA)(dbgReadU32((U_32*)(((U_8*)object) + offsetof(J9Object, clazz))))& ~((UDATA)(J9_REQUIRED_CLASS_ALIGNMENT - 1)))+ offsetof(J9Class,lockOffset)))))
 #else
 #define TMP_LOCKWORD_OFFSET(object) (dbgReadUDATA((UDATA*)((U_8*)(((UDATA)(dbgReadU64((U_64*)(((U_8*)object) + offsetof(J9Object, clazz))))& ~((UDATA)(J9_REQUIRED_CLASS_ALIGNMENT - 1)))+ offsetof(J9Class,lockOffset)))))

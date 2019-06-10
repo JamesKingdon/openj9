@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <stdlib.h>
@@ -36,6 +36,7 @@
 #include "j9cp.h"
 #include "bcutil_api.h"
 #include "cfdumper_internal.h"
+#include "vendor_version.h"
 
 #if defined(J9ZOS390)
 #include "atoe.h"
@@ -673,8 +674,8 @@ static void dumpAttribute(J9CfrClassFile* classfile, J9CfrAttribute* attrib, U_3
 			break;
 		}
 
-		case CFR_ATTRIBUTE_MemberOfNest: {
-			index = ((J9CfrAttributeMemberOfNest*)attrib)->hostClassIndex;
+		case CFR_ATTRIBUTE_NestHost: {
+			index = ((J9CfrAttributeNestHost*)attrib)->hostClassIndex;
 			for(i = 0; i < tabLevel + 1; i++) j9tty_printf( PORTLIB, "  ");
 			j9tty_printf( PORTLIB, "%i -> %s\n", index, classfile->constantPool[classfile->constantPool[index].slot1].bytes);
 			break;
@@ -682,7 +683,6 @@ static void dumpAttribute(J9CfrClassFile* classfile, J9CfrAttribute* attrib, U_3
 #endif /* J9VM_OPT_VALHALLA_NESTMATES */
 
 		case CFR_ATTRIBUTE_LineNumberTable:
-			(J9CfrAttributeLineNumberTable*)attrib;
 			for(i = 0; i < ((J9CfrAttributeLineNumberTable*)attrib)->lineNumberTableLength; i++)
 			{
 				for(j = 0; j < tabLevel + 1; j++) j9tty_printf( PORTLIB, "  ");
@@ -691,7 +691,6 @@ static void dumpAttribute(J9CfrClassFile* classfile, J9CfrAttribute* attrib, U_3
 			break;
 
 		case CFR_ATTRIBUTE_LocalVariableTable:
-			(J9CfrAttributeLocalVariableTable*)attrib;
 			for(i = 0; i < ((J9CfrAttributeLocalVariableTable*)attrib)->localVariableTableLength; i++)
 			{
 				index = ((J9CfrAttributeLocalVariableTable*)attrib)->localVariableTable[i].nameIndex;
@@ -711,7 +710,6 @@ static void dumpAttribute(J9CfrClassFile* classfile, J9CfrAttribute* attrib, U_3
 			break;
 
 		case CFR_ATTRIBUTE_LocalVariableTypeTable:
-			(J9CfrAttributeLocalVariableTypeTable*)attrib;
 			for(i = 0; i < ((J9CfrAttributeLocalVariableTypeTable*)attrib)->localVariableTypeTableLength; i++)
 			{
 				index = ((J9CfrAttributeLocalVariableTypeTable*)attrib)->localVariableTypeTable[i].nameIndex;
@@ -1439,12 +1437,22 @@ static void printDisassembledMethod(J9CfrClassFile* classfile, J9CfrMethod* meth
 			NEXT_U8_ENDIAN(bigEndian, bc, bcIndex);
 			if(wide)
 			{
-				j9tty_printf( PORTLIB, "%s ", sunJavaBCNames[bc]);
+				j9tty_printf( PORTLIB, "%s", sunJavaBCNames[bc]);
 			}
 			else
 			{
-				j9tty_printf( PORTLIB, "%5i %s ", pc, sunJavaBCNames[bc]);
+				j9tty_printf( PORTLIB, "%5i %s", pc, sunJavaBCNames[bc]);
 			}
+
+			if(0 == strcmp(sunJavaBCNames[bc], "JBunimplemented"))
+			{
+				j9tty_printf( PORTLIB, "_%d ", bc);
+			}
+			else
+			{
+				j9tty_printf( PORTLIB, " ", bc);
+			}
+
 			start = pc;
 			pc++;
 			switch(bc)
@@ -1662,6 +1670,9 @@ static void printDisassembledMethod(J9CfrClassFile* classfile, J9CfrMethod* meth
 				case CFR_BC_putstatic:
 				case CFR_BC_getfield:
 				case CFR_BC_putfield:
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+				case CFR_BC_withfield:
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 					fieldFlag = TRUE;
 
 				case CFR_BC_invokevirtual:
@@ -1723,6 +1734,9 @@ static void printDisassembledMethod(J9CfrClassFile* classfile, J9CfrMethod* meth
 				case CFR_BC_anewarray:
 				case CFR_BC_checkcast:
 				case CFR_BC_instanceof:
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+				case CFR_BC_defaultvalue:
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 					NEXT_U16_ENDIAN(bigEndian, index, bcIndex);
 					info = classfile->constantPool[index];
 					j9tty_printf( PORTLIB, "%i ", index);
@@ -1855,7 +1869,7 @@ static void dumpHelpText( J9PortLibrary *portLib, int argc, char **argv)
 	PORT_ACCESS_FROM_PORT(portLib);
 
 	vmDetailString(portLib, detailString, 1024);
-	j9file_printf( PORTLIB, J9PORT_TTY_OUT, "\nOpenJ9 Java(TM) Class File Reader, Version " EsVersionString);
+	j9file_printf( PORTLIB, J9PORT_TTY_OUT, "\nOpenJ9 Java(TM) Class File Reader, Version " J9JVM_VERSION_STRING);
 	j9file_printf( PORTLIB, J9PORT_TTY_OUT, "\n" J9_COPYRIGHT_STRING);
 	j9file_printf( PORTLIB, J9PORT_TTY_OUT, "\nTarget: %s\n", detailString);
 	j9file_printf( PORTLIB, J9PORT_TTY_OUT, "\nJava and all Java-based marks and logos are trademarks or registered");
@@ -2302,6 +2316,14 @@ static U_32 buildFlags(void)
 	U_32 flags;
 
 	flags = BCT_RetainRuntimeInvisibleAttributes;
+
+	/* Set vm flags to the latest version to pass version validation
+	 * check in j9bcutil_readClassFileBytes.
+	 */
+	flags |= BCT_JavaMaxMajorVersionShifted;
+	flags |= BCT_ValueTypesEnabled;
+	flags |= BCT_AnyPreviewVersion;
+
 	if(options.options & OPTION_stripDebugAttributes) flags |= CFR_StripDebugAttributes;
 	if(options.options & OPTION_stripDebugLines) flags |= BCT_StripDebugLines;
 	if(options.options & OPTION_stripDebugSource) flags |= BCT_StripDebugSource;
@@ -2388,7 +2410,7 @@ static I_32 processAllFiles(char** files, U_32 flags)
 	PORT_ACCESS_FROM_PORT(portLib);
 
 	i = 0;
-	while(currentFile = files[i++])
+	while(NULL != (currentFile = files[i++]))
 	{
 		if(j9file_attr(currentFile) == EsIsDir)
 		{
@@ -3248,9 +3270,9 @@ static void sun_formatBytecode(J9CfrClassFile* classfile, J9CfrMethod* method, B
 						string = classfile->constantPool[cpIndex].bytes;
 						j = 0;
 						index = 0;
-						while(ch2 = string[j++]) if(ch2 == '/') index = j;
+						while('\0' != (ch2 = string[j++])) if(ch2 == '/') index = j;
 						j = index;
-						while(ch2 = string[j++]) j9tty_output_char(ch2);
+						while('\0' != (ch2 = string[j++])) j9tty_output_char(ch2);
 						break;
 
 					case 'C':
@@ -3258,7 +3280,7 @@ static void sun_formatBytecode(J9CfrClassFile* classfile, J9CfrMethod* method, B
 						cpIndex = classfile->constantPool[classfile->thisClass].slot1;
 						string = classfile->constantPool[cpIndex].bytes;
 						j = 0;
-						while(ch2 = string[j++])
+						while('\0' != (ch2 = string[j++]))
 						{
 							if(ch2 == '/') j9tty_output_char('.');
 							else j9tty_output_char(ch2);
@@ -3275,7 +3297,7 @@ static void sun_formatBytecode(J9CfrClassFile* classfile, J9CfrMethod* method, B
 						/* method signature */
 						string = classfile->constantPool[method->descriptorIndex].bytes;
 						j = 0;
-						while(ch2 = string[j++])
+						while('\0' != (ch2 = string[j++]))
 						{
 							if(ch2 == '/') j9tty_output_char('.');
 							else j9tty_output_char(ch2);
@@ -3539,7 +3561,7 @@ cpAscii:
 											case CFR_CONSTANT_Class:
 												string = classfile->constantPool[info->slot1].bytes;
 												j = 0;
-												while(ch2 = string[j++])
+												while('\0' != (ch2 = string[j++]))
 												{
 													if(ch2 == '/') j9tty_output_char('.');
 													else j9tty_output_char(ch2);
@@ -3552,7 +3574,7 @@ cpAscii:
 												cpIndex = classfile->constantPool[info->slot1].slot1;
 												string = classfile->constantPool[cpIndex].bytes;
 												j = 0;
-												while(ch2 = string[j++])
+												while('\0' != (ch2 = string[j++]))
 												{
 													if(ch2 == '/') j9tty_output_char('.');
 													else j9tty_output_char(ch2);
@@ -3563,7 +3585,7 @@ cpAscii:
 												cpIndex = classfile->constantPool[info->slot2].slot2;
 												string = classfile->constantPool[cpIndex].bytes;
 												j = 0;
-												while(ch2 = string[j++])
+												while('\0' != (ch2 = string[j++]))
 												{
 													if(ch2 == '/') j9tty_output_char('.');
 													else j9tty_output_char(ch2);
@@ -4121,7 +4143,7 @@ static void sun_formatClass(J9CfrClassFile* classfile, char *formatString, IDATA
 						string = classfile->constantPool[cpIndex].bytes;
 						j = 0;
 						index = 0;
-						while(ch2 = string[j++]) if(ch2 == '/') index = j - 1;
+						while('\0' != (ch2 = string[j++])) if(ch2 == '/') index = j - 1;
 						j = 0;
 						while(j < index)
 						{
@@ -4137,9 +4159,9 @@ static void sun_formatClass(J9CfrClassFile* classfile, char *formatString, IDATA
 						string = classfile->constantPool[cpIndex].bytes;
 						j = 0;
 						index = 0;
-						while(ch2 = string[j++]) if(ch2 == '/') index = j;
+						while('\0' != (ch2 = string[j++])) if(ch2 == '/') index = j;
 						j = index;
-						while(ch2 = string[j++]) j9tty_output_char(ch2);
+						while('\0' != (ch2 = string[j++])) j9tty_output_char(ch2);
 						break;
 
 					case 'C':
@@ -4147,7 +4169,7 @@ static void sun_formatClass(J9CfrClassFile* classfile, char *formatString, IDATA
 						cpIndex = classfile->constantPool[classfile->thisClass].slot1;
 						string = classfile->constantPool[cpIndex].bytes;
 						j = 0;
-						while(ch2 = string[j++])
+						while('\0' != (ch2 = string[j++]))
 						{
 							if(ch2 == '/') j9tty_output_char('.');
 							else j9tty_output_char(ch2);
@@ -4161,7 +4183,7 @@ static void sun_formatClass(J9CfrClassFile* classfile, char *formatString, IDATA
 							cpIndex = classfile->constantPool[classfile->superClass].slot1;
 							string = classfile->constantPool[cpIndex].bytes;
 							j = 0;
-							while(ch2 = string[j++])
+							while('\0' != (ch2 = string[j++]))
 							{
 								if(ch2 == '/') j9tty_output_char('.');
 								else j9tty_output_char(ch2);
@@ -4177,7 +4199,7 @@ static void sun_formatClass(J9CfrClassFile* classfile, char *formatString, IDATA
 							cpIndex = classfile->constantPool[cpIndex].slot1;
 							string = classfile->constantPool[cpIndex].bytes;
 							k = 0;
-							while(ch2 = string[k++])
+							while('\0' != (ch2 = string[k++]))
 							{
 								if(ch2 == '/') j9tty_output_char('.');
 								else j9tty_output_char(ch2);
@@ -4305,9 +4327,9 @@ static void sun_formatField(J9CfrClassFile* classfile, J9CfrField* field, char *
 						string = classfile->constantPool[cpIndex].bytes;
 						j = 0;
 						index = 0;
-						while(ch2 = string[j++]) if(ch2 == '/') index = j;
+						while('\0' != (ch2 = string[j++])) if(ch2 == '/') index = j;
 						j = index;
-						while(ch2 = string[j++]) j9tty_output_char(ch2);
+						while('\0' != (ch2 = string[j++])) j9tty_output_char(ch2);
 						break;
 
 					case 'C':
@@ -4315,7 +4337,7 @@ static void sun_formatField(J9CfrClassFile* classfile, J9CfrField* field, char *
 						cpIndex = classfile->constantPool[classfile->thisClass].slot1;
 						string = classfile->constantPool[cpIndex].bytes;
 						j = 0;
-						while(ch2 = string[j++])
+						while('\0' != (ch2 = string[j++]))
 						{
 							if(ch2 == '/') j9tty_output_char('.');
 							else j9tty_output_char(ch2);
@@ -4332,7 +4354,7 @@ static void sun_formatField(J9CfrClassFile* classfile, J9CfrField* field, char *
 						/* type signature */
 						string = classfile->constantPool[field->descriptorIndex].bytes;
 						j = 0;
-						while(ch2 = string[j++])
+						while('\0' != (ch2 = string[j++]))
 						{
 							if(ch2 == '/') j9tty_output_char('.');
 							else j9tty_output_char(ch2);
@@ -4551,9 +4573,9 @@ static void sun_formatMethod(J9CfrClassFile* classfile, J9CfrMethod* method, cha
 						string = classfile->constantPool[cpIndex].bytes;
 						j = 0;
 						index = 0;
-						while(ch2 = string[j++]) if(ch2 == '/') index = j;
+						while('\0' != (ch2 = string[j++])) if(ch2 == '/') index = j;
 						j = index;
-						while(ch2 = string[j++]) j9tty_output_char(ch2);
+						while('\0' != (ch2 = string[j++])) j9tty_output_char(ch2);
 						break;
 
 					case 'C':
@@ -4561,7 +4583,7 @@ static void sun_formatMethod(J9CfrClassFile* classfile, J9CfrMethod* method, cha
 						cpIndex = classfile->constantPool[classfile->thisClass].slot1;
 						string = classfile->constantPool[cpIndex].bytes;
 						j = 0;
-						while(ch2 = string[j++])
+						while('\0' != (ch2 = string[j++]))
 						{
 							if(ch2 == '/') j9tty_output_char('.');
 							else j9tty_output_char(ch2);
@@ -4578,7 +4600,7 @@ static void sun_formatMethod(J9CfrClassFile* classfile, J9CfrMethod* method, cha
 						/* method signature */
 						string = classfile->constantPool[method->descriptorIndex].bytes;
 						j = 0;
-						while(ch2 = string[j++])
+						while('\0' != (ch2 = string[j++]))
 						{
 							if(ch2 == '/') j9tty_output_char('.');
 							else j9tty_output_char(ch2);
@@ -4721,7 +4743,7 @@ static void sun_formatMethod(J9CfrClassFile* classfile, J9CfrMethod* method, cha
 							index = classfile->constantPool[exceptions->exceptionIndexTable[j]].slot1;
 							string = classfile->constantPool[index].bytes;
 							k = 0;
-							while(ch2 = string[k++])
+							while('\0' != (ch2 = string[k++]))
 							{
 								if(ch2 == '/') j9tty_output_char('.');
 								else j9tty_output_char(ch2);
@@ -6571,6 +6593,9 @@ static void j9_formatBytecodes(J9ROMClass* romClass, J9ROMMethod* method, U_8* b
 				case JBputstatic:
 				case JBgetfield:
 				case JBputfield:
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+				case JBwithfield:
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 					j9_formatBytecode(romClass, method, bytecodes, bcIndex, bc, 3, CFR_DECODE_J9_FIELDREF, formatString, stringLength, flags);
 					pc += 2;
 					bcIndex += 3;
@@ -6593,6 +6618,9 @@ static void j9_formatBytecodes(J9ROMClass* romClass, J9ROMMethod* method, U_8* b
 				case JBanewarray:
 				case JBcheckcast:
 				case JBinstanceof:
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+				case JBdefaultvalue:
+#endif /* J9VM_OPT_VALHALLA_VALUE_TYPES */
 					j9_formatBytecode(romClass, method, bytecodes, bcIndex, bc, 3, CFR_DECODE_J9_CLASSREF, formatString, stringLength, flags);
 					pc += 2;
 					bcIndex += 3;

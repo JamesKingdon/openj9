@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2014, 2014 IBM Corp. and others
+ * Copyright (c) 2014, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -33,7 +33,7 @@
 #include <string.h>
 #if defined(WIN32)
 #include <windows.h>
-#elif defined(LINUX) || defined(AIXPPC)
+#elif defined(LINUX) || defined(AIXPPC) || defined(OSX)
 #include <dlfcn.h>
 #else
 #include <dll.h>
@@ -48,9 +48,13 @@
 #if defined(WIN32)
 #define J9PATH_DIRECTORY_SEPARATOR '\\'
 #define J9PATH_JVM_LIBRARY "jvm.dll"
-#else
+#else /* defined(WIN32) */
 #define J9PATH_DIRECTORY_SEPARATOR '/'
+#if defined(OSX)
+#define J9PATH_JVM_LIBRARY "libjvm.dylib"
+#else /* defined(OSX) */
 #define J9PATH_JVM_LIBRARY "libjvm.so"
-#endif
+#endif /* defined(OSX) */
+#endif /* defined(WIN32) */
 
 #endif /* !defined(_testjep178_h_) */

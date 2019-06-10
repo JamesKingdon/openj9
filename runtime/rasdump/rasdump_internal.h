@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef rasdump_internal_h
@@ -93,7 +93,8 @@ typedef enum J9RASdumpRequestState
 	J9RAS_DUMP_THREADS_HALTED              = 32,
 	J9RAS_DUMP_ATTACHED_THREAD             = 64,
 	J9RAS_DUMP_PREEMPT_THREADS             = 128,
-	J9RAS_DUMP_TRACE_DISABLED              = 256
+	J9RAS_DUMP_TRACE_DISABLED              = 256,
+	J9RAS_DUMP_GOT_JNI_VM_ACCESS           = 512, 
 } J9RASdumpRequestState;
 
 /* Internal function prototypes for rasdump module */ 
@@ -102,6 +103,8 @@ omr_error_t mapDumpOptions(J9JavaVM *vm, J9RASdumpOption agentOpts[], IDATA *age
 omr_error_t mapDumpActions(J9JavaVM *vm, J9RASdumpOption agentOpts[], IDATA *agentNum, char *buf, IDATA condition);
 omr_error_t mapDumpDefaults(J9JavaVM *vm, J9RASdumpOption agentOpts[], IDATA *agentNum);
 omr_error_t mapDumpSettings(J9JavaVM *vm, J9RASdumpOption agentOpts[], IDATA *agentNum);
+void disableDumpOnOutOfMemoryError(J9RASdumpOption agentOpts[], IDATA agentNum);
+void enableDumpOnOutOfMemoryError(J9RASdumpOption agentOpts[], IDATA *agentNum);
 UDATA parseAllocationRange(char *range, UDATA *min, UDATA *max);
 omr_error_t rasDumpEnableHooks(J9JavaVM *vm, UDATA eventFlags);
 void rasDumpFlushHooks(J9JavaVM *vm, IDATA stage);
@@ -122,6 +125,9 @@ void setAllocationThreshold(J9VMThread *vmThread, UDATA min, UDATA max);
 #endif
 
 #define J9RAS_DUMP_EXCEPTION_EVENT_GROUP (J9RAS_DUMP_ON_EXCEPTION_THROW | J9RAS_DUMP_ON_EXCEPTION_SYSTHROW | J9RAS_DUMP_ON_EXCEPTION_CATCH | J9RAS_DUMP_ON_EXCEPTION_DESCRIBE)
+
+#define J9RAS_STDOUT_NAME "/STDOUT/"
+#define J9RAS_STDERR_NAME "/STDERR/"
 
 #ifdef __cplusplus
 }

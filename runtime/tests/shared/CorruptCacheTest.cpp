@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 extern "C"
@@ -812,10 +812,15 @@ zeroOutCache(J9JavaVM *vm, I_32 cacheType)
 	I_64 cacheSize;
 	IDATA fd;
 	IDATA rc = PASS;
+	U_32 flags = J9SHMEM_GETDIR_APPEND_BASEDIR;
 	PORT_ACCESS_FROM_JAVAVM(vm);
 
-	rc = j9shmem_getDir(NULL, TRUE, baseDir, J9SH_MAXPATH);
-	if (rc == -1) {
+#if defined(OPENJ9_BUILD)
+	flags |= J9SHMEM_GETDIR_USE_USERHOME;
+#endif /* defined(OPENJ9_BUILD) */
+
+	rc = j9shmem_getDir(NULL, flags, baseDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		ERRPRINTF("Cannot get a directory\n");
 	}
 	setCurrentCacheVersion(vm, J2SE_VERSION(vm), &versionData);
@@ -873,10 +878,15 @@ truncateCache(J9JavaVM *vm, I_32 cacheType)
 	J9PortShcVersion versionData;
 	IDATA fd;
 	IDATA rc = PASS;
+	U_32 flags = J9SHMEM_GETDIR_APPEND_BASEDIR;
 	PORT_ACCESS_FROM_JAVAVM(vm);
 
-	rc = j9shmem_getDir(NULL, TRUE, baseDir, J9SH_MAXPATH);
-	if (rc == -1) {
+#if defined(OPENJ9_BUILD)
+	flags |= J9SHMEM_GETDIR_USE_USERHOME;
+#endif /* defined(OPENJ9_BUILD) */
+
+	rc = j9shmem_getDir(NULL, flags, baseDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		ERRPRINTF("Cannot get a directory\n");
 	}
 	setCurrentCacheVersion(vm, J2SE_VERSION(vm), &versionData);
@@ -1026,7 +1036,7 @@ testCorruptCache(J9JavaVM* vm)
 	REPORT_START("CorruptCacheTest");
 
 	UnitTest::unitTest = UnitTest::CORRUPT_CACHE_TEST;
-	vm->internalVMFunctions->internalAcquireVMAccess(vm->mainThread);
+	vm->internalVMFunctions->internalEnterVMFromJNI(vm->mainThread);
 
 	for(i = 0; i < 6; i++) {
 		CorruptCacheTest corruptCacheTest;
@@ -1375,7 +1385,7 @@ testCorruptCache(J9JavaVM* vm)
 
 	UnitTest::unitTest = UnitTest::NO_TEST;
 
-	vm->internalVMFunctions->internalReleaseVMAccess(vm->mainThread);
+	vm->internalVMFunctions->internalExitVMToJNI(vm->mainThread);
 	REPORT_SUMMARY("CorruptCacheTest", rc);
 	return rc;
 }

@@ -1,4 +1,4 @@
-dnl Copyright (c) 2017, 2017 IBM Corp. and others
+dnl Copyright (c) 2017, 2018 IBM Corp. and others
 dnl
 dnl This program and the accompanying materials are made available under
 dnl the terms of the Eclipse Public License 2.0 which accompanies this
@@ -16,7 +16,7 @@ dnl
 dnl [1] https://www.gnu.org/software/classpath/license.html
 dnl [2] http://openjdk.java.net/legal/assembly-exception.html
 dnl
-dnl SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+dnl SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 
 include(xhelpers.m4)
 
@@ -163,9 +163,9 @@ START_PROC(c_cInterpreter)
 	mov uword ptr J9TR_ELS_jitGlobalStorageBase[_rax],_rbx
 	lea _rbx,J9TR_cframe_jitFPRs[_rsp]
 	mov uword ptr J9TR_ELS_jitFPRegisterStorageBase[_rax],_rbx
-cInterpreter:
+C_FUNCTION_SYMBOL(cInterpreter):
 	mov _rax,uword ptr J9TR_VMThread_javaVM[_rbp]
-	CALL_C_WITH_VMTHREAD(uword ptr J9TR_JavaVM_bytecodeLoop[_rax],0)
+	CALL_C_ADDR_WITH_VMTHREAD(uword ptr J9TR_JavaVM_bytecodeLoop[_rax],0)
 	cmp _rax,J9TR_bcloop_exit_interpreter
 	je SHORT_JMP cInterpExit
 	RESTORE_PRESERVED_REGS

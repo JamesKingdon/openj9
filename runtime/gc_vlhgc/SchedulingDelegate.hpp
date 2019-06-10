@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -237,9 +237,26 @@ private:
 	 */
 	double calculateAverageCopyForwardRate(MM_EnvironmentVLHGC *env);
 
+	/**
+	 * Estimate total free memory
+	 * @param env[in] the master GC thread
+	 * @oaram freeRegionMemory[in]
+	 * @param defragmentedMemory[in]
+	 * @oaram reservedFreeMemory[in]
+	 * @return total free memory(bytes)
+	 */
+	UDATA estimateTotalFreeMemory(MM_EnvironmentVLHGC *env, UDATA freeRegionMemory, UDATA defragmentedMemory, UDATA reservedFreeMemory);
+
+	/**
+	 * Calculate GMP Kickoff Headroom In Bytes
+	 * the
+	 */
+	UDATA calculateKickoffHeadroom(MM_EnvironmentVLHGC *env, UDATA totalFreeMemory);
+
 protected:
 	
 public:
+	UDATA initializeKickoffHeadroom(MM_EnvironmentVLHGC *env);
 
 	/**
 	 * Calculate the allocation threshold for the first taxation period. This should be called
@@ -332,6 +349,14 @@ public:
 	void calculateHeapOccupancyTrend(MM_EnvironmentVLHGC *env);
 	
 	/**
+	 * recalculate PGCCompactionRate, HeapOccupancyTrend, ScannableBytesRatio at the end of First PGC After GMP
+	 * it should be called before estimating defragmentReclaimableRegions in order to calculate GMPIntermission more accurate.
+	 * TODO: might need to recalculate desiredCompactWork for sliding Compact of PGC (MacroDefragment part, right now it is calculated at the end of TaxationEntryPoint,
+	 * but we need to decide sliding compaction before Copyforward PGC).
+	 */
+	void recalculateRatesOnFirstPGCAfterGMP(MM_EnvironmentVLHGC *env);
+
+	/**
 	 * Calculate desired amount of work to be compacted this PGC cycle
 	 * @param env[in] the master GC thread
 	 * @return desired bytes to be compacted
@@ -346,6 +371,11 @@ public:
 	 * clear the flag that indicate this was the first PGC after GMP completed
 	 */
 	void firstPGCAfterGMPCompleted();
+
+	/**
+	 * return whether a PGC Abort happens during GMP
+	 */
+	bool isPGCAbortDuringGMP() {return _disableCopyForwardDuringCurrentGlobalMarkPhase;}
 
 	/**
 	 * return whether the following PGC is required to do global sweep (typically, first PGC after GMP completed)
@@ -394,7 +424,7 @@ public:
 
 	/**
 	 * Determine what type of PGC should be run next PGC cycle (Copy-Forward, Mark-Sweep-Compact etc)
-	 * The result is not explicitely returned, but implicitely through CycleState, class member flag etc.
+	 * The result is not explicitly returned, but implicitly through CycleState, class member flag etc.
 	 * @param env[in] the master GC thread
 	 */
 	void determineNextPGCType(MM_EnvironmentVLHGC *env);
@@ -430,6 +460,8 @@ public:
 	 */
 	void heapReconfigured(MM_EnvironmentVLHGC *env);
 	
+	double getAvgEdenSurvivalRateCopyForward(MM_EnvironmentVLHGC *env) { return _edenSurvivalRateCopyForward; }
+
 	MM_SchedulingDelegate(MM_EnvironmentVLHGC *env, MM_HeapRegionManager *manager);
 };
 

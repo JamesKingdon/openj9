@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -127,7 +127,7 @@ initializeArrayROMClass(J9ROMArrayClass *romClass, J9UTF8 *className, U_32 array
 	NNSRP_SET(romClass->className, className);
 	NNSRP_SET(romClass->superclassName, &arrayROMClasses.objectClassName);
 	romClass->modifiers = J9AccFinal | J9AccPublic | J9AccClassArray | J9AccAbstract;
-	romClass->extraModifiers = J9AccClassCloneable;
+	romClass->extraModifiers = J9AccClassCloneable | J9AccClassIsUnmodifiable;
 	romClass->interfaceCount = sizeof(arrayROMClasses.interfaceClasses) / sizeof(J9SRP);
 	NNSRP_SET(romClass->interfaces, &arrayROMClasses.interfaceClasses);
 	romClass->arrayShape = arrayShape;
@@ -150,6 +150,7 @@ initializeBaseTypeROMClass(J9ROMReflectClass *romClass, J9UTF8 *className, U_32 
 	romClass->romSize = size;
 	NNSRP_SET(romClass->className, className);
 	romClass->modifiers = J9AccFinal | J9AccPublic | J9AccClassInternalPrimitiveType | J9AccAbstract;
+	romClass->extraModifiers = J9AccClassIsUnmodifiable;
 	romClass->reflectTypeCode = typeCode;
 	romClass->instanceShape = instanceShape;
 	romClass->elementSize = elementSize;

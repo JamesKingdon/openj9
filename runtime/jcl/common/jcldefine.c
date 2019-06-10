@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2017 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -39,14 +39,15 @@ defineClassCommon(JNIEnv *env, jobject classLoaderObject,
 	J9VMThread *currentThread = (J9VMThread *)env;
 	J9JavaVM *vm = currentThread->javaVM;
 	J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
-	J9TranslationBufferSet *dynFuncs;
-	J9ClassLoader *classLoader;
+	J9TranslationBufferSet *dynFuncs = NULL;
+	J9ClassLoader *classLoader = NULL;
 	UDATA retried = FALSE;
-	UDATA utf8Length;
-	U_8 *utf8Name;
+	UDATA utf8Length = 0;
+	char utf8NameStackBuffer[J9VM_PACKAGE_NAME_BUFFER_LENGTH];
+	U_8 *utf8Name = NULL;
 	U_8 *classBytes = NULL;
 	J9Class *clazz = NULL;
-	jclass result;
+	jclass result = NULL;
 	PORT_ACCESS_FROM_JAVAVM(vm);
 	UDATA isContiguousClassBytes = 0;
 	J9ROMClass *loadedClass = NULL;
@@ -55,54 +56,52 @@ defineClassCommon(JNIEnv *env, jobject classLoaderObject,
 	J9TranslationLocalBuffer localBuffer = {J9_CP_INDEX_NONE, LOAD_LOCATION_UNKNOWN, NULL};
 
 	if (vm->dynamicLoadBuffers == NULL) {
-		throwNewInternalError(env, "Dynamic loader is unavailable");
-		return NULL;
+		if (J9_ARE_NO_BITS_SET(options, J9_FINDCLASS_FLAG_NAME_IS_INVALID)) {
+			throwNewInternalError(env, "Dynamic loader is unavailable");
+		}
+		goto done;
 	}
 	dynFuncs = vm->dynamicLoadBuffers;
 
 	if (classRep == NULL) {
-		throwNewNullPointerException(env, NULL);
-		return NULL;
+		if (J9_ARE_NO_BITS_SET(options, J9_FINDCLASS_FLAG_NAME_IS_INVALID)) {
+			throwNewNullPointerException(env, NULL);
+		}
+		goto done;
 	}
 
 	vmFuncs->internalEnterVMFromJNI(currentThread);
 	isContiguousClassBytes = J9ISCONTIGUOUSARRAY(vm, *(J9IndexableObject **)classRep);
 	if (!isContiguousClassBytes) {
-		vmFuncs->internalReleaseVMAccess(currentThread);
+		vmFuncs->internalExitVMToJNI(currentThread);
 		/* Make a "flat" copy of classRep */
 		if (length < 0) {
-			throwNewIndexOutOfBoundsException(env, NULL);
-			return NULL;
+			if (J9_ARE_NO_BITS_SET(options, J9_FINDCLASS_FLAG_NAME_IS_INVALID)) {
+				throwNewIndexOutOfBoundsException(env, NULL);
+			}
+			goto done;
 		}
 		classBytes = j9mem_allocate_memory(length, J9MEM_CATEGORY_CLASSES);
 		if (classBytes == NULL) {
-			throwNativeOOMError(env, 0, 0);
-			return NULL;
+			if (J9_ARE_NO_BITS_SET(options, J9_FINDCLASS_FLAG_NAME_IS_INVALID)) {
+				vmFuncs->throwNativeOOMError(env, 0, 0);
+			}
+			goto done;
 		}
 		(*env)->GetByteArrayRegion(env, classRep, offset, length, (jbyte *)classBytes);
 		if ((*env)->ExceptionCheck(env)) {
 			j9mem_free_memory(classBytes);
-			return NULL;
+			goto done;
 		}
 		vmFuncs->internalEnterVMFromJNI(currentThread);
 	}
 
 	/* Allocate and initialize a UTF8 copy of the Unicode class-name */
-	if (className == NULL) {
-		utf8Length = 0;
-		utf8Name = NULL;
-	} else {
-		utf8Length = vmFuncs->getStringUTF8Length(currentThread, J9_JNI_UNWRAP_REFERENCE(className));
-		/* For now, use malloc, but this should use stack allocation for short class-names */
-		utf8Name = j9mem_allocate_memory(utf8Length+1, J9MEM_CATEGORY_CLASSES);
-		if (utf8Name == NULL) {
+	if (NULL != className) {
+		utf8Name = (U_8*)vmFuncs->copyStringToUTF8WithMemAlloc(currentThread, J9_JNI_UNWRAP_REFERENCE(className), J9_STR_NULL_TERMINATE_RESULT | J9_STR_XLAT, "", 0, utf8NameStackBuffer, J9VM_PACKAGE_NAME_BUFFER_LENGTH, &utf8Length);
+
+		if (NULL == utf8Name) {
 			vmFuncs->setNativeOutOfMemoryError(currentThread, 0, 0);
-			goto done;
-		}
-		if (UDATA_MAX == vmFuncs->copyStringToUTF8Helper(
-			currentThread, J9_JNI_UNWRAP_REFERENCE(className), TRUE, J9_STR_XLAT, utf8Name, utf8Length + 1)
-		) {
-			vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGINTERNALERROR, NULL);
 			goto done;
 		}
 	}
@@ -132,7 +131,9 @@ retry:
 	if (vmFuncs->hashClassTableAt(classLoader, utf8Name, utf8Length) != NULL) {
 		/* Bad, we have already defined this class - fail */
 		omrthread_monitor_exit(vm->classTableMutex);
-		vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGLINKAGEERROR, (UDATA *)*(j9object_t*)className);
+		if (J9_ARE_NO_BITS_SET(options, J9_FINDCLASS_FLAG_NAME_IS_INVALID)) {
+			vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGLINKAGEERROR, (UDATA *)*(j9object_t*)className);
+		}
 		goto done;
 	}
 
@@ -162,16 +163,16 @@ retry:
 			 */
 			if ((NULL == vm->sharedClassConfig) || (0 == vm->sharedClassConfig->isBCIEnabled(vm))) {
 				clazz = vmFuncs->internalCreateRAMClassFromROMClass(currentThread,
-																			classLoader,
-																			loadedClass,
-																			0,
-																			NULL,
-																			protectionDomain ? *(j9object_t*)protectionDomain : NULL,
-																			NULL,
-																			J9_CP_INDEX_NONE,
-																			localBuffer.loadLocationType,
-																			NULL,
-																			hostClass);
+						classLoader,
+						loadedClass,
+						0,
+						NULL,
+						protectionDomain ? *(j9object_t*)protectionDomain : NULL,
+						NULL,
+						J9_CP_INDEX_NONE,
+						localBuffer.loadLocationType,
+						NULL,
+						hostClass);
 				/* Done if a class was found or and exception is pending, otherwise try to define the bytes */
 				if ((clazz != NULL) || (currentThread->currentException != NULL)) {
 					goto done;
@@ -189,14 +190,14 @@ retry:
 	/* The defineClass helper requires you hold the class table mutex and releases it for you */
 	
 	clazz = dynFuncs->internalDefineClassFunction(currentThread, 
-                                              utf8Name, utf8Length,
-                                              tempClassBytes, (UDATA) tempLength, NULL, 
-                                              classLoader, 
-                                              protectionDomain ? *(j9object_t*)protectionDomain : NULL,
-                                              options | J9_FINDCLASS_FLAG_THROW_ON_FAIL | J9_FINDCLASS_FLAG_NO_CHECK_FOR_EXISTING_CLASS,
-                                              loadedClass,
-											  hostClass,
-											  &localBuffer);
+				utf8Name, utf8Length,
+				tempClassBytes, (UDATA) tempLength, NULL,
+				classLoader,
+				protectionDomain ? *(j9object_t*)protectionDomain : NULL,
+				options | J9_FINDCLASS_FLAG_THROW_ON_FAIL | J9_FINDCLASS_FLAG_NO_CHECK_FOR_EXISTING_CLASS,
+				loadedClass,
+				hostClass,
+				&localBuffer);
 
 	/* If OutOfMemory, try a GC to free up some memory */
 	
@@ -211,16 +212,31 @@ retry:
 	}
 
 done:
-	if ((clazz == NULL) && (currentThread->currentException == NULL)) {
-		/* should not get here -- throw the default exception just in case */
-		vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGCLASSFORMATERROR, NULL);
+	if (NULL == clazz) {
+		if (J9_ARE_ANY_BITS_SET(options, J9_FINDCLASS_FLAG_NAME_IS_INVALID)) {
+			/*
+			 * The caller signalled that the name is invalid. Leave the result NULL and
+			 * clear any pending exception; the caller will throw NoClassDefFoundError.
+			 */
+			currentThread->currentException = NULL;
+ 			currentThread->privateFlags &= ~(UDATA)J9_PRIVATE_FLAGS_REPORT_EXCEPTION_THROW;
+		} else if (NULL == currentThread->currentException) {
+			/* should not get here -- throw the default exception just in case */
+			vmFuncs->setCurrentException(currentThread, J9VMCONSTANTPOOL_JAVALANGCLASSFORMATERROR, NULL);
+		}
+	} else {
+		result = vmFuncs->j9jni_createLocalRef(env, J9VM_J9CLASS_TO_HEAPCLASS(clazz));
+
+		if ((NULL != result) && J9CLASS_IS_EXEMPT_FROM_VALIDATION(clazz)) {
+			vmFuncs->fixUnsafeMethods(currentThread, result);
+		}
 	}
-			
-	result = vmFuncs->j9jni_createLocalRef(env, J9VM_J9CLASS_TO_HEAPCLASS(clazz));
 
-	vmFuncs->internalReleaseVMAccess(currentThread);
+	vmFuncs->internalExitVMToJNI(currentThread);
 
-	j9mem_free_memory(utf8Name);
+	if ((U_8*)utf8NameStackBuffer != utf8Name) {
+		j9mem_free_memory(utf8Name);
+	}
 
 	if (!isContiguousClassBytes) {
 		j9mem_free_memory(classBytes);

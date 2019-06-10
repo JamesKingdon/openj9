@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <stdio.h>
@@ -336,6 +336,9 @@ JNIEXPORT jobject JNICALL Java_com_ibm_j9ddr_corereaders_debugger_JniNatives_get
 #if defined(AIXPPC)
 	char* platform = "AIX";
 #endif
+#if defined(OSX)
+	char* platform = "OSX";
+#endif
 
 
 	platformClass = (*env)->FindClass(env, "com/ibm/j9ddr/corereaders/Platform");
@@ -642,7 +645,7 @@ Java_com_ibm_j9ddr_corereaders_debugger_JniSearchableMemory_findPattern(JNIEnv *
 	rc = dbgFindPatternInRange(pattern, patternLength, patternAlignment, startSearchFrom, (UDATA) -1 - (UDATA) startSearchFrom, &bytesSearched);
 	(*env)->ReleaseByteArrayElements(env, whatBytes,  searchBytes, JNI_ABORT);
 	if (rc == NULL) {
-		return -1; // The various Java implementors of IMemory.findPattern return -1 for not found, so should we
+		return -1; // The various Java implementers of IMemory.findPattern return -1 for not found, so should we
 	} else {
 		return (jlong) (UDATA) rc;
 	}

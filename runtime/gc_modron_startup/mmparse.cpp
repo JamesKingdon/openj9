@@ -1,6 +1,5 @@
-
 /*******************************************************************************
- * Copyright (c) 1991, 2016 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
  
 /**
@@ -71,6 +70,9 @@
 #define OPT_XMR "-Xmr"
 #define OPT_SOFTMX "-Xsoftmx"
 #define OPT_NUMA_NONE "-Xnuma:none"
+#define OPT_XXMAXRAMPERCENT "-XX:MaxRAMPercentage="
+#define OPT_XXINITIALRAMPERCENT "-XX:InitialRAMPercentage="
+
 /**
  * @}
  */
@@ -251,6 +253,35 @@ option_set_to_opt_integer(J9JavaVM* vm, const char* option, IDATA* optionIndex, 
 
 	if (element >= 0) {
 		returnCode = GET_INTEGER_VALUE(element, option, value);
+		if (OPTION_OK == returnCode) {
+			*address = value;
+		}
+	} 
+	return returnCode;
+}
+
+/**
+ * Find, consume and record an option from the argument list.
+ * Given an option string and the match type, find the argument in the to be consumed list.
+ * If not found, return success.
+ * If found, consume it, verify the memory value.
+ * 
+ * @return OPTION_OK if option is found and consumed or option not present, OPTION_MALFORMED if the option was malformed, OPTION_OVERFLOW if the option overflowed.
+ * @note value stored at address is invalid if failure returned
+ * @note optionIndex contains position of argument on command line if success returned, else -1
+ */
+static IDATA
+option_set_to_opt_double(J9JavaVM* vm, const char* option, IDATA* optionIndex, IDATA match, double* address)
+{
+	IDATA element = -1;
+	IDATA returnCode = OPTION_OK;
+	double value = 0.0;
+
+	element = FIND_AND_CONSUME_ARG2(match, option, NULL);
+	*optionIndex = element;
+
+	if (element >= 0) {
+		returnCode = GET_DOUBLE_VALUE(element, option, value);
 		if (OPTION_OK == returnCode) {
 			*address = value;
 		}
@@ -648,7 +679,7 @@ gcParseXlpOption(J9JavaVM *vm)
 		IDATA result = j9vmem_find_valid_page_size(0, &pageSize, &pageFlags, &isRequestedSizeSupported);
 
 		/*
-		 * j9vmem_find_valid_page_size happend to be changed to always return 0
+		 * j9vmem_find_valid_page_size happened to be changed to always return 0
 		 * However formally the function type still be IDATA so assert if it returns anything else
 		 */
 		Assert_MM_true(0 == result);
@@ -1114,7 +1145,7 @@ gcParseSovereignArguments(J9JavaVM *vm)
 	
 #endif /* J9VM_GC_LARGE_OBJECT_AREA) */
 
-	/* If user has specifed any of the following SOV options  then we just silently ignore them 
+	/* If user has specified any of the following SOV options  then we just silently ignore them 
 	 * 
 	 * -Xparroot
 	 * -XloratioN 
@@ -1197,7 +1228,7 @@ _error:
  * Wrapper for scan_udata, that provides readable error messages.
  * @param cursor address of the pointer to the string to parse for the udata
  * @param value address of the storage for the udata to be read
- * @param argName string containing the arguement name to be used in error reporting
+ * @param argName string containing the argument name to be used in error reporting
  * @return true if parsing was successful, false otherwise.
  */
 bool
@@ -1223,7 +1254,7 @@ scan_udata_helper(J9JavaVM *javaVM, char **cursor, UDATA *value, const char *arg
  * Wrapper for scan_udata, that provides readable error messages.
  * @param cursor address of the pointer to the string to parse for the udata
  * @param value address of the storage for the udata to be read
- * @param argName string containing the arguement name to be used in error reporting
+ * @param argName string containing the argument name to be used in error reporting
  * @return true if parsing was successful, false otherwise.
  */
 bool
@@ -1249,7 +1280,7 @@ scan_u32_helper(J9JavaVM *javaVM, char **cursor, U_32 *value, const char *argNam
  * Wrapper for scan_long, that provides readable error messages.
  * @param cursor address of the pointer to the string to parse for the u_64
  * @param value address of the storage for the U_64 to be read
- * @param argName string containing the arguement name to be used in error reporting
+ * @param argName string containing the argument name to be used in error reporting
  * @return true if parsing was successful, false otherwise.
  */
 bool
@@ -1275,7 +1306,7 @@ scan_u64_helper(J9JavaVM *javaVM, char **cursor, U_64 *value, const char *argNam
  * Wrapper for scan_hex, that provides readable error messages.
  * @param cursor address of the pointer to the string to parse for the hex value
  * @param value address of the storage for the hex value to be read
- * @param argName string containing the arguement name to be used in error reporting
+ * @param argName string containing the argument name to be used in error reporting
  * @return true if parsing was successful, false otherwise.
  */
 bool
@@ -1401,7 +1432,7 @@ gcParseCommandLineAndInitializeWithValues(J9JavaVM *vm, IDATA *memoryParameters)
 	PORT_ACCESS_FROM_JAVAVM(vm);
 
 	/* Parse the command line 
-	 * Order is important for paramters that match as substrings (-Xmrx/-Xmr)
+	 * Order is important for parameters that match as substrings (-Xmrx/-Xmr)
 	 */
 	result = option_set_to_opt(vm, OPT_XMCA, &index, EXACT_MEMORY_MATCH, &vm->ramClassAllocationIncrement);
 	if (OPTION_OK != result) {
@@ -1420,20 +1451,22 @@ gcParseCommandLineAndInitializeWithValues(J9JavaVM *vm, IDATA *memoryParameters)
 		goto _error;
 	}
 
-#if defined(J9VM_GC_COMPRESSED_POINTERS)	/* This should be J9VM_INTERP_COMPRESSED_OBJECT_HEADER */
-	if (-1 != index) {
-		extensions->suballocatorInitialSize = optionValue;
-	}
-	if(0 == extensions->suballocatorInitialSize) {
-		j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_GC_OPTIONS_VALUE_MUST_BE_ABOVE, OPT_XMCRS, (UDATA)0);
+#if defined(OMR_GC_COMPRESSED_POINTERS)
+	if (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm)) {
+		if (-1 != index) {
+			extensions->suballocatorInitialSize = optionValue;
+		}
+		if(0 == extensions->suballocatorInitialSize) {
+			j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_GC_OPTIONS_VALUE_MUST_BE_ABOVE, OPT_XMCRS, (UDATA)0);
 			return JNI_EINVAL;
-	}
+		}
 #define FOUR_GB ((UDATA)4 * 1024 * 1024 * 1024)
-	if(extensions->suballocatorInitialSize >= FOUR_GB) {
-		j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_GC_OPTIONS_VALUE_OVERFLOWED, OPT_XMCRS);
+		if(extensions->suballocatorInitialSize >= FOUR_GB) {
+			j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_GC_OPTIONS_VALUE_OVERFLOWED, OPT_XMCRS);
 			return JNI_EINVAL;
+		}
 	}
-#endif /* defined(J9VM_GC_COMPRESSED_POINTERS) */
+#endif /* defined(OMR_GC_COMPRESSED_POINTERS) */
 
 	memoryParameters[opt_Xmcrs] = index;
 
@@ -1499,7 +1532,6 @@ gcParseCommandLineAndInitializeWithValues(J9JavaVM *vm, IDATA *memoryParameters)
 		goto _error;
 	}
 	memoryParameters[opt_Xms] = index;
-
 
 #if defined(J9VM_GC_MODRON_SCAVENGER)
 	result = option_set_to_opt(vm, OPT_XMRX, &index, EXACT_MEMORY_MATCH, &optionValue);
@@ -1571,6 +1603,30 @@ gcParseCommandLineAndInitializeWithValues(J9JavaVM *vm, IDATA *memoryParameters)
 		/* Hack table to appear that -Xmos and -Xmox _were_ specified */		
 		memoryParameters[opt_Xmos] = memoryParameters[opt_Xmo];
 		memoryParameters[opt_Xmox] = memoryParameters[opt_Xmo];
+	}
+
+	result = option_set_to_opt_double(vm, OPT_XXMAXRAMPERCENT, &index, EXACT_MEMORY_MATCH, &extensions->maxRAMPercent);
+	if (OPTION_OK != result) {
+		goto _error;
+	}
+	memoryParameters[opt_maxRAMPercent] = index;
+	if (memoryParameters[opt_maxRAMPercent] != -1) {
+		if ((extensions->maxRAMPercent < 0.0) || (extensions->maxRAMPercent > 100.0)) {
+			j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_GC_OPTIONS_PERCENT_OUT_OF_RANGE, "-XX:MaxRAMPercentage", 0.0, 100.0);
+			return JNI_EINVAL;
+		}
+	}
+
+	result = option_set_to_opt_double(vm, OPT_XXINITIALRAMPERCENT, &index, EXACT_MEMORY_MATCH, &extensions->initialRAMPercent);
+	if (OPTION_OK != result) {
+		goto _error;
+	}
+	memoryParameters[opt_initialRAMPercent] = index;
+	if (memoryParameters[opt_initialRAMPercent] != -1) {
+		if ((extensions->initialRAMPercent < 0.0) || (extensions->initialRAMPercent > 100.0)) {
+			j9nls_printf(PORTLIB, J9NLS_ERROR, J9NLS_GC_OPTIONS_PERCENT_OUT_OF_RANGE, "-XX:InitialRAMPercentage", 0.0, 100.0);
+			return JNI_EINVAL;
+		}
 	}
 
 	/* Parse the option to disable NUMA-awareness.  This is parsed on all platforms but only Balanced currently does anything

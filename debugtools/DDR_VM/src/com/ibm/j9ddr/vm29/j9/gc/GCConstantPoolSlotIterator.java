@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.j9.gc;
 
@@ -44,6 +44,7 @@ import com.ibm.j9ddr.vm29.pointer.generated.J9RAMClassRefPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9RAMMethodHandleRefPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9RAMMethodTypeRefPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9RAMStringRefPointer;
+import com.ibm.j9ddr.vm29.pointer.helper.J9ROMClassHelper;
 import com.ibm.j9ddr.vm29.structure.J9RAMConstantPoolItem;
 
 public class GCConstantPoolSlotIterator extends GCIterator
@@ -65,7 +66,7 @@ public class GCConstantPoolSlotIterator extends GCIterator
 	
 	protected void initializeSlots_V1(J9ClassPointer clazz, boolean returnClassSlots, boolean returnObjectSlots) throws CorruptDataException
 	{
-		U32Pointer cpDescriptionSlots = clazz.romClass().cpShapeDescription();
+		U32Pointer cpDescriptionSlots = J9ROMClassHelper.cpShapeDescription(clazz.romClass());
 		PointerPointer cpEntry = PointerPointer.cast(clazz.ramConstantPool());
 		long cpDescription = 0;
 		long cpEntryCount = clazz.romClass().ramConstantPoolCount().longValue();

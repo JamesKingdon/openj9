@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.j9.gc;
 
@@ -66,7 +66,7 @@ public class GCHeapMapWordIterator extends GCIterator {
 		J9ObjectPointer nextObject = null;
 		
 		if (!_cache.eq(0)) {
-			/* TODO: lpnguyen, Note that numberOfTrailingZeros in java refers == numberOfLeadingZeros in C verison of this.. */
+			/* TODO: lpnguyen, Note that numberOfTrailingZeros in java refers == numberOfLeadingZeros in C version of this.. */
 			int trailingZeros = _cache.numberOfTrailingZeros();
 			long slotsToSkip = (trailingZeros * MM_HeapMap.J9MODRON_HEAP_SLOTS_PER_HEAPMAP_BIT);
 			_heapSlotCurrent = _heapSlotCurrent.add(slotsToSkip);

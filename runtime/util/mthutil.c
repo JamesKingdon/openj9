@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2015 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -215,6 +215,72 @@ getCodeTypeAnnotationsDataFromROMMethod(J9ROMMethod *romMethod)
 	return result;
 }
 
+J9Method *
+iTableMethodAtIndex(J9Class *interfaceClass, UDATA index)
+{
+	J9Method *ramMethod = interfaceClass->ramMethods;
+	while (0 != index) {
+		if (J9ROMMETHOD_IN_ITABLE(J9_ROM_METHOD_FROM_RAM_METHOD(ramMethod))) {
+			index -= 1;
+		}
+		ramMethod += 1;
+	}
+	return ramMethod;
+}
+
+UDATA
+getITableIndexWithinDeclaringClass(J9Method *method)
+{
+	UDATA index = 0;
+	J9Class * const methodClass = J9_CLASS_FROM_METHOD(method);
+	J9Method *ramMethods = methodClass->ramMethods;
+	U_32 *ordering = J9INTERFACECLASS_METHODORDERING(methodClass);
+	if (NULL == ordering) {
+		while (method != ramMethods) {
+			if (J9ROMMETHOD_IN_ITABLE(J9_ROM_METHOD_FROM_RAM_METHOD(ramMethods))) {
+				index += 1;
+			}
+			ramMethods += 1;
+		}
+	} else {
+		for(;;) {
+			J9Method *ramMethod = ramMethods + *ordering;
+			if (method == ramMethod) {
+				break;
+			}
+			if (J9ROMMETHOD_IN_ITABLE(J9_ROM_METHOD_FROM_RAM_METHOD(ramMethod))) {
+				index += 1;
+			}
+			ordering += 1;
+		}
+	}
+	return index;
+}
+
+UDATA
+getITableIndexForMethod(J9Method * method, J9Class *targetInterface)
+{
+	J9Class *methodClass = J9_CLASS_FROM_METHOD(method);
+	UDATA skip = 0;
+	/* NULL targetInterface implies searching only within methodClass, which may be an obsolete class.
+	 * This works because the methods for the local interface always appear first in the iTable, with
+	 * extended interface methods appearing after.
+	 */
+	if (NULL != targetInterface) {
+		/* Locate methodClass within the extends chain of targetInterface */
+		J9ITable *allInterfaces = (J9ITable*)targetInterface->iTable;
+		for(;;) {
+			J9Class *interfaceClass = allInterfaces->interfaceClass;
+			if (interfaceClass == methodClass) {
+				break;
+			}
+			skip += J9INTERFACECLASS_ITABLEMETHODCOUNT(interfaceClass);
+			allInterfaces = allInterfaces->next;
+		}
+	}
+	return getITableIndexWithinDeclaringClass(method) + skip;
+}
+
 J9MethodDebugInfo *
 methodDebugInfoFromROMMethod(J9ROMMethod *romMethod)
 {
@@ -332,6 +398,7 @@ walkStackMapSlots(U_8 *framePointer, U_16 typeInfoCount)
 			framePointer += 2; /* Skip offset */
 			break;
 		case CFR_STACKMAP_TYPE_BYTE_ARRAY: /* fall through 7 cases */
+		case CFR_STACKMAP_TYPE_BOOL_ARRAY:
 		case CFR_STACKMAP_TYPE_CHAR_ARRAY:
 		case CFR_STACKMAP_TYPE_DOUBLE_ARRAY:
 		case CFR_STACKMAP_TYPE_FLOAT_ARRAY:

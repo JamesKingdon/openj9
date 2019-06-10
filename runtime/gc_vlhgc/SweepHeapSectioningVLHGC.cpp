@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9.h"
@@ -38,7 +38,7 @@
  * Called during initialization, this routine looks at the maximum size of the heap and expected
  * configuration (generations, regions, etc) and determines the approximate maximum number of chunks
  * that will be required for a sweep at any given time.  It is safe to underestimate the number of chunks,
- * as the sweep sectioning mechnanism will compensate, but the the expectation is that by having all
+ * as the sweep sectioning mechanism will compensate, but the the expectation is that by having all
  * chunk memory allocated in one go will keep the data localized and fragment system memory less.
  * @return estimated upper bound number of chunks that will be required by the system.
  */

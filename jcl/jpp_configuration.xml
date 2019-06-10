@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE configurationreg SYSTEM "http://home.ottawa.ibm.com/teams/bluebird/web/eclipse_site/jpp.dtd">
-
 <!--
 /*******************************************************************************
- * Copyright (c) 2002, 2017 IBM Corp. and others
+ * Copyright (c) 2002, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -21,20 +20,11 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
  -->
-
 <configurationreg version="3.0">
-	<!-- AUTOMATED TEST METADATA -->
-	<automatedtests project="J9 JCL Automated Tests v2">
-		<classpathentry kind="src" path="/J9 JCL Test Harness"/>
-		<classpathentry kind="src" path="/JUnit_3.8.2"/>
-		<classpathentry kind="lib" path="/J9 JCL Automated Tests v2/src/com/ibm/resources/j9ts_boothclasspath.jar"/>
-		<source path="src"/>
-	</automatedtests>
-
-	<!-- GLOBAL PARAMETERS FOR ALL CONFIGURATIONS, CAN BE OVERWITTEN IN CONFIGURATION ELEMENT IF IT IS REQUIRED-->
+	<!-- GLOBAL PARAMETERS FOR ALL CONFIGURATIONS, CAN BE OVERWRITTEN IN CONFIGURATION ELEMENT IF IT IS REQUIRED-->
 	<globalParameters>
 		<parameter name="outputPathPrefix" value="pConfig "/>
 		<parameter name="outputPathSuffix" value=""/>
@@ -50,45 +40,45 @@
 		for debugging, and are not yet used in a configuration. -->
 	<set
 		label="newflags"
-		flags="AnnotateOverride,Sidecar15,Valhalla-MVT"/>
+		flags="AnnotateOverride,Sidecar15"/>
 
 	<set
 		label="oldflags"
-		flags="PaaS"/>
+		flags="PaaS,Sidecar19-SE_RAWPLUSJ9"/>
 
 	<!-- These flags identify the target platform. -->
 	<set
 		label="platforms"
-		flags="PLATFORM-ap64,PLATFORM-mz31,PLATFORM-mz64,PLATFORM-wa64,PLATFORM-xa64,PLATFORM-xi32,PLATFORM-xl64,PLATFORM-xr32,PLATFORM-xs32,PLATFORM-xz31,PLATFORM-xz64"/>
+		flags="PLATFORM-ap64,PLATFORM-mz31,PLATFORM-mz64,PLATFORM-oa64,PLATFORM-wa64,PLATFORM-xa64,PLATFORM-xi32,PLATFORM-xl64,PLATFORM-xr32,PLATFORM-xr64,PLATFORM-xs32,PLATFORM-xz31,PLATFORM-xz64"/>
 
 	<configuration
 		  label="SIDECAR18-SE"
 		  outputpath="SIDECAR18-SE/src"
 		  flags="Sidecar18-SE,Sidecar70_27,Sidecar17,Sidecar16,SharedClasses"
 		  jdkcompliance="1.8">
-		<classpathentry kind="src" path="/pConfig CUDA4J"/>
 		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun180.jar"/>
 		<source path="src/java.base/share/classes"/>
 		<source path="src/java.desktop/share/classes"/>
 		<source path="src/java.logging/share/classes"/>
 		<source path="src/java.management/share/classes"/>
 		<source path="src/jdk.attach/share/classes"/>
+		<source path="src/jdk.jcmd/share/classes"/>
 		<source path="src/openj9.jvm/share/classes"/>
 		<source path="src/jdk.management/share/classes"/>
 		<source path="src/openj9.cuda/share/classes" />
 		<source path="src/openj9.dataaccess/share/classes"/>
 		<source path="src/openj9.gpu/share/classes" />
-		<source path="src/com.ibm.management/share/classes"/>
 		<source path="src/openj9.sharedclasses/share/classes"/>
+		<source path="src/openj9.zosconditionhandling/share/classes"/>
 		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
 		<parameter name="msg:outputdir" value="com/ibm/oti/util"/>
 		<parameter name="jxerules:outputdir" value="java/lang"/>
 	</configuration>
-	
+
 	<configuration
 		  label="SIDECAR18-SE-OPENJ9"
 		  outputpath="SIDECAR18-SE-OPENJ9/src"
-		  flags="Sidecar18-SE-OpenJ9,CUDA4J,DAA"
+		  flags="Sidecar18-SE-OpenJ9,DAA"
 		  dependencies="SIDECAR18-SE"
 		  jdkcompliance="1.8">
 		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun180.jar"/>
@@ -97,39 +87,41 @@
 		<source path="src/java.logging/share/classes"/>
 		<source path="src/java.management/share/classes"/>
 		<source path="src/jdk.attach/share/classes"/>
+		<source path="src/jdk.jcmd/share/classes"/>
 		<source path="src/openj9.jvm/share/classes"/>
 		<source path="src/jdk.management/share/classes"/>
 		<source path="src/openj9.cuda/share/classes" />
 		<source path="src/openj9.dataaccess/share/classes"/>
 		<source path="src/openj9.gpu/share/classes" />
-		<source path="src/com.ibm.management/share/classes"/>
 		<source path="src/openj9.sharedclasses/share/classes"/>
+		<source path="src/openj9.zosconditionhandling/share/classes"/>
 		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
 		<parameter name="msg:outputdir" value="com/ibm/oti/util"/>
 		<parameter name="jxerules:outputdir" value="java/lang"/>
 	</configuration>
-	
+
 	<configuration
-		  label="SIDECAR19-SE-B148"
-		  outputpath="SIDECAR19-SE-B148/src"
-		  flags="Sidecar19-SE, DAA, Open-Module-Support"
+		  label="JAVA11"
+		  outputpath="JAVA11/src"
+		  flags="Sidecar18-SE-OpenJ9, DAA, Open-Module-Support,Sidecar19-SE,Sidecar19-SE-OpenJ9,Java10,Java11"
 		  dependencies="SIDECAR18-SE"
 		  jdkcompliance="1.8">
 		<classpathentry kind="src" path="src/java.base/share/classes"/>
 		<classpathentry kind="src" path="src/java.management/share/classes"/>
 		<classpathentry kind="src" path="src/jdk.attach/share/classes"/>
+		<classpathentry kind="src" path="src/jdk.jcmd/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.jvm/share/classes"/>
 		<classpathentry kind="src" path="src/jdk.management/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.cuda/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.dataaccess/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfj/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfjview/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.dtfj/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.dtfjview/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.gpu/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.management/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.sharedclasses/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.traceformat/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.zosconditionhandling/share/classes"/>
 		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190.jar"/>
+		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sunJava11.jar"/>
 		<source path="src"/>
 		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
 		<parameter name="msg:outputdir" value="java.base/share/classes/com/ibm/oti/util"/>
@@ -137,26 +129,27 @@
 	</configuration>
 
 	<configuration
-		  label="SIDECAR19-SE-B136"
-		  outputpath="SIDECAR19-SE-B136/src"
-		  flags="Sidecar19-SE, DAA"
-		  dependencies="SIDECAR18-SE"
+		  label="JAVA12"
+		  outputpath="JAVA12/src"
+		  flags="Java12"
+		  dependencies="JAVA11"
 		  jdkcompliance="1.8">
 		<classpathentry kind="src" path="src/java.base/share/classes"/>
 		<classpathentry kind="src" path="src/java.management/share/classes"/>
 		<classpathentry kind="src" path="src/jdk.attach/share/classes"/>
+		<classpathentry kind="src" path="src/jdk.jcmd/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.jvm/share/classes"/>
 		<classpathentry kind="src" path="src/jdk.management/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.cuda/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.dataaccess/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfj/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfjview/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.dtfj/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.dtfjview/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.gpu/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.management/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.sharedclasses/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.traceformat/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.zosconditionhandling/share/classes"/>
 		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190.jar"/>
+		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sunJava12.jar"/>
 		<source path="src"/>
 		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
 		<parameter name="msg:outputdir" value="java.base/share/classes/com/ibm/oti/util"/>
@@ -164,26 +157,27 @@
 	</configuration>
 
 	<configuration
-		  label="SIDECAR19-SE-B165"
-		  outputpath="SIDECAR19-SE-B165/src"
-		  flags="Sidecar19-SE-B165"
-		  dependencies="SIDECAR19-SE-B148"
+		  label="JAVA13"
+		  outputpath="JAVA13/src"
+		  flags="Java13"
+		  dependencies="JAVA12"
 		  jdkcompliance="1.8">
 		<classpathentry kind="src" path="src/java.base/share/classes"/>
 		<classpathentry kind="src" path="src/java.management/share/classes"/>
 		<classpathentry kind="src" path="src/jdk.attach/share/classes"/>
+		<classpathentry kind="src" path="src/jdk.jcmd/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.jvm/share/classes"/>
 		<classpathentry kind="src" path="src/jdk.management/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.cuda/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.dataaccess/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfj/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfjview/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.dtfj/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.dtfjview/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.gpu/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.management/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.sharedclasses/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.traceformat/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.zosconditionhandling/share/classes"/>
 		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190b165.jar"/>
+		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sunJava13.jar"/>
 		<source path="src"/>
 		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
 		<parameter name="msg:outputdir" value="java.base/share/classes/com/ibm/oti/util"/>
@@ -191,134 +185,27 @@
 	</configuration>
 
 	<configuration
-		  label="SIDECAR19-SE-B169"
-		  outputpath="SIDECAR19-SE-B169/src"
-		  flags="Sidecar19-SE-B169"
-		  dependencies="SIDECAR19-SE-B165"
+		  label="OPENJ9-RAWBUILD"
+		  outputpath="OPENJ9-RAWBUILD/src"
+		  flags="OpenJ9-RawBuild"
+		  dependencies="JAVA11"
 		  jdkcompliance="1.8">
 		<classpathentry kind="src" path="src/java.base/share/classes"/>
 		<classpathentry kind="src" path="src/java.management/share/classes"/>
 		<classpathentry kind="src" path="src/jdk.attach/share/classes"/>
+		<classpathentry kind="src" path="src/jdk.jcmd/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.jvm/share/classes"/>
 		<classpathentry kind="src" path="src/jdk.management/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.cuda/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.dataaccess/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfj/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfjview/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.dtfj/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.dtfjview/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.gpu/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.management/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.sharedclasses/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.traceformat/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.zosconditionhandling/share/classes"/>
 		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190b165.jar"/>
-		<source path="src"/>
-		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
-		<parameter name="msg:outputdir" value="java.base/share/classes/com/ibm/oti/util"/>
-		<parameter name="jxerules:outputdir" value="java/lang"/>
-	</configuration>
-
-	<configuration
-		  label="SIDECAR19-SE-B174"
-		  outputpath="SIDECAR19-SE-B174/src"
-		  flags="Sidecar19-SE-B174"
-		  dependencies="SIDECAR19-SE-B169"
-		  jdkcompliance="1.8">
-		<classpathentry kind="src" path="src/java.base/share/classes"/>
-		<classpathentry kind="src" path="src/java.management/share/classes"/>
-		<classpathentry kind="src" path="src/jdk.attach/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.jvm/share/classes"/>
-		<classpathentry kind="src" path="src/jdk.management/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.cuda/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.dataaccess/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfj/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfjview/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.gpu/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.management/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.sharedclasses/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.traceformat/share/classes"/>
-		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190b174.jar"/>
-		<source path="src"/>
-		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
-		<parameter name="msg:outputdir" value="java.base/share/classes/com/ibm/oti/util"/>
-		<parameter name="jxerules:outputdir" value="java/lang"/>
-	</configuration>
-
-	<configuration
-		  label="SIDECAR19-SE-OPENJ9"
-		  outputpath="SIDECAR19-SE-OpenJ9/src"
-		  flags="Sidecar18-SE-OpenJ9,Sidecar19-SE-OpenJ9"
-		  dependencies="SIDECAR19-SE-B174"
-		  jdkcompliance="1.8">
-		<classpathentry kind="src" path="src/java.base/share/classes"/>
-		<classpathentry kind="src" path="src/java.management/share/classes"/>
-		<classpathentry kind="src" path="src/jdk.attach/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.jvm/share/classes"/>
-		<classpathentry kind="src" path="src/jdk.management/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.cuda/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.dataaccess/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfj/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfjview/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.gpu/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.management/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.sharedclasses/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.traceformat/share/classes"/>
-		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190b174.jar"/>
-		<source path="src"/>
-		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
-		<parameter name="msg:outputdir" value="java.base/share/classes/com/ibm/oti/util"/>
-		<parameter name="jxerules:outputdir" value="java/lang"/>
-	</configuration>
-
-	<configuration
-		  label="SIDECAR19-SE-B175"
-		  outputpath="SIDECAR19-SE-B175/src"
-		  flags="Sidecar19-SE-B175"
-		  dependencies="SIDECAR19-SE-OPENJ9"
-		  jdkcompliance="1.8">
-		<classpathentry kind="src" path="src/java.base/share/classes"/>
-		<classpathentry kind="src" path="src/java.management/share/classes"/>
-		<classpathentry kind="src" path="src/jdk.attach/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.jvm/share/classes"/>
-		<classpathentry kind="src" path="src/jdk.management/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.cuda/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.dataaccess/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfj/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfjview/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.gpu/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.management/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.sharedclasses/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.traceformat/share/classes"/>
-		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190b174.jar"/>
-		<source path="src"/>
-		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
-		<parameter name="msg:outputdir" value="java.base/share/classes/com/ibm/oti/util"/>
-		<parameter name="jxerules:outputdir" value="java/lang"/>
-	</configuration>
-
-	<configuration
-		  label="JAVA18.3"
-		  outputpath="JAVA18.3/src"
-		  flags="Java18.3"
-		  dependencies="SIDECAR19-SE-B175"
-		  jdkcompliance="1.8">
-		<classpathentry kind="src" path="src/java.base/share/classes"/>
-		<classpathentry kind="src" path="src/java.management/share/classes"/>
-		<classpathentry kind="src" path="src/jdk.attach/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.jvm/share/classes"/>
-		<classpathentry kind="src" path="src/jdk.management/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.cuda/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.dataaccess/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfj/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfjview/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.gpu/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.management/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.sharedclasses/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.traceformat/share/classes"/>
-		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190b174.jar"/>
+		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sunJava11.jar"/>
 		<source path="src"/>
 		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
 		<parameter name="msg:outputdir" value="java.base/share/classes/com/ibm/oti/util"/>
@@ -329,75 +216,27 @@
 		  label="PANAMA"
 		  outputpath="PANAMA/src"
 		  flags="Panama"
-		  dependencies="SIDECAR19-SE-B136"
+		  dependencies="JAVA13"
 		  jdkcompliance="1.8">
 		<classpathentry kind="src" path="src/java.base/share/classes"/>
 		<classpathentry kind="src" path="src/java.management/share/classes"/>
 		<classpathentry kind="src" path="src/jdk.attach/share/classes"/>
+		<classpathentry kind="src" path="src/jdk.jcmd/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.jvm/share/classes"/>
 		<classpathentry kind="src" path="src/jdk.management/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.cuda/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.dataaccess/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfj/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfjview/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.dtfj/share/classes"/>
+		<classpathentry kind="src" path="src/openj9.dtfjview/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.gpu/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.management/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.sharedclasses/share/classes"/>
 		<classpathentry kind="src" path="src/openj9.traceformat/share/classes"/>
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190.jar"/>
+		<classpathentry kind="src" path="src/openj9.zosconditionhandling/share/classes"/>
+		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sunJava13.jar"/>
 		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190Panama.jar"/>
 		<source path="src"/>
 		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
 		<parameter name="msg:outputdir" value="java.base/share/classes/com/ibm/oti/util"/>
-		<parameter name="jxerules:outputdir" value="java/lang"/>
-	</configuration>
-
-	<configuration
-		  label="VALHALLA"
-		  outputpath="VALHALLA/src"
-		  flags="Valhalla, Valhalla-MVT, Valhalla-NestMates"
-		  dependencies="SIDECAR19-SE-B136"
-		  jdkcompliance="1.8">
-		<classpathentry kind="src" path="src/java.base/share/classes"/>
-		<classpathentry kind="src" path="src/java.management/share/classes"/>
-		<classpathentry kind="src" path="src/jdk.attach/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.jvm/share/classes"/>
-		<classpathentry kind="src" path="src/jdk.management/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.cuda/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.dataaccess/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfj/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.dtfjview/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.gpu/share/classes"/>
-		<classpathentry kind="src" path="src/com.ibm.management/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.sharedclasses/share/classes"/>
-		<classpathentry kind="src" path="src/openj9.traceformat/share/classes"/>
-		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190.jar"/>
-		<source path="src"/>
-		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
-		<parameter name="msg:outputdir" value="java.base/share/classes/com/ibm/oti/util"/>
-		<parameter name="jxerules:outputdir" value="java/lang"/>
-	</configuration>
-
-	<configuration
-		  label="SIDECAR19-SE_RAWPLUSJ9"
-		  outputpath="SIDECAR19-SE_RAWPLUSJ9/src"
-		  flags="Sidecar19-SE_RAWPLUSJ9"
-		  dependencies="SIDECAR19-SE-B136"
-		  jdkcompliance="1.8">
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190.jar"/>
-		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun190RawPlusJ9.jar"/>
-		<source path="src/java.base/share/classes"/>
-		<source path="src/java.desktop/share/classes"/>
-		<source path="src/java.management/share/classes"/>
-		<source path="src/jdk.management/share/classes"/>
-		<source path="src/jdk.attach/share/classes"/>
-		<source path="src/openj9.jvm/share/classes"/>
-		<source path="src/openj9.dataaccess/share/classes"/>
-		<source path="src/com.ibm.management/share/classes"/>
-		<source path="src/openj9.sharedclasses/share/classes"/>
-		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
-		<parameter name="msg:outputdir" value="com/ibm/oti/util"/>
 		<parameter name="jxerules:outputdir" value="java/lang"/>
 	</configuration>
 
@@ -407,10 +246,10 @@
 		  flags="DAA"
 		  dependencies="SIDECAR18-SE"
 		  jdkcompliance="1.8">
-		<classpathentry kind="src" path="/pConfig CUDA4J"/>
 		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun180.jar"/>
 		<source path="src/java.base/share/classes"/>
 		<source path="src/openj9.dataaccess/share/classes"/>
+		<source path="src/openj9.zosconditionhandling/share/classes"/>
 		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
 		<parameter name="msg:outputdir" value="com/ibm/oti/util"/>
 		<parameter name="jxerules:outputdir" value="java/lang"/>
@@ -421,11 +260,11 @@
 		  outputpath="SIDECAR18-DTFJ/src"
 		  dependencies="SIDECAR18-SE"
 		  jdkcompliance="1.8">
-		<classpathentry kind="src" path="/pConfig CUDA4J"/>
 		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun180.jar"/>
 		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
 		<source path="src/java.base/share/classes"/>
-		<source path="src/com.ibm.dtfj/share/classes"/>
+		<source path="src/openj9.dtfj/share/classes"/>
+		<source path="src/openj9.zosconditionhandling/share/classes"/>
 		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
 		<parameter name="msg:outputdir" value="com/ibm/oti/util"/>
 		<parameter name="jxerules:outputdir" value="java/lang"/>
@@ -436,23 +275,15 @@
 		  outputpath="SIDECAR18-DTFJVIEW/src"
 		  dependencies="SIDECAR18-SE"
 		  jdkcompliance="1.8">
-		<classpathentry kind="src" path="/pConfig CUDA4J"/>
 		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun180.jar"/>
 		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
 		<source path="src/java.base/share/classes"/>
-		<source path="src/com.ibm.dtfj/share/classes"/>
-		<source path="src/com.ibm.dtfjview/share/classes"/>
+		<source path="src/openj9.dtfj/share/classes"/>
+		<source path="src/openj9.dtfjview/share/classes"/>
+		<source path="src/openj9.zosconditionhandling/share/classes"/>
 		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
 		<parameter name="msg:outputdir" value="com/ibm/oti/util"/>
 		<parameter name="jxerules:outputdir" value="java/lang"/>
-	</configuration>
-
-	<configuration label="CUDA4J" outputpath="CUDA4J/src" flags="CUDA4J" jdkcompliance="1.8">
-		<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8"/>
-		<source path="src/java.base/share/classes" />
-		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
-		<parameter name="msg:outputdir" value="com/ibm/oti/util" />
-		<parameter name="jxerules:outputdir" value="java/lang" />
 	</configuration>
 
 	<configuration
@@ -460,14 +291,29 @@
 		  outputpath="SIDECAR18-TRACEFORMAT/src"
 		  dependencies="SIDECAR18-SE"
 		  jdkcompliance="1.8">
-		<classpathentry kind="src" path="/pConfig CUDA4J"/>
 		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun180.jar"/>
 		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
 		<source path="src/java.base/share/classes"/>
 		<source path="src/openj9.traceformat/share/classes"/>
+		<source path="src/openj9.zosconditionhandling/share/classes"/>
 		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
 		<parameter name="msg:outputdir" value="com/ibm/oti/util"/>
 		<parameter name="jxerules:outputdir" value="java/lang"/>
+	</configuration>
+
+	<configuration
+		  label="SIDECAR18-TOOLS-OPENJ9"
+		  outputpath="SIDECAR18-TOOLS/src"
+		  dependencies="SIDECAR18-SE-OPENJ9"
+		  jdkcompliance="1.8">
+		<classpathentry kind="src" path="/pConfig SIDECAR18-SE-OPENJ9"/>
+		<classpathentry kind="lib" path="/binaries/vm/third/rt-compressed.sun180.jar"/>
+		<classpathentry kind="lib" path="/binaries/common/ibm/ibmjzos.jar"/>
+		<source path="src/openj9.dtfj/share/classes"/>
+		<source path="src/openj9.dtfjview/share/classes"/>
+		<source path="src/openj9.traceformat/share/classes"/>
+		<parameter name="macro:define" value="com.ibm.oti.vm.library.version=29"/>
+		<parameter name="msg:outputdir" value=""/>
 	</configuration>
 
 </configurationreg>

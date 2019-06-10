@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2016 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 /* Undefine the winsockapi because winsock2 defines it.  Removes warnings. */
 #if defined(_WINSOCKAPI_) && !defined(_WINSOCK2API_)
@@ -161,9 +161,11 @@ jobject getPlatformPropertyList(JNIEnv *env, const char *strings[], int propInde
 		strings[propIndex++] = userdir;
 	}
 
-	/* Get the timezone */
-	strings[propIndex++] = "user.timezone";
-	strings[propIndex++] = "";
+	if (JAVA_SPEC_VERSION < J2SE_V12) {
+		/* Get the timezone */
+		strings[propIndex++] = "user.timezone";
+		strings[propIndex++] = "";
+	}
 
 	/* Jazz 52075 JCL_J2SE is always true */
 
@@ -217,8 +219,12 @@ char* getPlatformFileEncoding(JNIEnv *env, char *codepage, int size, int encodin
 	/*[PR 94901] Get info about the current code page, not the system code page (CP_ACP) */
 	if (GetCPInfo(cp, &cpInfo) && cpInfo.MaxCharSize > 1) {
 		if (cp == 936) {
-			if (IsValidCodePage(54936))
-				return "GB18030";
+			J9JavaVM* vm = ((J9VMThread *)env)->javaVM;
+			if (J2SE_VERSION(vm) < J2SE_V11) {
+				if (IsValidCodePage(54936)) {
+					return "GB18030";
+				}
+			}
 			return "GBK";
 		} else if (cp == 54936) return "GB18030";
 		codepage[0] = 'M';
@@ -237,7 +243,7 @@ char* getPlatformFileEncoding(JNIEnv *env, char *codepage, int size, int encodin
 
 
 /**
- * Turns a platform independed DLL name into a platform specific one
+ * Turns a platform independent DLL name into a platform specific one
  */	
 void mapLibraryToPlatformName(const char *inPath, char *outPath) {
 	strcpy(outPath,inPath);

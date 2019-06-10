@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar17]*/
 /*******************************************************************************
- * Copyright (c) 2005, 2016 IBM Corp. and others
+ * Copyright (c) 2005, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package java.lang.management;
 
@@ -32,7 +32,7 @@ package java.lang.management;
  * </p>
  * <p>
  * Accessing this kind of <code>MXBean</code> can be done in one of three
- * ways. <br/>
+ * ways.
  * <ol>
  * <li>Invoking the static {@link ManagementFactory#getMemoryManagerMXBeans()}
  * method which returns a {@link java.util.List} of all currently instantiated
@@ -43,7 +43,7 @@ package java.lang.management;
  * string &quot;java.lang:type=MemoryManager,name= <i>unique manager's name
  * </i>&quot; for the value of the second parameter.</li>
  * </ol>
- * </p>
+ * 
  */
 public interface MemoryManagerMXBean extends PlatformManagedObject {
 

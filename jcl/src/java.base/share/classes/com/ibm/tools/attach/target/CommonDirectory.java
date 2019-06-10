@@ -1,7 +1,7 @@
 /*[INCLUDE-IF Sidecar16]*/
 package com.ibm.tools.attach.target;
 /*******************************************************************************
- * Copyright (c) 2009, 2010 IBM Corp. and others
+ * Copyright (c) 2009, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -19,14 +19,22 @@ package com.ibm.tools.attach.target;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
+
+import static com.ibm.tools.attach.target.IPC.LOGGING_DISABLED;
+import static com.ibm.tools.attach.target.IPC.loggingStatus;
 
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.Objects;
 
+/**
+ * This class maintains the directory holding the attach API file artifacts.
+ *
+ */
 public abstract class CommonDirectory {
 	private static final String ATTACH_LOCK = "_attachlock"; //$NON-NLS-1$
 	private static final String COM_IBM_TOOLS_ATTACH_DIRECTORY = "com.ibm.tools.attach.directory"; //$NON-NLS-1$
@@ -37,16 +45,17 @@ public abstract class CommonDirectory {
 	static final int SEMAPHORE_OKAY = 0;
 	private static final String TRASH_PREFIX = ".trash_"; //$NON-NLS-1$
 
-	static final class syncObject {}
+	static final class syncObject { /* empty class for synchronization only. */}
 	private static final syncObject accessorMutex = new syncObject();
 	private static FileLock attachLock;
 	private static File commonDirFile; /* file where all IPC files are held */
 	private static FileLock masterLock;
 	private static String semaphoreId;
+	private static int masterLockCount = 0;
 	/**
 	 * default name of directories where VMs place their advertisements
 	 */
-	private static String systemTmpDir = IPC.getTmpDir();
+	private static final String systemTmpDir = IPC.getTmpDir();
 	/**
 	 * Indicates the control file is newer than the semaphore
 	 */
@@ -87,8 +96,8 @@ public abstract class CommonDirectory {
 		String ipcDirProperty = com.ibm.oti.vm.VM.getVMLangAccess().internalGetProperties().getProperty(COM_IBM_TOOLS_ATTACH_DIRECTORY, 
 				(new File(systemTmpDir,".com_ibm_tools_attach")).getPath()); //$NON-NLS-1$
 		/*[PR CMVC 165300 restriction on embedded blanks was unnecessary. Also, trailing separators were redundant. ]*/
-		if (IPC.loggingEnabled ) {
-			IPC.logMessage("IPC Directory", ipcDirProperty); //$NON-NLS-1$
+		if (LOGGING_DISABLED != loggingStatus) {
+			IPC.logMessage("IPC Directory=", ipcDirProperty); //$NON-NLS-1$
 		}
 		File cd = new File(ipcDirProperty);
 		setCommonDirFileObject(cd);
@@ -101,7 +110,7 @@ public abstract class CommonDirectory {
 	 /*[PR Jazz 30075] createDirectoryAndSemaphore is a misnomer, since it does not create the semaphore. */
 	static void prepareCommonDirectory() throws IOException {
 		File cd = getCommonDirFileObject();
-		if (IPC.loggingEnabled ) {
+		if (LOGGING_DISABLED != loggingStatus) {
 			IPC.logMessage("createDirectoryAndSemaphore ", cd.getAbsolutePath()); //$NON-NLS-1$
 		}
 		if (cd.exists()) {
@@ -126,32 +135,65 @@ public abstract class CommonDirectory {
 	 * Lock the master lock file. Create the lockfile if necessary.
 	 * @throws IOException if the file is already locked.
 	 */
-	/*[PR Jazz 30075] obtainMasterLock(File commonDirectory) is never used. */		
 	public static void obtainMasterLock() throws IOException {
-		getMasterLock().lockFile(true);
+		FileLock masterLockCopy = null;
+		synchronized (accessorMutex) {
+			++masterLockCount;
+			if (1 == masterLockCount) {
+				masterLockCopy = getMasterLock();
+			}
+		}
+		if (null != masterLockCopy) { /* first entry */
+			masterLockCopy.lockFile(true);
+		}
 	}
 
 	/**
-	 * non-blocking lock the master lockfile. Create the lockfile if necessary.
+	 * non-blocking lock the master lockfile. 
+	 * Create the lockfile if necessary.
 	 * @return true if lock obtained
-	 * @throws IOException if file already locked
 	 */
-	static boolean tryObtainMasterLock() throws IOException {
-		return getMasterLock().lockFile(false);
+	static boolean tryObtainMasterLock() {
+		boolean masterLockEntered = true;
+		synchronized (accessorMutex) {
+			++masterLockCount; /* optimistically assume we enter the lock */
+			if (1 == masterLockCount) { /* first time in */
+				try {
+					masterLockEntered = getMasterLock().lockFile(false);
+					if (!masterLockEntered) { /* lock failed, so revert */
+						--masterLockCount;
+					}
+				} catch (IOException e) { /* this shouldn't happen */
+					masterLockEntered = false;
+					IPC.logMessage("IOException in tryObtainMasterLock," //$NON-NLS-1$
+							+ " masterLockCount=" +masterLockCount, e); //$NON-NLS-1$
+				}
+			}
+			return masterLockEntered;		
+		}
 	}
 
 	/**
 	 * Release the lock on the master lock file
 	 */
 	public static void releaseMasterLock() {
-		getMasterLock().unlockFile();		
+		synchronized (accessorMutex) {
+			if (masterLockCount <= 0) {
+				IPC.logMessage("releaseMasterLock: Illegal value for masterLockCount", masterLockCount); //$NON-NLS-1$
+				return;
+			}
+			--masterLockCount;
+			if (Objects.nonNull(masterLock) && (0 == masterLockCount)) {
+				masterLock.unlockFile();
+				masterLock = null;
+			}
+		}
 	}
 
 	/**
 	 * Lock the attach lockfile. Create the lockfile if necessary.
 	 * @throws IOException if file already locked
 	 */
-	/*[PR Jazz 30075] obtainAttachLock(File commonDirectory) is never used.. */
 	 
 	public static void obtainAttachLock() throws IOException {
 		getAttachLock().lockFile(true);
@@ -188,7 +230,7 @@ public abstract class CommonDirectory {
 	 */
 	static String openSemaphore() throws IOException {
 		String semName = MASTER_NOTIFIER; /*[PR Jazz 48044] semaphore name is a constant */
-		int status = IPC.openSemaphore(getCommonDirFileObject().getAbsolutePath(), semName);
+		int status = IPC.openSemaphore(getCommonDirFileObject().getAbsolutePath(), semName, true);
 		/*[MSG "K0538", "semaphore {0} status= {1}"]*/
 		if (SEMAPHORE_OKAY != status) {
 			throw new IOException(com.ibm.oti.util.Msg.getString("K0538" , semName, Integer.valueOf(status)));  //$NON-NLS-1$
@@ -204,7 +246,7 @@ public abstract class CommonDirectory {
 		int status = 0;
 		IPC.logMessage("reopenSemaphore"); //$NON-NLS-1$
 		closeSemaphore();
-		status = IPC.openSemaphore(getCommonDirFileObject().getAbsolutePath(), MASTER_NOTIFIER);		
+		status = IPC.openSemaphore(getCommonDirFileObject().getAbsolutePath(), MASTER_NOTIFIER, true);		
 		return status;
 	}
 
@@ -225,22 +267,24 @@ public abstract class CommonDirectory {
 	/**
 	 * Open the semaphore, post to it, and close it
 	 * @param numberOfTargets number of times to post to the semaphore
+	 * @param global Use the global semaphore (Windows only)
 	 * @return 0 on success
 	 */
-	public static int notifyVm(int numberOfTargets) {
-		if (IPC.loggingEnabled ) {
+	public static int notifyVm(int numberOfTargets, boolean global) {
+		if (LOGGING_DISABLED != loggingStatus) {
 			IPC.logMessage("notifyVm ", numberOfTargets, " targets"); //$NON-NLS-1$ //$NON-NLS-2$
 		}
-		return IPC.notifyVm(getCommonDirFileObject().getAbsolutePath(), MASTER_NOTIFIER, numberOfTargets);
+		return IPC.notifyVm(getCommonDirFileObject().getAbsolutePath(), MASTER_NOTIFIER, numberOfTargets, global);
 	}
 
 	/**
 	 * Open the semaphore, decrement it without blocking to it, and close it
 	 * @param numberOfTargets number of times to decrement to the semaphore
+	 * @param global Use the global semaphore (Windows only)
 	 * @return 0 on success
 	 */
-	public static int cancelNotify(int numberOfTargets) {
-		return IPC.cancelNotify(getCommonDirPath(), MASTER_NOTIFIER, numberOfTargets);
+	public static int cancelNotify(int numberOfTargets, boolean global) {
+		return IPC.cancelNotify(getCommonDirPath(), MASTER_NOTIFIER, numberOfTargets, global);
 	}
 
 	/**
@@ -258,6 +302,10 @@ public abstract class CommonDirectory {
 		IPC.destroySemaphore();
 	}
 
+	/**
+	 * Count the number of target directories in the common directory
+	 * @return Number of directories
+	 */
 	public static int countTargetDirectories () {
 		File dir= getCommonDirFileObject();
 
@@ -269,7 +317,7 @@ public abstract class CommonDirectory {
 			return 0;
 		} else {
 			int count = 0;
-			for (int i=0; i < vmDirs.length; ++i) {
+			for (int i = 0; i < vmDirs.length; ++i) {
 				String dirMemberName = vmDirs[i].getName();
 				if (dirMemberName.startsWith(TRASH_PREFIX) || isCommonControlFile(dirMemberName)) {
 					continue;
@@ -285,11 +333,10 @@ public abstract class CommonDirectory {
 				|| MASTER_NOTIFIER.equalsIgnoreCase(dirMemberName));
 	}
 
-	/*
-	 * look for leftover files and directories from previous VMs
+	/**
+	 * Look for and delete leftover files and directories from previous VMs
+	 * @param myId VMID of the current.  Set to non-null to prevent deleting own directory.
 	 */
-	/*[PR Jazz 37778 deleteStaleDirectories was always called with checkProcess=true */
-	@SuppressWarnings("synthetic-access")
 	static void deleteStaleDirectories(String myId) {
 		long myUid = IPC.getUid();
 		File[] vmDirs = getCommonDirFileObject().listFiles(new DirectorySampler());
@@ -306,7 +353,7 @@ public abstract class CommonDirectory {
 				continue;
 			}
 			String dirMemberName = dirMember.getName();
-			if (IPC.loggingEnabled ) {
+			if (LOGGING_DISABLED != loggingStatus) {
 				IPC.logMessage("deleteStaleDirectories checking ", dirMemberName); //$NON-NLS-1$
 			}
 			if (dirMember.isFile()) {
@@ -379,8 +426,7 @@ public abstract class CommonDirectory {
 			TargetDirectory.deleteTargetDirectory(dirMember.getName());
 		}
 		Advertisement advert;
-		try {
-			FileInputStream propStream = new FileInputStream(advertFile);
+		try (FileInputStream propStream = new FileInputStream(advertFile)) {
 			advert = Advertisement.readAdvertisementFile(propStream); /* throws IOException if file cannot be read */
 			propStream.close();
 		} catch (IOException e) {
@@ -388,14 +434,14 @@ public abstract class CommonDirectory {
 		}
 		pid = advert.getProcessId();
 		long uid = advert.getUid();
-		if (IPC.loggingEnabled) {
+		if (LOGGING_DISABLED != loggingStatus) {
 			IPC.logMessage("getPidFromFile pid = ", (int) pid, dirMember.getName()); //$NON-NLS-1$
 		}
 		/*advertisement is from an older version or is corrupt, or claims to be owned by root.  Get the owner via file stat ]*/
 		if (0 == uid) {
 			uid = CommonDirectory.getFileOwner(dirMember.getAbsolutePath());
 		}
-		if (IPC.loggingEnabled) {
+		if (LOGGING_DISABLED != loggingStatus) {
 			IPC.logMessage("getPidFromFile uid = ", (int) uid); //$NON-NLS-1$
 		}
 		if (((0 != myUid) && (uid != myUid))) {
@@ -417,25 +463,33 @@ public abstract class CommonDirectory {
 		return attachLock;
 	}
 	
+	/**
+	 * Returns a FileLock object, creating it if necessary.
+	 * @return FileLock object
+	 * @note this is not thread safe.  This should be called while holding accessorMutex.
+	 */
 	private static FileLock getMasterLock() {
-		synchronized (accessorMutex) {
-			if (null == masterLock) {
-				/*[PR Jazz 30075] inlined function which was called only from this method */
-				File commonDirFileObject = new File(getCommonDirFileObject(), MASTER_LOCKFILE);
-				String commonDirPath = commonDirFileObject.getAbsolutePath();
-				masterLock = new FileLock(commonDirPath, COMMON_LOCK_FILE_PERMISSIONS);
-			}
+		if (null == masterLock) {
+			File commonDirFileObject = new File(getCommonDirFileObject(), MASTER_LOCKFILE);
+			String commonDirPath = commonDirFileObject.getAbsolutePath();
+			masterLock = new FileLock(commonDirPath, COMMON_LOCK_FILE_PERMISSIONS);
 		}
 		return masterLock;
 	}
 	
+	/**
+	 * Get the UID of a file's owner
+	 * @param path file path
+	 * @return UID of file owner
+	 */
 	public static native long getFileOwner(String path);
 	
-	private static final class DirectorySampler implements FileFilter {
+	static final class DirectorySampler implements FileFilter {
 
 		private int acceptCount = 16;
 		private long skip;
 		private long range = 2;
+		@Override
 		public boolean accept(File candidate) {
 			if (acceptCount > 0) { /* accept the first N files unconditionally */
 				--acceptCount;

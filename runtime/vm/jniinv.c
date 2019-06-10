@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <string.h>
@@ -75,8 +75,6 @@ J9_DECLARE_CONSTANT_UTF8(j9_exit, "exit");
 J9_DECLARE_CONSTANT_UTF8(j9_run, "run");
 J9_DECLARE_CONSTANT_UTF8(j9_initCause, "initCause");
 J9_DECLARE_CONSTANT_UTF8(j9_completeInitialization, "completeInitialization");
-J9_DECLARE_CONSTANT_UTF8(j9_cleanup, "cleanup");
-J9_DECLARE_CONSTANT_UTF8(j9_threadCleanup, "threadCleanup");
 J9_DECLARE_CONSTANT_UTF8(j9_void_void, "()V");
 J9_DECLARE_CONSTANT_UTF8(j9_class_void, "(Ljava/lang/Class;)V");
 J9_DECLARE_CONSTANT_UTF8(j9_class_class_void, "(Ljava/lang/Class;Ljava/lang/Class;)V");
@@ -192,7 +190,10 @@ jint JNICALL J9_CreateJavaVM(JavaVM ** p_vm, void ** p_env, J9CreateJavaVMParams
 	omrthread_monitor_exit(globalMonitor);
 #endif
 
-	releaseVMAccessInJNI(env);
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+	enterVMFromJNI(env);
+	releaseVMAccess(env);
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 
 	TRIGGER_J9HOOK_VM_INITIALIZED(vm->hookInterface, env);
 
@@ -205,7 +206,7 @@ jint JNICALL J9_CreateJavaVM(JavaVM ** p_vm, void ** p_env, J9CreateJavaVMParams
 
     enterVMFromJNI(env);
 	jniResetStackReferences((JNIEnv *) env);
-    releaseVMAccessInJNI(env);
+    releaseVMAccess(env);
 
 #if defined(J9VM_OPT_JAVA_OFFLOAD_SUPPORT)
 	if (NULL != vm->javaOffloadSwitchOffWithReasonFunc) {
@@ -225,6 +226,10 @@ error:
 
 #ifdef J9VM_PROF_EVENT_REPORTING
 	if (env) {
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+		enterVMFromJNI(env);
+		releaseVMAccess(env);
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 		TRIGGER_J9HOOK_VM_SHUTTING_DOWN(vm->hookInterface, env, result);
 	}
 #endif /* J9VM_PROF_EVENT_REPORTING */
@@ -270,7 +275,7 @@ jint JNICALL J9_GetCreatedJavaVMs(JavaVM ** vm_buf, jsize bufLen, jsize * nVMs)
 #if defined (LINUXPPC64) || (defined (AIXPPC) && defined (PPC64)) || defined (J9ZOS39064)
 	/* there was a bug in older VMs on these platforms where jsize was defined to
 	 * be 64-bits, rather than the 32-bits required by the JNI spec. Provide backwards
-	 * compatability if the JAVA_JSIZE_COMPAT environment variable is set
+	 * compatibility if the JAVA_JSIZE_COMPAT environment variable is set
 	 */
 	if (getenv("JAVA_JSIZE_COMPAT")) {
 		*(jlong*)nVMs = (jlong)count;
@@ -333,7 +338,7 @@ protectedDestroyJavaVM(J9PortLibrary* portLibrary, void * userData)
 
 	/* Do the java cleanup */
 	enterVMFromJNI(vmThread);
-	cleanUpAttachedThread(vmThread, 0, 0, 0, 0);
+	cleanUpAttachedThread(vmThread);
 	releaseVMAccess(vmThread);
 
 	TRIGGER_J9HOOK_VM_SHUTTING_DOWN(vm->hookInterface, vmThread, 0);
@@ -374,7 +379,7 @@ protectedDestroyJavaVM(J9PortLibrary* portLibrary, void * userData)
 				omrthread_monitor_exit(vm->runtimeFlagsMutex);
 			}
 			/* Do not acquire exclusive here as it may cause deadlocks with
-			 * the other thread shuting down.
+			 * the other thread shutting down.
 			 */
 			return JNI_ERR;
 		}
@@ -475,7 +480,7 @@ jint JNICALL DestroyJavaVM(JavaVM * javaVM)
 		omrthread_monitor_enter(vm->runtimeFlagsMutex);
 	}
 
-	/* we only allow shudown code to run once */
+	/* we only allow shutdown code to run once */
 	
 	if(vm->runtimeFlags & J9_RUNTIME_SHUTDOWN_STARTED) {
 		if(vm->runtimeFlagsMutex != NULL) {
@@ -534,7 +539,6 @@ protectedDetachCurrentThread(J9PortLibrary* portLibrary, void * userData)
 	/* Note: No need to ever unset this, since the vmThread will be discarded */
 	vmThread->gpProtected = TRUE;
 
-	releaseVMAccessInJNI(vmThread);
 	threadCleanup(vmThread, FALSE);
 
 	return JNI_OK;
@@ -543,8 +547,8 @@ protectedDetachCurrentThread(J9PortLibrary* portLibrary, void * userData)
 jint JNICALL DetachCurrentThread(JavaVM * javaVM)
 {
 	J9JavaVM * vm = ((J9InvocationJavaVM *)javaVM)->j9vm;
-	J9VMThread * vmThread;
-	UDATA result;
+	J9VMThread * vmThread = NULL;
+	UDATA result = 0;
 	PORT_ACCESS_FROM_PORT(vm->portLibrary);
 
 	/* we should return here to avoid the detaching operations after the destroy call to avoid
@@ -670,6 +674,10 @@ protectedInternalAttachCurrentThread(J9PortLibrary* portLibrary, void * userData
 
 	/* if this is the main thread, the VM hasn't been bootstrapped yet, so we can't do this yet */
 	if ( (threadType & J9_PRIVATE_FLAGS_NO_OBJECT) == 0) {
+#if defined(J9VM_INTERP_ATOMIC_FREE_JNI)
+		internalEnterVMFromJNI(env);
+		internalReleaseVMAccess(env);
+#endif /* J9VM_INTERP_ATOMIC_FREE_JNI */
 		initializeAttachedThread(
 			env, 
 			threadName,
@@ -753,7 +761,6 @@ static J9ThreadEnv threadEnv = {
 /**
  * JVMTI_VERSION_1_0 		0x30010000
  * IFA_ENABLED_JNI_VERSION 0x79xxxxxx	- combine with the JNI_VERSION
- * J9RCM_VMI_VERSION_1_2    0x7A000001
  * J9THREAD_VERSION_1_1 	0x7C010001
  * SUNVMI_VERSION_1_1 		0x7D010001
  * UTE_VERSION_1_1          0x7E000101
@@ -793,7 +800,7 @@ jint JNICALL GetEnv(JavaVM *jvm, void **penv, jint version)
 		return JNI_EDETACHED;
 	}
 
-	/* Call the hook - if rc changs from JNI_EVERSION, return it.
+	/* Call the hook - if rc changes from JNI_EVERSION, return it.
 	 * Note: the JavaVM parameter must be used in the call instead of the J9JavaVM
 	 * because the JavaVM parameter should be a J9InvocationJavaVM* when GetEnv()
 	 * is called from JVMTI agents.
@@ -803,11 +810,13 @@ jint JNICALL GetEnv(JavaVM *jvm, void **penv, jint version)
 		return rc;
 	}
 
+#ifdef J9VM_OPT_HARMONY
 	/* Allow retrieval of the Harmony VM interface */
 	if (HARMONY_VMI_VERSION_2_0 == version) {
 		*penv = &(vm->harmonyVMInterface);
 		return JNI_OK;
 	}
+#endif /* J9VM_OPT_HARMONY */
 
 	if (version == UTE_VERSION_1_1) {
 		if (vm->j9rasGlobalStorage != NULL) {	
@@ -1152,7 +1161,7 @@ static UDATA terminateRemainingThreads(J9VMThread* vmThread) {
 
 	Trc_VM_terminateRemainingThreads_Entry(vmThread);
 
-	/* Wait for any zombie threads (java notified of death, but vmThread not freed and threadProc not exitted) to completely terminate */
+	/* Wait for any zombie threads (java notified of death, but vmThread not freed and threadProc not exited) to completely terminate */
 
 	omrthread_monitor_enter(vm->vmThreadListMutex);
 	while (vm->zombieThreadCount != 0) {
@@ -1256,14 +1265,20 @@ jint JNICALL ResetJavaVM(JavaVM *vm)
 /* run the shutdown method in java.lang.Shutdown */
 void 
 sidecarExit(J9VMThread* shutdownThread) {
-	UDATA args[] = {130};	/* The exit code */
-	J9NameAndSignature nas;
+	/* static void java.lang.Shutdown.exit(int status)
+	 *
+	 * The exit code is 130. Store ints in the low-memory half
+	 * of the stack slot on 64-bit platforms. Otherwise, input
+	 * argument will always be zero on big-endian platforms.
+	 */
+	I_32 args[] = {130};
+	J9NameAndSignature nas = {0};
 
-	nas.name = (J9UTF8*)&j9_exit;
-	nas.signature = (J9UTF8*)&j9_int_void;
+	nas.name = (J9UTF8 *)&j9_exit;
+	nas.signature = (J9UTF8 *)&j9_int_void;
 
 	enterVMFromJNI(shutdownThread);
-	runStaticMethod(shutdownThread, (U_8*)"java/lang/Shutdown", &nas, 1, args);
+	runStaticMethod(shutdownThread, (U_8 *)"java/lang/Shutdown", &nas, 1, (UDATA *)args);
 	internalExceptionDescribe(shutdownThread);
 	releaseVMAccess(shutdownThread);
 }

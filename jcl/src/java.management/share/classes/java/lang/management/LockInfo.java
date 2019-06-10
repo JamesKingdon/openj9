@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar17]*/
 /*******************************************************************************
- * Copyright (c) 2008, 2017 IBM Corp. and others
+ * Copyright (c) 2008, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package java.lang.management;
 
@@ -91,18 +91,19 @@ public class LockInfo {
 	 * Returns a {@code LockInfo} object represented by the given
 	 * {@code CompositeData}. The given {@code CompositeData} must contain the
 	 * following attributes: <blockquote>
-	 * <table border summary="The attributes and the types the given CompositeData contains">
+	 * <table>
+	 * <caption>The attributes and the types the given CompositeData contains</caption>
 	 * <tr>
-	 * <th align=left>Attribute Name</th>
-	 * <th align=left>Type</th>
+	 * <th style="float:left">Attribute Name</th>
+	 * <th style="float:left">Type</th>
 	 * </tr>
 	 * <tr>
 	 * <td>className</td>
-	 * <td><tt>java.lang.String</tt></td>
+	 * <td><code>java.lang.String</code></td>
 	 * </tr>
 	 * <tr>
 	 * <td>identityHashCode</td>
-	 * <td><tt>java.lang.Integer</tt></td>
+	 * <td><code>java.lang.Integer</code></td>
 	 * </tr>
 	 * </table>
 	 * </blockquote>
@@ -145,7 +146,7 @@ public class LockInfo {
 	 * The string will hold both the name of the lock object's class and it's
 	 * identity hash code expressed as an unsigned hexadecimal. i.e.<br>
 	 * <p>
-	 * {@link #getClassName()}&nbsp;+&nbsp;&commat;&nbsp;+&nbsp;Integer.toHexString({@link #getIdentityHashCode()})
+	 * {@link #getClassName()} &nbsp;+&nbsp;&#64;&nbsp;+&nbsp;Integer.toHexString({@link #getIdentityHashCode()})
 	 * </p>
 	 *
 	 * @return a string containing the key details of the lock

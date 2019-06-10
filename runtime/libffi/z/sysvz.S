@@ -1,24 +1,4 @@
-*
-* Copyright (c) 2016, 2017 IBM Corp. and others
-*
-* This program and the accompanying materials are made
-* available under the terms of the Eclipse Public License 2.0
-* which accompanies this distribution and is available at
-* https://www.eclipse.org/legal/epl-2.0/ or the Apache License,
-* Version 2.0 which accompanies this distribution and is available
-* at https://www.apache.org/licenses/LICENSE-2.0.
-*
-* This Source Code may also be made available under the following
-* Secondary Licenses when the conditions for such availability set
-* forth in the Eclipse Public License, v. 2.0 are satisfied: GNU
-* General Public License, version 2 with the GNU Classpath
-* Exception [1] and GNU General Public License, version 2 with the
-* OpenJDK Assembly Exception [2].
-*
-* [1] https://www.gnu.org/software/classpath/license.html
-* [2] http://openjdk.java.net/legal/assembly-exception.html
-*
-* SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+* Copyright (c) 2016, 2018 IBM Corp. and others
 
       ACONTROL AFPR,FLAG(CONT)
 
@@ -36,20 +16,19 @@ FFISYS EDCXPRLG DSASIZE=DSASZ,PSECT=ASP
 *What: Storing arguments in this routine's
 *      local storage for future use
           USING  CEEDSAHP,4
-
+         L  14,0(,2)          ecif->cif
+         L  14,8(,14)         cif->arg_types
 *Name:    ffi_prep_args_call
 *Input:   stack, extended_cif
 *Output:  void
 *Action:  Is an external call to C-XPLINK routine
 *         It saves function's arguments in this 
 *         routine's local storage
-*Returns: The parameter types in a array
-*         r3 points to the start of the array
          LA 1,LSTOR
          LR 13,1
          EDCXCALL  PREPARGS,WORKREG=10
 
-         LR 5,3               Copy of parameter types
+         LR 5,14              Copy of parameter types
 *Reset registers used in code gen
          SR  0,0              GPR counter
          SR  14,14            FPR counter
@@ -61,8 +40,8 @@ FFISYS EDCXPRLG DSASIZE=DSASZ,PSECT=ASP
          L   9,(2112+(((DSASZ+31)/32)*32)+20)(,4) 
 
 *Place arguments passed to the foreign function based on type
-ARGLOOP  SR  11,11
-         LLC 11,0(10,5)       Get the next parameter type
+ARGLOOP  L   11,0(10,5)       Get pointer to current ffi_type
+         LLC 11,7(11)         ffi_type->type
          SLL 11,2             Find offset in branch tabel
          LA  15,ATABLE
          L   15,0(11,15)
@@ -500,7 +479,7 @@ BYTE12   DS 0H
          B CONT
 
 CONT     DS 0H                End of processing curr_param
-         AHI 10,1             Next parameter type
+         AHI 10,4             Next parameter type
          AHI 6,4              Next parameter value stored
          BCT 9,ARGLOOP
   
@@ -585,6 +564,9 @@ ATABLE DC A(I)                Labels for parm types
  DC A(UI64)
  DC A(FLT)
  DC A(STRCT)
+ DC A(0)
+ DC A(I)
+ DC A(D)
 I32 DC A(IGPR1)               Labels for passing INT in gpr
  DC A(IGPR2)
  DC A(IGPR3)

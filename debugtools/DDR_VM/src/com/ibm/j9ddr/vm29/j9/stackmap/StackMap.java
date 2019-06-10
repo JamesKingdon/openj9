@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2014 IBM Corp. and others
+ * Copyright (c) 2009, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.j9.stackmap;
 
@@ -43,6 +43,7 @@ import static com.ibm.j9ddr.vm29.j9.BCNames.JBldc;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBldcw;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBmultianewarray;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBputfield;
+import static com.ibm.j9ddr.vm29.j9.BCNames.JBwithfield;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBputstatic;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBswap;
 import static com.ibm.j9ddr.vm29.j9.BCNames.JBtableswitch;
@@ -73,7 +74,6 @@ import com.ibm.j9ddr.vm29.pointer.generated.J9ROMConstantPoolItemPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ROMFieldRefPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ROMMethodPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ROMMethodRefPointer;
-import com.ibm.j9ddr.vm29.pointer.generated.J9ROMMethodTypeRefPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9UTF8Pointer;
 import com.ibm.j9ddr.vm29.pointer.helper.J9UTF8Helper;
 import com.ibm.j9ddr.vm29.types.I16;
@@ -257,7 +257,7 @@ public class StackMap
 			//Scratch storage is held on-heap in stack data structures and managed inside mapStack.
 			
 			//Build map array - one slot for every PC in method
-			length = (UDATA) J9_BYTECODE_SIZE_FROM_ROM_METHOD(romMethod);
+			length = J9_BYTECODE_SIZE_FROM_ROM_METHOD(romMethod);
 			
 			stackStructSize = romMethod.maxStack();
 			
@@ -434,10 +434,7 @@ public class StackMap
 
 					}
 				} else {
-					switch (bc) {
-
-					case JBldc:
-					case JBldcw:
+					if ((bc == JBldc) || (bc == JBldcw)) {
 						if (bc == JBldc) {
 							index = PARAM_8(bcIndex, 1).intValue();
 						} else {
@@ -449,26 +446,17 @@ public class StackMap
 						} else {
 							PUSH(INT);
 						}
-						
-						break;
-
-					case JBdup:
+					} else if (bc == JBdup) {
 						type = POP();
 						PUSH(type);
 						PUSH(type);
-						
-						break;
-
-					case JBdupx1:
+					} else if (bc == JBdupx1) {
 						type = POP();
 						temp1 = POP();
 						PUSH(type);
 						PUSH(temp1);
 						PUSH(type);
-						
-						break;
-
-					case JBdupx2:
+					} else if (bc == JBdupx2) {
 						type = POP();
 						temp1 = POP();
 						temp2 = POP();
@@ -476,20 +464,14 @@ public class StackMap
 						PUSH(temp2);
 						PUSH(temp1);
 						PUSH(type);
-						
-						break;
-
-					case JBdup2:
+					} else if (bc == JBdup2) {
 						temp1 = POP();
 						temp2 = POP();
 						PUSH(temp2);
 						PUSH(temp1);
 						PUSH(temp2);
 						PUSH(temp1);
-						
-						break;
-
-					case JBdup2x1:
+					} else if (bc == JBdup2x1) {
 						type = POP();
 						temp1 = POP();
 						temp2 = POP();
@@ -498,10 +480,7 @@ public class StackMap
 						PUSH(temp2);
 						PUSH(temp1);
 						PUSH(type);
-						
-						break;
-
-					case JBdup2x2:
+					} else if (bc == JBdup2x2) {
 						type = POP();
 						temp1 = POP();
 						temp2 = POP();
@@ -512,20 +491,13 @@ public class StackMap
 						PUSH(temp2);
 						PUSH(temp1);
 						PUSH(type);
-						
-						break;
-
-					case JBswap:
+					} else if (bc == JBswap) {
 						type = POP();
 						temp1 = POP();
 						PUSH(type);
 						PUSH(temp1);
-						break;
-
-					case JBgetfield:
-						POP();			/* fall through case !!!! */
-
-					case JBgetstatic:
+					} else if (bc == JBgetfield) {
+						POP();
 						index = PARAM_16(bcIndex, 1).intValue();
 						utf8Signature = J9ROMFieldRefPointer.cast(pool.add(index)).nameAndSignature().signature();
 						
@@ -538,13 +510,21 @@ public class StackMap
 								PUSH(INT);
 							}
 						}
+					} else if (bc == JBgetstatic) {
+						index = PARAM_16(bcIndex, 1).intValue();
+						utf8Signature = J9ROMFieldRefPointer.cast(pool.add(index)).nameAndSignature().signature();
 						
-						break;
-
-					case JBputfield:
-						POP();			/* fall through case !!! */
-
-					case JBputstatic:
+						signature = J9UTF8Helper.stringValue(utf8Signature).charAt(0);
+						if ((signature == 'L') || (signature == '[')) {
+							PUSH(OBJ);
+						} else {
+							PUSH(INT);
+							if ((signature == 'J') || (signature == 'D')) {
+								PUSH(INT);
+							}
+						}
+					} else if (bc == JBputfield) {
+						POP();
 						index = PARAM_16(bcIndex, 1).intValue();
 						utf8Signature = J9ROMFieldRefPointer.cast(pool.add(index)).nameAndSignature().signature();
 						signature = J9UTF8Helper.stringValue(utf8Signature).charAt(0);
@@ -552,22 +532,25 @@ public class StackMap
 						if ((signature == 'D') || (signature == 'J')) {
 							POP();
 						}
-						
-						break;
-
-					case JBinvokeinterface2:
+					} else if ((bc == JBputstatic) || (bc == JBwithfield)) {
+						index = PARAM_16(bcIndex, 1).intValue();
+						utf8Signature = J9ROMFieldRefPointer.cast(pool.add(index)).nameAndSignature().signature();
+						signature = J9UTF8Helper.stringValue(utf8Signature).charAt(0);
+						POP();
+						if ((signature == 'D') || (signature == 'J')) {
+							POP();
+						}
+					} else if (bc == JBinvokeinterface2) {
 						bcIndex = bcIndex.add(2);
 						continue;
-
-					case JBinvokehandle:
-					case JBinvokehandlegeneric:
-					case JBinvokevirtual:
-					case JBinvokespecial:
-					case JBinvokespecialsplit:
-					case JBinvokeinterface:
+					} else if ((bc == JBinvokehandle) 
+						|| (bc == JBinvokehandlegeneric) 
+						|| (bc == JBinvokevirtual) 
+						|| (bc == JBinvokespecial) 
+						|| (bc == JBinvokespecialsplit)
+						|| (bc == JBinvokeinterface)
+					) {
 						POP();
-					case JBinvokestatic:
-					case JBinvokestaticsplit:
 						index = PARAM_16(bcIndex, 1).intValue();
 						if (bc == JBinvokestaticsplit) {
 							index = romClass.staticSplitMethodRefIndexes().at(index).intValue();
@@ -609,32 +592,74 @@ public class StackMap
 						if (bc == JBinvokeinterface2) {
 							bcIndex = bcIndex.sub(2);
 						}
-						break;
+					} else if ((bc == JBinvokestatic)
+						|| (bc == JBinvokestaticsplit)
+					) {
+						index = PARAM_16(bcIndex, 1).intValue();
+						if (bc == JBinvokestaticsplit) {
+							index = romClass.staticSplitMethodRefIndexes().at(index).intValue();
+						} else if (bc == JBinvokespecialsplit) {
+							index = romClass.specialSplitMethodRefIndexes().at(index).intValue();
+						}
+						utf8Signature = J9ROMMethodRefPointer.cast(pool.add(index)).nameAndSignature().signature();
+						char[] args = J9UTF8Helper.stringValue(utf8Signature).toCharArray();
+						int i = 0;
+						
+						for (i = 1; args[i] != ')'; i++) {
+							POP();
+							if (args[i] == '[') {
+								while (args[++i] == '[');
+								if (args[i] != 'L') {
+									continue;
+								}
+							}
+							if (args[i] == 'L') {
+								while (args[++i] != ';');
+								continue;
+							}
+							if ((args[i] == 'D') || (args[i] == 'J')) {
+								POP();
+							}
+						}
 
-					/*
-					 * case JBinvokedynamic:
-					 * The case for the JBinvokedynamic byte code is unimplemented as the there is no way
-					 * to test a port of the C code to Java without a suitable dump and the code is not
-					 * trivial enough for a simple port to be safe.
-					 * If an suitable dump can be found then we need to port the code in the equivalent
-					 * switch statement in :
-					 * runtime/stackmap/stackmap.c
-					 */
-					
-					case JBmultianewarray:
+						signature = args[i + 1];
+						if (signature != 'V') {
+							if ((signature == 'L') || (signature == '[')) {
+								PUSH(OBJ);
+							} else {
+								PUSH(INT);
+								if ((signature == 'J') || (signature == 'D')) {
+									PUSH(INT);
+								}
+							}
+						}
+						if (bc == JBinvokeinterface2) {
+							bcIndex = bcIndex.sub(2);
+						}
+					} else if (bc == JBmultianewarray) {
 						index = PARAM_8(bcIndex, 3).intValue();
-						for (i=0; i < index; i++) {
+						for (int i=0; i < index; i++) {
 							POP();
 						}
 						//Checking from C removed. If we've overflowed, POP() would have thrown an exception
 						PUSH(OBJ);
 						break;
-
-					}
+					} 
 					bcIndex = bcIndex.add(size & 7);
 					continue;
 				}
+				/*
+				 * case JBinvokedynamic:
+				 * The case for the JBinvokedynamic byte code is unimplemented as the there is no way
+				 * to test a port of the C code to Java without a suitable dump and the code is not
+				 * trivial enough for a simple port to be safe.
+				 * If an suitable dump can be found then we need to port the code in the equivalent
+				 * switch statement in :
+				 * runtime/stackmap/stackmap.c
+				 */
 			}
+		
+		
 			return BCT_ERR_STACK_MAP_FAILED;					/* Fell off end of bytecode array - should never get here */
 		}
 

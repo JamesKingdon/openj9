@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9protos.h"
@@ -292,7 +292,9 @@ objectMonitorEnterNonBlocking(J9VMThread *currentThread, j9object_t object)
 		} else {
 #if defined(J9VM_THR_LOCK_NURSERY)
 			/* check to see if object is unlocked (JIT did not do initial inline sequence due to insufficient static type info) */
-			if ((0 == lock) && VM_ObjectMonitor::inlineFastInitAndEnterMonitor(currentThread, lwEA)) {
+			if ((0 == (lock & ~OBJECT_HEADER_LOCK_RESERVED)) &&
+				VM_ObjectMonitor::inlineFastInitAndEnterMonitor(currentThread, lwEA, false, lock)
+			) {
 				/* compare and swap succeeded - barrier already performed */
 			} else
 #endif /* J9VM_THR_LOCK_NURSERY */
@@ -314,7 +316,7 @@ objectMonitorEnterNonBlocking(J9VMThread *currentThread, j9object_t object)
 						if (spinOnFlatLock(currentThread, lwEA, object)) {
 							goto done;
 						}
-						/* Preemptively create the obhect monitor but do not assign it.
+						/* Preemptively create the object monitor but do not assign it.
 						 * This makes it impossible to fail in objectMonitorEnterBlocking.
 						 * This only affects reserved locks, as the non-reserved path in
 						 * the blocking code immediately calls monitorTableAt.
@@ -405,13 +407,11 @@ spinOnFlatLock(J9VMThread *currentThread, j9objectmonitor_t volatile *lwEA, j9ob
 			{
 				if (nestedPath) {
 					VM_AtomicSupport::yieldCPU();
-					if (0 != spinCount1) {
-						VM_AtomicSupport::dropSMTThreadPriority();
-						for (UDATA _spinCount1 = spinCount1; _spinCount1 > 0; _spinCount1--) {
-							VM_AtomicSupport::nop();
-						} /* end tight loop */
-						VM_AtomicSupport::restoreSMTThreadPriority();
-					}
+					VM_AtomicSupport::dropSMTThreadPriority();
+					for (UDATA _spinCount1 = spinCount1; _spinCount1 > 0; _spinCount1--) {
+						VM_AtomicSupport::nop();
+					} /* end tight loop */
+					VM_AtomicSupport::restoreSMTThreadPriority();
 				}
 			} else {
 				goto done;
@@ -489,19 +489,21 @@ spinOnTryEnter(J9VMThread *currentThread, J9ObjectMonitor *objectMonitor, j9obje
 
 #if defined(OMR_THR_THREE_TIER_LOCKING) && defined(OMR_THR_SPIN_WAKE_CONTROL)
 	bool tryEnterSpin = true;
-	if (monitor->spinThreads < lib->maxSpinThreads) {
-		VM_AtomicSupport::add(&monitor->spinThreads, 1);
-	} else {
-		tryEnterSpinCount1 = 1;
-		tryEnterSpinCount2 = 1;
-		tryEnterYieldCount = 1;
-		tryEnterSpin = false;
+	if (OMRTHREAD_IGNORE_SPIN_THREAD_BOUND != lib->maxSpinThreads) {
+		if (monitor->spinThreads < lib->maxSpinThreads) {
+			VM_AtomicSupport::add(&monitor->spinThreads, 1);
+		} else {
+			tryEnterSpinCount1 = 1;
+			tryEnterSpinCount2 = 1;
+			tryEnterYieldCount = 1;
+			tryEnterSpin = false;
+		}
 	}
 #endif /* defined(OMR_THR_THREE_TIER_LOCKING) && defined(OMR_THR_SPIN_WAKE_CONTROL) */
 
 	/* Need to store the original value of tryEnterSpinCount2 since it gets overridden during non-nested spinning */
 	UDATA tryEnterSpinCount2Init = tryEnterSpinCount2;
-	
+
 	UDATA _tryEnterYieldCount = tryEnterYieldCount;
 	UDATA _tryEnterSpinCount2 = tryEnterSpinCount2;
 
@@ -596,7 +598,7 @@ update_jlm:
 #endif /* OMR_THR_JLM */
 
 #if defined(OMR_THR_THREE_TIER_LOCKING) && defined(OMR_THR_SPIN_WAKE_CONTROL)
-	if (tryEnterSpin) {
+	if (tryEnterSpin && (OMRTHREAD_IGNORE_SPIN_THREAD_BOUND != lib->maxSpinThreads)) {
 		VM_AtomicSupport::subtract(&monitor->spinThreads, 1);
 	}
 #endif /* defined(OMR_THR_THREE_TIER_LOCKING) && defined(OMR_THR_SPIN_WAKE_CONTROL) */

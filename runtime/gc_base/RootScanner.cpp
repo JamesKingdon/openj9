@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2016 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <stdlib.h>
@@ -81,19 +81,21 @@ MM_RootScanner::doClassLoader(J9ClassLoader *classLoader)
 void
 MM_RootScanner::scanModularityObjects(J9ClassLoader * classLoader)
 {
-	J9HashTableState moduleWalkState;
-	J9Module **modulePtr = (J9Module**)hashTableStartDo(classLoader->moduleHashTable, &moduleWalkState);
-	while (NULL != modulePtr) {
-		J9Module * const module = *modulePtr;
+	if (NULL != classLoader->moduleHashTable) {
+		J9HashTableState moduleWalkState;
+		J9Module **modulePtr = (J9Module**)hashTableStartDo(classLoader->moduleHashTable, &moduleWalkState);
+		while (NULL != modulePtr) {
+			J9Module * const module = *modulePtr;
 
-		doSlot(&module->moduleObject);
-		if (NULL != module->moduleName) {
-			doSlot(&module->moduleName);
+			doSlot(&module->moduleObject);
+			if (NULL != module->moduleName) {
+				doSlot(&module->moduleName);
+			}
+			if (NULL != module->version) {
+				doSlot(&module->version);
+			}
+			modulePtr = (J9Module**)hashTableNextDo(&moduleWalkState);
 		}
-		if (NULL != module->version) {
-			doSlot(&module->version);
-		}
-		modulePtr = (J9Module**)hashTableNextDo(&moduleWalkState);
 	}
 }
 
@@ -286,6 +288,8 @@ MM_RootScanner::scanClasses(MM_EnvironmentBase *env)
 		}
 	}
 
+	condYield();
+
 	reportScanningEnded(RootScannerEntity_Classes);
 }
 
@@ -396,6 +400,8 @@ MM_RootScanner::scanPermanentClasses(MM_EnvironmentBase *env)
 		}
 	}
 
+	condYield();
+
 	reportScanningEnded(RootScannerEntity_PermanentClasses);
 }
 #endif /* J9VM_GC_DYNAMIC_CLASS_UNLOADING */
@@ -480,7 +486,7 @@ MM_RootScanner::scanThreads(MM_EnvironmentBase *env)
 
 /**
  * This function scans exactly one thread for potential roots.  It is designed as
- *    an overrideable subroutine of the primary functions scanThreads and scanSingleThread.
+ *    an overridable subroutine of the primary functions scanThreads and scanSingleThread.
  * @param walkThead the thread to be scanned
  * @param localData opaque data to be passed to the stack walker callback function.
  *   The root scanner fixes that callback function to the stackSlotIterator function
@@ -887,6 +893,11 @@ MM_RootScanner::scanRoots(MM_EnvironmentBase *env)
 #endif /* J9VM_GC_FINALIZATION */
 	scanJNIGlobalReferences(env);
 
+	if (_jniWeakGlobalReferencesTableAsRoot) {
+		/* JNI Weak Global References table should be scanned as a hard root */
+		scanJNIWeakGlobalReferences(env);
+	}
+
 /* In the RT configuration, We can skip scanning the string table because
    all interned strings are in immortal memory and will not move. */
 	if(_stringTableAsRoot && (!_nurseryReferencesOnly && !_nurseryReferencesPossibly)){
@@ -925,7 +936,10 @@ MM_RootScanner::scanClearable(MM_EnvironmentBase *env)
 	}
 #endif /* J9VM_GC_FINALIZATION */
 
-	scanJNIWeakGlobalReferences(env);
+	if (!_jniWeakGlobalReferencesTableAsRoot) {
+		/* Skip Clearable phase if it was treated as a hard root already */
+		scanJNIWeakGlobalReferences(env);
+	}
 
 	scanPhantomReferenceObjects(env);
 	if(complete_phase_ABORT == scanPhantomReferencesComplete(env)) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "jvmtiHelpers.h"
@@ -112,6 +112,8 @@ jvmtiGetLoadedClasses(jvmtiEnv* env,
 	jclass * classRefs = NULL;
 	jvmtiError rc;
 	PORT_ACCESS_FROM_JAVAVM(vm);
+	jclass *rv_classes = NULL;
+	jint rv_class_count = 0;
 
 	Trc_JVMTI_jvmtiGetLoadedClasses_Entry(env);
 
@@ -173,16 +175,22 @@ jvmtiGetLoadedClasses(jvmtiEnv* env,
 			vm->internalVMFunctions->allLiveClassesEndDo(&classWalkState);
 
 			jvmtiData->lastClassCount = (UDATA) i;
-			*class_count_ptr = i;
-			*classes_ptr = classRefs;
+			rv_class_count = i;
+			rv_classes = classRefs;
 		}
 
 		omrthread_monitor_exit(vm->classTableMutex);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != class_count_ptr) {
+		*class_count_ptr = rv_class_count;
+	}
+	if (NULL != classes_ptr) {
+		*classes_ptr = rv_classes;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetLoadedClasses);
 }
 
@@ -200,6 +208,8 @@ jvmtiGetClassLoaderClasses(jvmtiEnv* env,
 	J9HashTableState walkState;
 	J9Class* clazz;
 	PORT_ACCESS_FROM_JAVAVM(vm);
+	jint rv_class_count = 0;
+	jclass *rv_classes = NULL;
 
 	Trc_JVMTI_jvmtiGetClassLoaderClasses_Entry(env);
 
@@ -221,11 +231,6 @@ jvmtiGetClassLoaderClasses(jvmtiEnv* env,
 		} else {
 			loader = J9VMJAVALANGCLASSLOADER_VMREF(currentThread, J9_JNI_UNWRAP_REFERENCE(initiating_loader));
 			if (NULL == loader) {
-				*class_count_ptr = 0;
-				*classes_ptr = j9mem_allocate_memory(0, J9MEM_CATEGORY_JVMTI_ALLOCATE);
-				if (NULL == *classes_ptr) {
-					rc = JVMTI_ERROR_OUT_OF_MEMORY;
-				}
 				goto done;
 			}
 		}
@@ -250,8 +255,8 @@ jvmtiGetClassLoaderClasses(jvmtiEnv* env,
 		} else {
 
 			/* Save count before it gets modified below... */
-			*class_count_ptr = (jint) stats.classCount;
-			*classes_ptr = stats.classRefs;
+			rv_class_count = (jint) stats.classCount;
+			rv_classes = stats.classRefs;
 
 			/* Record classes who have this class loader as the initiating loader (wind down count) */
 			clazz = vm->internalVMFunctions->hashClassTableStartDo(loader, &walkState);
@@ -264,9 +269,15 @@ jvmtiGetClassLoaderClasses(jvmtiEnv* env,
 		omrthread_monitor_exit(vm->classTableMutex);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != class_count_ptr) {
+		*class_count_ptr = rv_class_count;
+	}
+	if (NULL != classes_ptr) {
+		*classes_ptr = rv_classes;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetClassLoaderClasses);
 }
 
@@ -283,6 +294,8 @@ jvmtiGetClassSignature(jvmtiEnv* env,
 	char * signature = NULL;
 	char * generic = NULL;
 	PORT_ACCESS_FROM_JAVAVM(vm);
+	char *rv_signature = NULL;
+	char *rv_generic = NULL;
 
 	Trc_JVMTI_jvmtiGetClassSignature_Entry(env);
 
@@ -371,20 +384,23 @@ jvmtiGetClassSignature(jvmtiEnv* env,
 			}
 		}
 
-		if (signature_ptr != NULL) {
-			*signature_ptr = signature; 
-		}
-		if (generic_ptr != NULL) {
-			*generic_ptr = generic;
-		}
+		rv_signature = signature;
+		rv_generic = generic;
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	if (rc != JVMTI_ERROR_NONE) {
 		j9mem_free_memory(signature);
 		j9mem_free_memory(generic);
+	}
+
+	if (NULL != signature_ptr) {
+		*signature_ptr = rv_signature; 
+	}
+	if (NULL != generic_ptr) {
+		*generic_ptr = rv_generic;
 	}
 	TRACE_JVMTI_RETURN(jvmtiGetClassSignature);
 }
@@ -398,6 +414,7 @@ jvmtiGetClassStatus(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc;
 	J9VMThread * currentThread;
+	jint rv_status = JVMTI_CLASS_STATUS_ERROR;
 
 	Trc_JVMTI_jvmtiGetClassStatus_Entry(env);
 
@@ -413,12 +430,15 @@ jvmtiGetClassStatus(jvmtiEnv* env,
 		ENSURE_NON_NULL(status_ptr);
 
 		clazz = J9VM_J9CLASS_FROM_JCLASS(currentThread, klass);
-		*status_ptr = getClassStatus(clazz);
+		rv_status = getClassStatus(clazz);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != status_ptr) {
+		*status_ptr = rv_status;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetClassStatus);
 }
 
@@ -431,6 +451,7 @@ jvmtiGetSourceFileName(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc;
 	J9VMThread * currentThread;
+	char *rv_source_name = NULL;
 
 	Trc_JVMTI_jvmtiGetSourceFileName_Entry(env);
 
@@ -453,13 +474,16 @@ jvmtiGetSourceFileName(jvmtiEnv* env,
 		rc = JVMTI_ERROR_ABSENT_INFORMATION;
 		sourceFileName = getSourceFileNameForROMClass(vm, clazz->classLoader, clazz->romClass);
 		if (sourceFileName != NULL) {
-			rc = cStringFromUTF(env, sourceFileName, source_name_ptr);
+			rc = cStringFromUTF(env, sourceFileName, &rv_source_name);
 			releaseOptInfoBuffer(vm, clazz->romClass);
 		}
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != source_name_ptr) {
+		*source_name_ptr = rv_source_name;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetSourceFileName);
 }
 
@@ -472,6 +496,7 @@ jvmtiGetClassModifiers(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc;
 	J9VMThread * currentThread;
+	jint rv_modifiers = 0;
 
 	Trc_JVMTI_jvmtiGetClassModifiers_Entry(env);
 
@@ -513,12 +538,15 @@ jvmtiGetClassModifiers(jvmtiEnv* env,
 
 		/* Only the low 16 bit of the modifiers are specified - the rest are J9 internal */
 
-		*modifiers_ptr = (jint) (modifiers & 0xFFFF);
+		rv_modifiers = (jint) (modifiers & 0xFFFF);
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != modifiers_ptr) {
+		*modifiers_ptr = rv_modifiers;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetClassModifiers);
 }
 
@@ -533,6 +561,8 @@ jvmtiGetClassMethods(jvmtiEnv* env,
 	jvmtiError rc;
 	J9VMThread * currentThread;
 	PORT_ACCESS_FROM_JAVAVM(vm);
+	jint rv_method_count = 0;
+	jmethodID *rv_methods = NULL;
 
 	Trc_JVMTI_jvmtiGetClassMethods_Entry(env);
 
@@ -574,13 +604,19 @@ jvmtiGetClassMethods(jvmtiEnv* env,
 				}
 				methodIDs[i] = (jmethodID) methodID;
 			}
-			*method_count_ptr = (jint) methodCount;
-			*methods_ptr = methodIDs;
+			rv_method_count = (jint) methodCount;
+			rv_methods = methodIDs;
 		}
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != method_count_ptr) {
+		*method_count_ptr = rv_method_count;
+	}
+	if (NULL != methods_ptr) {
+		*methods_ptr = rv_methods;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetClassMethods);
 }
 
@@ -595,6 +631,8 @@ jvmtiGetClassFields(jvmtiEnv* env,
 	jvmtiError rc;
 	J9VMThread * currentThread;
 	PORT_ACCESS_FROM_JAVAVM(vm);
+	jint rv_field_count = 0;
+	jfieldID *rv_fields = NULL;
 
 	Trc_JVMTI_jvmtiGetClassFields_Entry(env);
 
@@ -629,8 +667,14 @@ jvmtiGetClassFields(jvmtiEnv* env,
 
 			i = 0;
 
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+			result = vmFuncs->fieldOffsetsStartDo(vm, romClass, GET_SUPERCLASS(clazz), &state,
+					J9VM_FIELD_OFFSET_WALK_INCLUDE_STATIC | J9VM_FIELD_OFFSET_WALK_INCLUDE_INSTANCE, clazz->flattenedClassCache);
+#else /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 			result = vmFuncs->fieldOffsetsStartDo(vm, romClass, GET_SUPERCLASS(clazz), &state,
 					J9VM_FIELD_OFFSET_WALK_INCLUDE_STATIC | J9VM_FIELD_OFFSET_WALK_INCLUDE_INSTANCE );
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
+
 			while (NULL != result->field) {
 				UDATA inconsistentData = 0;
 				J9JNIFieldID * fieldID = vmFuncs->getJNIFieldID(currentThread, clazz, result->field, result->offset, &inconsistentData);
@@ -645,13 +689,15 @@ jvmtiGetClassFields(jvmtiEnv* env,
 				result = vmFuncs->fieldOffsetsNextDo(&state);
 			}
 
-			*field_count_ptr = (jint) fieldCount;
-			*fields_ptr = fieldIDs;
+			rv_field_count = (jint) fieldCount;
+			rv_fields = fieldIDs;
 		}
 done:
-		vmFuncs->internalReleaseVMAccess(currentThread);
+		vmFuncs->internalExitVMToJNI(currentThread);
 	}
 
+	*field_count_ptr = rv_field_count;
+	*fields_ptr = rv_fields;
 	TRACE_JVMTI_RETURN(jvmtiGetClassFields);
 }
 
@@ -666,6 +712,8 @@ jvmtiGetImplementedInterfaces(jvmtiEnv* env,
 	jvmtiError rc;
 	J9VMThread * currentThread;
 	PORT_ACCESS_FROM_JAVAVM(vm);
+	jint rv_interface_count = 0;
+	jclass *rv_interfaces = NULL;
 
 	Trc_JVMTI_jvmtiGetImplementedInterfaces_Entry(env);
 
@@ -673,8 +721,8 @@ jvmtiGetImplementedInterfaces(jvmtiEnv* env,
 	if (rc == JVMTI_ERROR_NONE) {
 		J9Class * clazz;
 		J9ROMClass * romClass;
-		jint interfaceCount;
-		jclass * interfaces;
+		jint interfaceCount = 0;
+		jclass * interfaces = NULL;
 
 		vm->internalVMFunctions->internalEnterVMFromJNI(currentThread);
 
@@ -691,11 +739,7 @@ jvmtiGetImplementedInterfaces(jvmtiEnv* env,
 
 		/* Array and primitive classes must return an empty list */
 
-		if (J9ROMCLASS_IS_PRIMITIVE_OR_ARRAY(romClass)) {
-			interfaceCount = 0;
-			interfaces = NULL;
-		} else {
-
+		if (!J9ROMCLASS_IS_PRIMITIVE_OR_ARRAY(romClass)) {
 			/* Must walk the interface names in the ROM class to be sure to get the whole list */
  
 			interfaceCount = (jint) romClass->interfaceCount;
@@ -719,12 +763,18 @@ jvmtiGetImplementedInterfaces(jvmtiEnv* env,
 			}
 		}
 
-		*interface_count_ptr = interfaceCount;
-		*interfaces_ptr = interfaces;
+		rv_interface_count = interfaceCount;
+		rv_interfaces = interfaces;
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != interface_count_ptr) {
+		*interface_count_ptr = rv_interface_count;
+	}
+	if (NULL != interfaces_ptr) {
+		*interfaces_ptr = rv_interfaces;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetImplementedInterfaces);
 }
 
@@ -737,6 +787,7 @@ jvmtiIsInterface(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc;
 	J9VMThread * currentThread;
+	jboolean rv_is_interface = JNI_FALSE;
 
 	Trc_JVMTI_jvmtiIsInterface_Entry(env);
 
@@ -752,12 +803,15 @@ jvmtiIsInterface(jvmtiEnv* env,
 		ENSURE_NON_NULL(is_interface_ptr);
 
 		clazz = J9VM_J9CLASS_FROM_JCLASS(currentThread, klass);
-		*is_interface_ptr = (clazz->romClass->modifiers & J9AccInterface) ? JNI_TRUE : JNI_FALSE;
+		rv_is_interface = (clazz->romClass->modifiers & J9AccInterface) ? JNI_TRUE : JNI_FALSE;
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != is_interface_ptr) {
+		*is_interface_ptr = rv_is_interface;
+	}
 	TRACE_JVMTI_RETURN(jvmtiIsInterface);
 }
 
@@ -770,6 +824,7 @@ jvmtiIsArrayClass(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc;
 	J9VMThread * currentThread;
+	jboolean rv_is_array_class = JNI_FALSE;
 
 	Trc_JVMTI_jvmtiIsArrayClass_Entry(env);
 
@@ -785,12 +840,15 @@ jvmtiIsArrayClass(jvmtiEnv* env,
 		ENSURE_NON_NULL(is_array_class_ptr);
 
 		clazz = J9VM_J9CLASS_FROM_JCLASS(currentThread, klass);
-		*is_array_class_ptr = (J9ROMCLASS_IS_ARRAY(clazz->romClass)) ? JNI_TRUE : JNI_FALSE;
+		rv_is_array_class = (J9ROMCLASS_IS_ARRAY(clazz->romClass)) ? JNI_TRUE : JNI_FALSE;
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != is_array_class_ptr) {
+		*is_array_class_ptr = rv_is_array_class;
+	}
 	TRACE_JVMTI_RETURN(jvmtiIsArrayClass);
 }
 
@@ -803,6 +861,7 @@ jvmtiGetClassLoader(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc;
 	J9VMThread * currentThread;
+	jobject rv_classloader = NULL;
 
 	Trc_JVMTI_jvmtiGetClassLoader_Entry(env);
 
@@ -821,14 +880,17 @@ jvmtiGetClassLoader(jvmtiEnv* env,
 		clazz = J9VM_J9CLASS_FROM_JCLASS(currentThread, klass);
 		classLoader = clazz->classLoader;
 		if (classLoader == vm->systemClassLoader) {
-			*classloader_ptr = NULL;
+			rv_classloader = NULL;
 		} else {
-			*classloader_ptr = vm->internalVMFunctions->j9jni_createLocalRef((JNIEnv *)currentThread, J9CLASSLOADER_CLASSLOADEROBJECT(currentThread, classLoader));
+			rv_classloader = vm->internalVMFunctions->j9jni_createLocalRef((JNIEnv *)currentThread, J9CLASSLOADER_CLASSLOADEROBJECT(currentThread, classLoader));
 		}
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != classloader_ptr) {
+		*classloader_ptr = rv_classloader;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetClassLoader);
 }
 
@@ -843,6 +905,7 @@ jvmtiGetSourceDebugExtension(jvmtiEnv* env,
 #if defined(J9VM_OPT_DEBUG_JSR45_SUPPORT)
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	J9VMThread * currentThread;
+	char *rv_source_debug_extension = NULL;
 
 	Trc_JVMTI_jvmtiGetSourceDebugExtension_Entry(env);
 
@@ -868,18 +931,21 @@ jvmtiGetSourceDebugExtension(jvmtiEnv* env,
 			U_32 length = sourceDebugExtension->size;
 
 			if (length != 0) {
-				rc = cStringFromUTFChars(env, (U_8 *) (sourceDebugExtension + 1), length, source_debug_extension_ptr);
+				rc = cStringFromUTFChars(env, (U_8 *) (sourceDebugExtension + 1), length, &rv_source_debug_extension);
 			}
 			releaseOptInfoBuffer(vm, clazz->romClass);
 		}
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 #else
 	Trc_JVMTI_jvmtiGetSourceDebugExtension_Entry(env);
 	rc = JVMTI_ERROR_MUST_POSSESS_CAPABILITY;
 #endif
 
+	if (NULL != source_debug_extension_ptr) {
+		*source_debug_extension_ptr = rv_source_debug_extension;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetSourceDebugExtension);
 }
 
@@ -910,12 +976,97 @@ jvmtiRedefineClasses(jvmtiEnv* env,
 
 		rc = redefineClassesCommon(env, class_count, class_definitions, currentThread, J9_FINDCLASS_FLAG_REDEFINING);
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	omrthread_monitor_exit(jvmtiData->redefineMutex);
 
 	TRACE_JVMTI_RETURN(jvmtiRedefineClasses);
+}
+
+
+static void
+fixWatchedFields(J9JavaVM *vm, J9HashTable *classHashTable)
+{
+	if (NULL != classHashTable) {
+		J9JVMTIData *jvmtiData = vm->jvmtiData;
+		pool_state envPoolState;
+		J9JVMTIEnv *j9env = pool_startDo(jvmtiData->environments, &envPoolState);
+		while (j9env != NULL) {
+			/* CMVC 196966: only inspect live (not disposed) environments */
+			if (0 == (j9env->flags & J9JVMTIENV_FLAG_DISPOSED)) {
+				J9HashTableState walkState;
+				J9JVMTIWatchedClass *watchedClass = hashTableStartDo(j9env->watchedClasses, &walkState);
+				while (NULL != watchedClass) {
+					J9JVMTIClassPair exemplar;
+					J9JVMTIClassPair *result = NULL;
+
+					exemplar.originalRAMClass = watchedClass->clazz;
+					result = hashTableFind(classHashTable, &exemplar);
+					if (NULL != result) {
+						J9Class *replacementRAMClass = result->replacementClass.ramClass;
+						if (NULL != replacementRAMClass) {
+							watchedClass->clazz = replacementRAMClass;
+						}
+					}
+					watchedClass = hashTableNextDo(&walkState);
+				}
+			}
+			j9env = pool_nextDo(&envPoolState);
+		}
+	}
+}
+
+/**
+ * Update the method ordering table for an interface class. The cases are:
+ *
+ * 1) A reodering is required and none exists yet
+ *		Assign the remap array to the interface class
+ * 2) A reordring is not required, and the class already has one
+ *		Free and NULL the interface class ordering array
+ * 3) A reodering is required and the class already has one
+ *		Copy the method remap over the existing ordering in the class
+ * 4) No reordering required and the class does not have one
+ *		Do nothing
+ *
+ * @param[in] currentThread the current J9VMThread
+ * @param[in] count The number of explicitly-redefined classes
+ * @param[in] classPair Pointer to the array of class pairs (of size count)
+ */
+static void
+updateInterfaceMethodOrdering(J9VMThread *currentThread, jint count, J9JVMTIClassPair *classPair)
+{
+	while (0 != count) {
+		J9Class *interfaceClass = classPair->originalRAMClass;
+		J9ROMClass *romClass = interfaceClass->romClass;
+		if (J9ROMCLASS_IS_INTERFACE(romClass)) {
+			U_32 *ordering = J9INTERFACECLASS_METHODORDERING(interfaceClass);
+			U_32 *remap = classPair->methodRemapIndices;
+			if (NULL == ordering) {
+				/* No reordering exists yet */
+				if (NULL != remap) {
+					/* First reordering required - assign the remap array and NULL it
+					 * in the pair to prevent it being freed.
+					 */
+					J9INTERFACECLASS_SET_METHODORDERING(interfaceClass, remap);
+					classPair->methodRemapIndices = NULL;
+				}
+			} else {
+				/* Ordering already exists */
+				if (NULL == remap) {
+					/* Back to the original ordering, discard the ordering array */
+					PORT_ACCESS_FROM_VMC(currentThread);
+					J9INTERFACECLASS_SET_METHODORDERING(interfaceClass, NULL);
+					j9mem_free_memory(ordering);
+				} else {
+					/* Reordering still required - copy the remap array over the existing ordering */
+					memcpy(ordering, remap, romClass->romMethodCount * sizeof(U_32));
+				}
+			}
+		}
+		classPair += 1;
+		count -= 1;
+	}
 }
 
 
@@ -1027,9 +1178,6 @@ redefineClassesCommon(jvmtiEnv* env,
 				/* Fix JNI */
 				fixJNIRefs(currentThread, classPairs, TRUE, extensionsUsed);
 
-				/* Update the iTables of any classes which implement a replaced interface */
-				fixITablesForFastHCR(currentThread, classPairs);
-
 				/* Fix resolved constant pool references to point to new methods. */
 				fixConstantPoolsForFastHCR(currentThread, classPairs, methodPairs);
 
@@ -1040,6 +1188,9 @@ redefineClassesCommon(jvmtiEnv* env,
 
 				/* Flush the reflect method cache */
 				flushClassLoaderReflectCache(currentThread, classPairs);
+
+				/* Store the method remap indices for redefined interface classes */
+				updateInterfaceMethodOrdering(currentThread, class_count, specifiedClasses);
 
 				/* Indicate that a redefine has occurred */
 				vm->hotSwapCount += 1;
@@ -1055,15 +1206,15 @@ redefineClassesCommon(jvmtiEnv* env,
 				/* Fix static refs */
 				fixStaticRefs(currentThread, classPairs, extensionsUsed);
  
-				/* Copy preserved values */
-				copyPreservedValues(currentThread, classPairs, extensionsUsed);
-
 				/* Update heap references */
 				fixHeapRefs(vm, classPairs);
 
 				/* Update method references in DirectHandles */
 				fixDirectHandles(currentThread, classPairs, methodPairs);
  
+				/* Copy preserved values */
+				copyPreservedValues(currentThread, classPairs, extensionsUsed);
+
 				/* Update the componentType and leafComponentType fields of array classes */
 				fixArrayClasses(currentThread, classPairs);
 
@@ -1100,8 +1251,16 @@ redefineClassesCommon(jvmtiEnv* env,
 				/* Flush the reflect method cache */
 				flushClassLoaderReflectCache(currentThread, classPairs);
 
+				/* Fix watched fields */
+				fixWatchedFields(vm, classPairs);
+
 				/* Indicate that a redefine has occurred */
 				vm->hotSwapCount += 1;
+
+#if defined(J9VM_OPT_VALHALLA_NESTMATES)
+				/* Update nests with redefined nest tops */
+				fixNestMembers(currentThread, classPairs);
+#endif /* defined(J9VM_OPT_VALHALLA_NESTMATES) */
 
 #ifdef J9VM_INTERP_NATIVE_SUPPORT
 				/* Notify the JIT about redefined classes */
@@ -1400,7 +1559,7 @@ jvmtiRetransformClasses(jvmtiEnv* env,
 			j9mem_free_memory(class_definitions);
 		}
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
 	omrthread_monitor_exit(jvmtiData->redefineMutex);
@@ -1417,13 +1576,13 @@ jvmtiIsModifiableClass(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc;
 	J9VMThread * currentThread;
+	jboolean rv_is_modifiable = JNI_FALSE;
 
 	Trc_JVMTI_jvmtiIsModifiableClass_Entry(env);
 
 	rc = getCurrentVMThread(vm, &currentThread);
 	if (rc == JVMTI_ERROR_NONE) {
 		J9Class * clazz;
-		jboolean modifiable = JNI_FALSE;
 		vm->internalVMFunctions->internalEnterVMFromJNI(currentThread);
 
 		ENSURE_PHASE_START_OR_LIVE(env);
@@ -1437,21 +1596,23 @@ jvmtiIsModifiableClass(jvmtiEnv* env,
 			JVMTI_ERROR(JVMTI_ERROR_INVALID_CLASS);
 		}
 
-		modifiable = classIsModifiable(vm, clazz);
-		if (modifiable) {
+		rv_is_modifiable = classIsModifiable(vm, clazz);
+		if (rv_is_modifiable) {
 			if (((J9JVMTIEnv *) env)->capabilities.can_retransform_classes) {
 				J9MemorySegmentList * classSegments = vm->classMemorySegments;
 
 				omrthread_monitor_enter(classSegments->segmentMutex);
-				modifiable = (WSRP_GET(clazz->romClass->intermediateClassData, U_8*) != NULL);
+				rv_is_modifiable = (WSRP_GET(clazz->romClass->intermediateClassData, U_8*) != NULL);
 				omrthread_monitor_exit(classSegments->segmentMutex);
 			}
 		}
-		*is_modifiable_class_ptr = modifiable;
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != is_modifiable_class_ptr) {
+		*is_modifiable_class_ptr = rv_is_modifiable;
+	}
 	TRACE_JVMTI_RETURN(jvmtiIsModifiableClass);
 }
 
@@ -1465,6 +1626,8 @@ jvmtiGetClassVersionNumbers(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc;
 	J9VMThread * currentThread;
+	jint rv_minor_version = 0;
+	jint rv_major_version = 0;
 
 	Trc_JVMTI_jvmtiGetClassVersionNumbers_Entry(env);
 
@@ -1487,14 +1650,20 @@ jvmtiGetClassVersionNumbers(jvmtiEnv* env,
 		if (J9ROMCLASS_IS_PRIMITIVE_OR_ARRAY(romClass)) {
 			rc = JVMTI_ERROR_ABSENT_INFORMATION;
 		} else {
-			*minor_version_ptr = (jint) romClass->minorVersion;
-			*major_version_ptr = (jint) romClass->majorVersion;
+			rv_minor_version = (jint) romClass->minorVersion;
+			rv_major_version = (jint) romClass->majorVersion;
 		}
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != minor_version_ptr) {
+		*minor_version_ptr = rv_minor_version;
+	}
+	if (NULL != major_version_ptr) {
+		*major_version_ptr = rv_major_version;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetClassVersionNumbers);
 }
 
@@ -1549,7 +1718,7 @@ done:
 
 
 /** 
- * \brief	Returnt the raw Constant Pool bytes for the specified class
+ * \brief	Return the raw Constant Pool bytes for the specified class
  * \ingroup	jvmtiClass 
  * 
  * 
@@ -1579,7 +1748,10 @@ jvmtiGetConstantPool(jvmtiEnv* env,
 	J9VMThread * currentThread;
 	jvmtiGcp_translation translation;
 	unsigned char *constantPoolBuf;
-	
+	jint rv_constant_pool_count = 0;
+	jint rv_constant_pool_byte_count = 0;
+	unsigned char *rv_constant_pool_bytes = NULL;
+
 	Trc_JVMTI_jvmtiGetConstantPool_Entry(env);
 
     memset(&translation, 0x00, sizeof(jvmtiGcp_translation));
@@ -1630,16 +1802,25 @@ jvmtiGetConstantPool(jvmtiEnv* env,
 			JVMTI_ERROR(rc);
 		}
 
-		*constant_pool_count_ptr = translation.cpSize;
-		*constant_pool_byte_count_ptr = translation.totalSize;
-		*constant_pool_bytes_ptr = constantPoolBuf;
-		
+		rv_constant_pool_count = translation.cpSize;
+		rv_constant_pool_byte_count = translation.totalSize;
+		rv_constant_pool_bytes = constantPoolBuf;
+
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 
 		jvmtiGetConstantPool_free(PORTLIB, &translation);
 	}
 
+	if (NULL != constant_pool_count_ptr) {
+		*constant_pool_count_ptr = rv_constant_pool_count;
+	}
+	if (NULL != constant_pool_byte_count_ptr) {
+		*constant_pool_byte_count_ptr = rv_constant_pool_byte_count;
+	}
+	if (NULL != constant_pool_bytes_ptr) {
+		*constant_pool_bytes_ptr = rv_constant_pool_bytes;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetConstantPool);
 }
 
@@ -1677,7 +1858,7 @@ done:
  *	ISSUES:
  *		The UTF8 and NameAndSignature constants are not stored on the constant pool and
  *		therefore do not have an "index" but rather use SRP references. This call will 
- *		create CP entries and update refering CP items accordingly
+ *		create CP entries and update referring CP items accordingly
  *
  *		The Long and Double type is defined by the spec to take _TWO_ constant pool entries
  *		instead of one. This creates a problem since our bytecode's cp indices have been
@@ -1712,7 +1893,6 @@ jvmtiGetConstantPool_translateCP(J9PortLibrary *privatePortLibrary, jvmtiGcp_tra
 	J9ROMConstantPoolItem *constantPool;
 	U_32 constantPoolCount;
 	U_32 * cpShapeDescription;
-
 
 	romClass = class->romClass;
 	constantPool = (J9ROMConstantPoolItem*) ((U_8*) romClass + sizeof(J9ROMClass));
@@ -1779,16 +1959,26 @@ jvmtiGetConstantPool_translateCP(J9PortLibrary *privatePortLibrary, jvmtiGcp_tra
 			case J9CPTYPE_INSTANCE_METHOD:
 			case J9CPTYPE_STATIC_METHOD:
 			case J9CPTYPE_INTERFACE_METHOD:
-
-				rc = jvmtiGetConstantPool_addReference(translation, cpIndex,
-								       (U_8) ((cpItemType == J9CPTYPE_INTERFACE_METHOD) ? CFR_CONSTANT_InterfaceMethodref : CFR_CONSTANT_Methodref),
-								       (J9ROMFieldRef *) cpItem,
-								       &sunCpIndex);
-				if (rc != JVMTI_ERROR_NONE) {
-					JVMTI_ERROR(rc);
+			case J9CPTYPE_INTERFACE_INSTANCE_METHOD:
+			case J9CPTYPE_INTERFACE_STATIC_METHOD:
+				{
+					U_8 cpType = (U_8)CFR_CONSTANT_Methodref;
+					if ((cpItemType == J9CPTYPE_INTERFACE_METHOD)
+					|| (cpItemType == J9CPTYPE_INTERFACE_STATIC_METHOD)
+					|| (cpItemType == J9CPTYPE_INTERFACE_INSTANCE_METHOD)
+					) {
+						cpType = (U_8)CFR_CONSTANT_InterfaceMethodref;
+					}
+					
+					rc = jvmtiGetConstantPool_addReference(translation, cpIndex,
+										cpType,
+										(J9ROMFieldRef *) cpItem,
+										&sunCpIndex);
+					if (rc != JVMTI_ERROR_NONE) {
+						JVMTI_ERROR(rc);
+					}
+					break;
 				}
-				break;
-
 			case J9CPTYPE_METHOD_TYPE:
 				rc = jvmtiGetConstantPool_addMethodType(translation, cpIndex,
 									   (U_8) CFR_CONSTANT_MethodType,
@@ -1912,7 +2102,7 @@ jvmtiGetConstantPool_translateCP(J9PortLibrary *privatePortLibrary, jvmtiGcp_tra
 									     J9UTF8_DATA(J9ROMNAMEANDSIGNATURE_SIGNATURE(nas))));
 
 					/* Add the referenced Class item to the HT, we explicitly do it here in case the refered class
-					 * has not yet been added. Defering it to be done via the CFR_CONSTANT_Class case would 
+					 * has not yet been added. Deferring it to be done via the CFR_CONSTANT_Class case would 
 					 * prevent us from being able to save the index in htEntry->type.ref.classIndex (ie another
 					 * pass would be needed once the CFR_CONSTANT_Class case adds it) */
 					rc = jvmtiGetConstantPool_addClassOrString(translation, ref->classRefCPIndex, (U_8)CFR_CONSTANT_Class,
@@ -2180,7 +2370,7 @@ jvmtiGetConstantPool_writeConstants(jvmtiGcp_translation *translation, unsigned 
 				GCP_WRITE_U32(constantPoolBufIndex, htEntry->type.longDouble.slot1);
 				GCP_WRITE_U32(constantPoolBufIndex, htEntry->type.longDouble.slot2);
 #endif				
-				/* Skip additional CP entry. See JVM spec v2 section 4.4.5 for the briliant rationale */
+				/* Skip additional CP entry. See JVM spec v2 section 4.4.5 for the brilliant rationale */
 				sunCpIndex++;
 
 				break;

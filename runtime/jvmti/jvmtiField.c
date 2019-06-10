@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "jvmtiHelpers.h"
@@ -35,6 +35,9 @@ jvmtiGetFieldName(jvmtiEnv* env,
 	jvmtiError rc;
 	J9VMThread * currentThread;
 	PORT_ACCESS_FROM_JAVAVM(vm);
+	char *rv_name = NULL;
+	char *rv_signature = NULL;
+	char *rv_generic = NULL;
 
 	Trc_JVMTI_jvmtiGetFieldName_Entry(env);
 
@@ -65,7 +68,7 @@ jvmtiGetFieldName(jvmtiEnv* env,
 			}
 			memcpy(name, J9UTF8_DATA(utf), length);
 			name[length] = '\0';
-			*name_ptr = name; 
+			rv_name = name;
 		}
 
 		if (signature_ptr != NULL) {
@@ -79,7 +82,7 @@ jvmtiGetFieldName(jvmtiEnv* env,
 			}
 			memcpy(signature, J9UTF8_DATA(utf), length);
 			signature[length] = '\0';
-			*signature_ptr = signature; 
+			rv_signature = signature;
 		}
 
 		if (generic_ptr != NULL) {
@@ -98,8 +101,8 @@ jvmtiGetFieldName(jvmtiEnv* env,
 				memcpy(generic, J9UTF8_DATA(utf), length);
 				generic[length] = '\0';
 			}
-	
-			*generic_ptr = generic;
+
+			rv_generic = generic;
 		}	
 
 done:
@@ -108,9 +111,18 @@ done:
 			j9mem_free_memory(signature);
 			j9mem_free_memory(generic);
 		}
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != name_ptr) {
+		*name_ptr = rv_name;
+	}
+	if (NULL != signature_ptr) {
+		*signature_ptr = rv_signature;
+	}
+	if (NULL != generic_ptr) {
+		*generic_ptr = rv_generic;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetFieldName);
 }
 
@@ -124,6 +136,7 @@ jvmtiGetFieldDeclaringClass(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc;
 	J9VMThread * currentThread;
+	jclass rv_declaring_class = NULL;
 
 	Trc_JVMTI_jvmtiGetFieldDeclaringClass_Entry(env);
 
@@ -140,12 +153,15 @@ jvmtiGetFieldDeclaringClass(jvmtiEnv* env,
 		ENSURE_NON_NULL(declaring_class_ptr);
 
 		fieldClass = getCurrentClass(((J9JNIFieldID *) field)->declaringClass);
-		*declaring_class_ptr = (jclass) vm->internalVMFunctions->j9jni_createLocalRef((JNIEnv *) currentThread, J9VM_J9CLASS_TO_HEAPCLASS(fieldClass));
+		rv_declaring_class = (jclass) vm->internalVMFunctions->j9jni_createLocalRef((JNIEnv *) currentThread, J9VM_J9CLASS_TO_HEAPCLASS(fieldClass));
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != declaring_class_ptr) {
+		*declaring_class_ptr = rv_declaring_class;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetFieldDeclaringClass);
 }
 
@@ -159,6 +175,7 @@ jvmtiGetFieldModifiers(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc;
 	J9VMThread * currentThread;
+	jint rv_modifiers = 0;
 
 	Trc_JVMTI_jvmtiGetFieldModifiers_Entry(env);
 
@@ -175,14 +192,17 @@ jvmtiGetFieldModifiers(jvmtiEnv* env,
 		ENSURE_NON_NULL(modifiers_ptr);
 
 		romField = ((J9JNIFieldID *) field)->field;
-		*modifiers_ptr = (jint) (romField->modifiers &
+		rv_modifiers = (jint) (romField->modifiers &
 			(J9AccPublic | J9AccPrivate | J9AccProtected | J9AccStatic | J9AccFinal | J9AccVolatile | J9AccTransient | J9AccEnum));
 		rc = JVMTI_ERROR_NONE;
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != modifiers_ptr) {
+		*modifiers_ptr = rv_modifiers;
+	}
 	TRACE_JVMTI_RETURN(jvmtiGetFieldModifiers);
 }
 
@@ -196,6 +216,7 @@ jvmtiIsFieldSynthetic(jvmtiEnv* env,
 	J9JavaVM * vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc;
 	J9VMThread * currentThread;
+	jboolean rv_is_synthetic = JNI_FALSE;
 
 	Trc_JVMTI_jvmtiIsFieldSynthetic_Entry(env);
 
@@ -213,12 +234,15 @@ jvmtiIsFieldSynthetic(jvmtiEnv* env,
 		ENSURE_NON_NULL(is_synthetic_ptr);
 
 		romFieldShape = ((J9JNIFieldID *) field)->field;
-		*is_synthetic_ptr = (romFieldShape->modifiers & J9AccSynthetic) ? JNI_TRUE : JNI_FALSE;
+		rv_is_synthetic = (romFieldShape->modifiers & J9AccSynthetic) ? JNI_TRUE : JNI_FALSE;
 
 done:
-		vm->internalVMFunctions->internalReleaseVMAccess(currentThread);
+		vm->internalVMFunctions->internalExitVMToJNI(currentThread);
 	}
 
+	if (NULL != is_synthetic_ptr) {
+		*is_synthetic_ptr = rv_is_synthetic;
+	}
 	TRACE_JVMTI_RETURN(jvmtiIsFieldSynthetic);
 }
 

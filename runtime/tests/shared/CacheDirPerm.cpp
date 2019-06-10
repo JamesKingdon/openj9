@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,11 +17,10 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #if !defined(WIN32)
-extern "C"
-{
+extern "C" {
 #include "shrinit.h"
 }
 
@@ -37,8 +36,22 @@ extern "C"
 #define J9SH_DEFAULT_CTRL_ROOT "/tmp"
 
 #define USER_PERMISSION_STR "0700"
-#define USER_PERMISSION		0700
-#define NEW_DIR_PERM	0760
+#define USER_PERMISSION      0700
+#define NEW_DIR_PERM         0760
+
+#define EXISTING_DIR_PERM         NEW_DIR_PERM
+#if defined(OPENJ9_BUILD)
+#define NON_EXISTING_DEFAULT_DIR_PERM	J9SH_DIRPERM
+#define EXISTING_DEFAULT_DIR_PERM	NEW_DIR_PERM
+#else
+#define NON_EXISTING_DEFAULT_DIR_PERM	J9SH_DIRPERM_DEFAULT_TMP
+#if defined(J9ZOS390)
+/* on z/OS permission of existing default directory under /tmp is not changed to J9SH_DIRPERM_DEFAULT_TMP. */
+#define EXISTING_DEFAULT_DIR_PERM	NEW_DIR_PERM
+#else /* defined(J9ZOS390) */
+#define EXISTING_DEFAULT_DIR_PERM	J9SH_DIRPERM_DEFAULT_TMP
+#endif /* defined(J9ZOS390) */
+#endif /* defined(OPENJ9_BUILD) */
 
 extern "C" IDATA removeTempDir(J9JavaVM *vm, char *dir);
 
@@ -53,41 +66,47 @@ public:
 	{
 	}
 
-	IDATA getTempCacheDir(I_32 cacheType, bool useDefaultDir);
+	IDATA getTempCacheDir(J9JavaVM *vm, I_32 cacheType, bool useDefaultDir, bool groupAccess);
 	IDATA createTempCacheDir(I_32 cacheType, bool useDefaultDir);
 	IDATA getCacheDirPerm(I_32 cacheType, bool isDefaultDir);
 	IDATA getParentDirPerm(void);
 };
 
 IDATA
-CacheDirPerm::getTempCacheDir(I_32 cacheType, bool useDefaultDir)
+CacheDirPerm::getTempCacheDir(J9JavaVM *vm, I_32 cacheType, bool useDefaultDir, bool groupAccess)
 {
 	IDATA rc = PASS;
 	char baseDir[J9SH_MAXPATH];
 	const char *testName = "getTempCacheDir";
+	U_32 flags = 0;
 	PORT_ACCESS_FROM_JAVAVM(vm);
+
+	if (useDefaultDir) {
+		flags |= J9SHMEM_GETDIR_APPEND_BASEDIR;
+#if defined(OPENJ9_BUILD)
+		if (!groupAccess) {
+			flags |= J9SHMEM_GETDIR_USE_USERHOME;
+		}
+#endif /* defined(OPENJ9_BUILD) */
+	}
 
 	memset(cacheDir, 0, J9SH_MAXPATH);
 	memset(parentDir, 0, J9SH_MAXPATH);
-	if (true == useDefaultDir) {
-		rc = j9shmem_getDir(NULL, TRUE, baseDir, J9SH_MAXPATH);
-	} else {
-		rc = j9shmem_getDir(NULL, FALSE, baseDir, J9SH_MAXPATH);
-	}
-	if (-1 == rc) {
+	rc = j9shmem_getDir(NULL, flags, baseDir, J9SH_MAXPATH);
+	if (0 > rc) {
 		ERRPRINTF("Failed to get a temporary directory\n");
 		rc = FAIL;
 		goto _end;
 	}
-	if (true == useDefaultDir) {
-		sprintf(cacheDir, "%s", baseDir);
+	if (useDefaultDir) {
+		j9str_printf(PORTLIB, cacheDir, sizeof(cacheDir), "%s", baseDir);
 	} else {
-		sprintf(cacheDir, "%s%s/%s/", baseDir, TEST_PARENTDIR, TEST_TEMPDIR);
+		j9str_printf(PORTLIB, cacheDir, sizeof(cacheDir), "%s%s/%s/", baseDir, TEST_PARENTDIR, TEST_TEMPDIR);
 		if (J9PORT_SHR_CACHE_TYPE_NONPERSISTENT == cacheType) {
 			/* for non-persistent cache, actual cache dir is cacheDir/J9SH_BASEDIR. So parent dir is same as cacheDir. */
-			sprintf(parentDir, "%s%s/%s/", baseDir, TEST_PARENTDIR, TEST_TEMPDIR);
+			j9str_printf(PORTLIB, parentDir, sizeof(parentDir), "%s%s/%s/", baseDir, TEST_PARENTDIR, TEST_TEMPDIR);
 		} else {
-			sprintf(parentDir, "%s%s/", baseDir, TEST_PARENTDIR);
+			j9str_printf(PORTLIB, parentDir, sizeof(parentDir), "%s%s/", baseDir, TEST_PARENTDIR);
 		}
 	}
 _end:
@@ -103,13 +122,13 @@ CacheDirPerm::createTempCacheDir(I_32 cacheType, bool useDefaultDir)
 	IDATA rc = PASS;
 	PORT_ACCESS_FROM_JAVAVM(vm);
 
-	if (true == useDefaultDir) {
-		sprintf(actualCacheDir, "%s", cacheDir);
+	if (useDefaultDir) {
+		j9str_printf(PORTLIB, actualCacheDir, sizeof(actualCacheDir), "%s", cacheDir);
 	} else {
 		if (J9PORT_SHR_CACHE_TYPE_NONPERSISTENT == cacheType) {
-			sprintf(actualCacheDir, "%s/%s", cacheDir, J9SH_BASEDIR);
+			j9str_printf(PORTLIB, actualCacheDir, sizeof(actualCacheDir), "%s/%s", cacheDir, J9SH_BASEDIR);
 		} else {
-			sprintf(actualCacheDir, "%s", cacheDir);
+			j9str_printf(PORTLIB, actualCacheDir, sizeof(actualCacheDir), "%s", cacheDir);
 		}
 	}
 
@@ -136,13 +155,13 @@ CacheDirPerm::getCacheDirPerm(I_32 cacheType, bool isDefaultDir)
 	const char *testName = "getCacheDirPerm";
 	PORT_ACCESS_FROM_JAVAVM(vm);
 
-	if (true == isDefaultDir) {
-		sprintf(actualCacheDir, "%s", cacheDir);
+	if (isDefaultDir) {
+		j9str_printf(PORTLIB, actualCacheDir, sizeof(actualCacheDir), "%s", cacheDir);
 	} else {
 		if (J9PORT_SHR_CACHE_TYPE_NONPERSISTENT == cacheType) {
-			sprintf(actualCacheDir, "%s/%s", cacheDir, J9SH_BASEDIR);
+			j9str_printf(PORTLIB, actualCacheDir, sizeof(actualCacheDir), "%s/%s", cacheDir, J9SH_BASEDIR);
 		} else {
-			sprintf(actualCacheDir, "%s", cacheDir);
+			j9str_printf(PORTLIB, actualCacheDir, sizeof(actualCacheDir), "%s", cacheDir);
 		}
 	}
 
@@ -195,37 +214,36 @@ removeTempDir(J9JavaVM *vm, char *dir)
 		char resultBuffer[J9SH_MAXPATH];
 		UDATA rc, handle;
 
-        j9str_printf(PORTLIB, baseFilePath, J9SH_MAXPATH, "%s", dir);
-        rc = handle = j9file_findfirst(baseFilePath, resultBuffer);
-        while ((UDATA)-1 != rc) {
-        	char nextEntry[J9SH_MAXPATH];
-        	/* skip current and parent dir */
-        	if (resultBuffer[0] == '.') {
-        		rc = j9file_findnext(handle, resultBuffer);
-        		continue;
-        	}
-        	j9str_printf(PORTLIB, nextEntry, J9SH_MAXPATH, "%s/%s", baseFilePath, resultBuffer);
-        	removeTempDir(vm, nextEntry);
-        	rc = j9file_findnext(handle, resultBuffer);
-        }
-        if (handle != (UDATA)-1) {
-        	j9file_findclose(handle);
-        }
-        rc = j9file_unlinkdir(baseFilePath);
-        if ((UDATA)-1 == rc) {
+		j9str_printf(PORTLIB, baseFilePath, sizeof(baseFilePath), "%s", dir);
+		rc = handle = j9file_findfirst(baseFilePath, resultBuffer);
+		while ((UDATA)-1 != rc) {
+			char nextEntry[J9SH_MAXPATH];
+			/* skip current and parent dir */
+			if (resultBuffer[0] == '.') {
+				rc = j9file_findnext(handle, resultBuffer);
+				continue;
+			}
+			j9str_printf(PORTLIB, nextEntry, sizeof(nextEntry), "%s/%s", baseFilePath, resultBuffer);
+			removeTempDir(vm, nextEntry);
+			rc = j9file_findnext(handle, resultBuffer);
+		}
+		if (handle != (UDATA)-1) {
+			j9file_findclose(handle);
+		}
+		rc = j9file_unlinkdir(baseFilePath);
+		if ((UDATA)-1 == rc) {
 			ERRPRINTF1("Failed to unlink %s\n", baseFilePath);
 			rc = FAIL;
 			goto _end;
-        }
+		}
 	}
 	rc = PASS;
 _end:
 	return rc;
-
 }
 
 IDATA
-testCacheDirPerm(J9JavaVM* vm)
+testCacheDirPerm(J9JavaVM *vm)
 {
 	IDATA rc = PASS;
 	const char *testName = "testCacheDirPerm";
@@ -236,12 +254,14 @@ testCacheDirPerm(J9JavaVM* vm)
 	CacheDirPerm cdp(vm);
 	cdp.cacheName = "CacheDirPermCache";
 
-	for (int i = 0; i <= 15; i++) {
+	for (int i = 0; i <= 19; i++) {
 		const char *cacheDirPermStr, *cacheTypeString;
 		bool useExistingDir, useDefaultDir;
 		IDATA expectedDirPerm;
 		IDATA perm;
 		IDATA cacheType = 0;
+		bool groupAccess = false;
+		U_64 extraRuntimeFlag = 0;
 
 		switch(i) {
 		case 0:
@@ -251,7 +271,7 @@ testCacheDirPerm(J9JavaVM* vm)
 			cacheTypeString = "persistent";
 			useExistingDir = true;
 			cacheDirPermStr = NULL;
-			expectedDirPerm = J9SH_DIRPERM;
+			expectedDirPerm = EXISTING_DIR_PERM;
 			useDefaultDir = false;
 #endif
 			break;
@@ -262,12 +282,7 @@ testCacheDirPerm(J9JavaVM* vm)
 			cacheTypeString = "non persistent";
 			useExistingDir = true;
 			cacheDirPermStr = NULL;
-			/* on z/OS permissions of existing directory are not changed to J9SH_DIRPERM. */
-#if defined(J9ZOS390)
-			expectedDirPerm = NEW_DIR_PERM;
-#else
-			expectedDirPerm = J9SH_DIRPERM;
-#endif
+			expectedDirPerm = EXISTING_DIR_PERM;
 			useDefaultDir = false;
 #endif
 			break;
@@ -344,7 +359,7 @@ testCacheDirPerm(J9JavaVM* vm)
 			cacheTypeString = "persistent";
 			useExistingDir = true;
 			cacheDirPermStr = NULL;
-			expectedDirPerm = J9SH_DIRPERM;
+			expectedDirPerm = EXISTING_DEFAULT_DIR_PERM;
 			useDefaultDir = true;
 #endif
 			break;
@@ -355,12 +370,7 @@ testCacheDirPerm(J9JavaVM* vm)
 			cacheTypeString = "non persistent";
 			useExistingDir = true;
 			cacheDirPermStr = NULL;
-			/* on z/OS permissions of existing directory are not changed to J9SH_DIRPERM. */
-#if defined(J9ZOS390)
-			expectedDirPerm = NEW_DIR_PERM;
-#else
-			expectedDirPerm = J9SH_DIRPERM;
-#endif
+			expectedDirPerm = EXISTING_DEFAULT_DIR_PERM;
 			useDefaultDir = true;
 #endif
 			break;
@@ -371,7 +381,7 @@ testCacheDirPerm(J9JavaVM* vm)
 			cacheTypeString = "persistent";
 			useExistingDir = true;
 			cacheDirPermStr = USER_PERMISSION_STR;
-			expectedDirPerm = J9SH_DIRPERM;
+			expectedDirPerm = EXISTING_DEFAULT_DIR_PERM;
 			useDefaultDir = true;
 #endif
 			break;
@@ -382,12 +392,7 @@ testCacheDirPerm(J9JavaVM* vm)
 			cacheTypeString = "non persistent";
 			useExistingDir = true;
 			cacheDirPermStr = USER_PERMISSION_STR;
-			/* on z/OS permissions of existing directory are not changed to J9SH_DIRPERM. */
-#if defined(J9ZOS390)
-			expectedDirPerm = NEW_DIR_PERM;
-#else
-			expectedDirPerm = J9SH_DIRPERM;
-#endif
+			expectedDirPerm = EXISTING_DEFAULT_DIR_PERM;
 			useDefaultDir = true;
 #endif
 			break;
@@ -398,7 +403,7 @@ testCacheDirPerm(J9JavaVM* vm)
 			cacheTypeString = "persistent";
 			useExistingDir = false;
 			cacheDirPermStr = NULL;
-			expectedDirPerm = J9SH_DIRPERM;
+			expectedDirPerm = NON_EXISTING_DEFAULT_DIR_PERM;
 			useDefaultDir = true;
 #endif
 			break;
@@ -409,7 +414,7 @@ testCacheDirPerm(J9JavaVM* vm)
 			cacheTypeString = "non persistent";
 			useExistingDir = false;
 			cacheDirPermStr = NULL;
-			expectedDirPerm = J9SH_DIRPERM;
+			expectedDirPerm = NON_EXISTING_DEFAULT_DIR_PERM;
 			useDefaultDir = true;
 #endif
 			break;
@@ -420,10 +425,10 @@ testCacheDirPerm(J9JavaVM* vm)
 			cacheTypeString = "persistent";
 			useExistingDir = false;
 			cacheDirPermStr = USER_PERMISSION_STR;
-			expectedDirPerm = J9SH_DIRPERM;
+			expectedDirPerm = NON_EXISTING_DEFAULT_DIR_PERM;
 			useDefaultDir = true;
+#endif /* !(defined(J9ZOS390)) */
 			break;
-#endif
 		case 15:
 #if !defined(J9SHR_CACHELET_SUPPORT)
 			/* non-persistent cache; use non-existing default directory; use cacheDirPerm */
@@ -431,16 +436,60 @@ testCacheDirPerm(J9JavaVM* vm)
 			cacheTypeString = "non persistent";
 			useExistingDir = false;
 			cacheDirPermStr = USER_PERMISSION_STR;
-			expectedDirPerm = J9SH_DIRPERM;
+			expectedDirPerm = NON_EXISTING_DEFAULT_DIR_PERM;
 			useDefaultDir = true;
 #endif
+			break;
+		case 16:
+#if !defined(J9ZOS390)
+			/* persistent cache; use non-existing default directory; don't use cacheDirPerm, use groupaccess*/
+			cacheType = J9PORT_SHR_CACHE_TYPE_PERSISTENT;
+			cacheTypeString = "persistent";
+			useExistingDir = false;
+			cacheDirPermStr = NULL;
+			expectedDirPerm = J9SH_DIRPERM_DEFAULT_TMP;
+			useDefaultDir = true;
+			groupAccess = true;
+#endif /*!defined(J9ZOS390) */
+			break;
+		case 17:
+			/* non-persistent cache; use non-existing default directory; don't use cacheDirPerm, use groupaccess */
+			cacheType = J9PORT_SHR_CACHE_TYPE_NONPERSISTENT;
+			cacheTypeString = "non persistent";
+			useExistingDir = false;
+			cacheDirPermStr = NULL;
+			expectedDirPerm = J9SH_DIRPERM_DEFAULT_TMP;
+			useDefaultDir = true;
+			groupAccess = true;
+			break;
+		case 18:
+#if !defined(J9ZOS390)
+			/* persistent cache; use non-existing non-default directory; don't use cacheDirPerm, use groupaccess*/
+			cacheType = J9PORT_SHR_CACHE_TYPE_PERSISTENT;
+			cacheTypeString = "persistent";
+			useExistingDir = false;
+			cacheDirPermStr = NULL;
+			expectedDirPerm = J9SH_DIRPERM_GROUPACCESS;
+			useDefaultDir = false;
+			groupAccess = true;
+#endif /* !defined(J9ZOS390) */
+			break;
+		case 19:
+			/* non-persistent cache; use non-existing non-default directory; don't use cacheDirPerm, use groupaccess*/
+			cacheType = J9PORT_SHR_CACHE_TYPE_NONPERSISTENT;
+			cacheTypeString = "non persistent";
+			useExistingDir = false;
+			cacheDirPermStr = NULL;
+			expectedDirPerm = J9SH_DIRPERM_GROUPACCESS;
+			useDefaultDir = false;
+			groupAccess = true;
 			break;
 		}
 
 		if (0 != cacheType) {
 			INFOPRINTF6("Test %d: cacheType: %s, useExistingDir: %d, cacheDirPermStr: %s, expectedDirPerm: %d, useDefaultDir: %d\n", i, cacheTypeString, useExistingDir, cacheDirPermStr, expectedDirPerm, useDefaultDir);
 
-			rc = cdp.getTempCacheDir(cacheType, useDefaultDir);
+			rc = cdp.getTempCacheDir(vm, cacheType, useDefaultDir, groupAccess);
 			if (FAIL == rc) {
 				ERRPRINTF("createTempCacheDir failed\n");
 				goto _end;
@@ -459,12 +508,20 @@ testCacheDirPerm(J9JavaVM* vm)
 				if (FAIL == rc) {
 					ERRPRINTF("createTempCacheDir failed\n");
 					goto _end;
+				} else {
+					INFOPRINTF1("Created cache dir %s\n", cdp.cacheDir);
 				}
 			}
-			if (useDefaultDir) {
-				rc = cdp.openTestCache(cacheType, CACHE_SIZE, cdp.cacheName, false, NULL, NULL, cacheDirPermStr, 0, 0);
+			if (groupAccess) {
+				extraRuntimeFlag = J9SHR_RUNTIMEFLAG_ENABLE_GROUP_ACCESS;
 			} else {
-				rc = cdp.openTestCache(cacheType, CACHE_SIZE, cdp.cacheName, false, NULL, cdp.cacheDir, cacheDirPermStr, 0, 0);
+				extraRuntimeFlag = 0;
+			}
+
+			if (useDefaultDir) {
+				rc = cdp.openTestCache(cacheType, CACHE_SIZE, cdp.cacheName, false, NULL, NULL, cacheDirPermStr, extraRuntimeFlag, 0);
+			} else {
+				rc = cdp.openTestCache(cacheType, CACHE_SIZE, cdp.cacheName, false, NULL, cdp.cacheDir, cacheDirPermStr, extraRuntimeFlag, 0);
 			}
 			if (FAIL == rc) {
 				ERRPRINTF("openTestCache failed\n");
@@ -517,5 +574,6 @@ _end:
 	return rc;
 }
 
-}
-#endif
+} /* extern "C" */
+
+#endif /* !defined(WIN32) */

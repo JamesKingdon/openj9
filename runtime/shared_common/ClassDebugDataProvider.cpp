@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -693,7 +693,7 @@ ClassDebugDataProvider::setPermission(J9VMThread* currentThread, AbstractMemoryP
 
 		if ( lntProtectHigh == lvtProtectLow) {
 			/* The whole debug area will be memory protected after the next call to setRegionPermissions().
-			 * Only new data is mportected, it is assumed the rest was protected earlier.
+			 * Only new data is mprotected, it is assumed the rest was protected earlier.
 			 */
 			UDATA startMprotect = ROUND_DOWN_TO(pageSize, (UDATA)lntProtectLow);
 			UDATA endMprotect = ROUND_UP_TO(pageSize, (UDATA)lvtProtectHigh);

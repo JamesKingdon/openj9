@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 /*
  * ROMClassWriter.cpp
@@ -383,7 +383,7 @@ ROMClassWriter::writeROMClass(Cursor *cursor,
 		cursor->writeU32(_classFileOracle->getInnerClassCount(), Cursor::GENERIC);
 		cursor->writeSRP(_innerClassesSRPKey, Cursor::SRP_TO_GENERIC);
 #if defined(J9VM_OPT_VALHALLA_NESTMATES)
-		cursor->writeSRP(_srpKeyProducer->mapCfrConstantPoolIndexToKey(_classFileOracle->getNestTopNameIndex()), Cursor::SRP_TO_UTF8);
+		cursor->writeSRP(_srpKeyProducer->mapCfrConstantPoolIndexToKey(_classFileOracle->getNestHostNameIndex()), Cursor::SRP_TO_UTF8);
 		cursor->writeU16(_classFileOracle->getNestMembersCount(), Cursor::GENERIC);
 		cursor->writeU16(0, Cursor::GENERIC); /* padding */
 		cursor->writeSRP(_nestMembersSRPKey, Cursor::SRP_TO_GENERIC);
@@ -428,7 +428,8 @@ ROMClassWriter::writeROMClass(Cursor *cursor,
 	writeVarHandleMethodTypeLookupTable(cursor, markAndCountOnly);
 	writeStaticSplitTable(cursor, markAndCountOnly);
 	writeSpecialSplitTable(cursor, markAndCountOnly);
-	cursor->padToAlignment(sizeof(U_64), Cursor::GENERIC); // TODO why U_64 alignment and not U_32
+	/* aligned to U_64 required by the shared classes */
+	cursor->padToAlignment(sizeof(U_64), Cursor::GENERIC);
 
 	/*
 	 * Write UTF8s
@@ -448,7 +449,8 @@ ROMClassWriter::writeROMClass(Cursor *cursor,
 	) {
 		classDataCursor->mark(_intermediateClassDataSRPKey);
 		classDataCursor->writeData(_context->intermediateClassData(), _context->intermediateClassDataLength(), Cursor::INTERMEDIATE_CLASS_DATA);
-		classDataCursor->padToAlignment(sizeof(U_64), Cursor::GENERIC); // TODO why U_64 alignment and not U_32
+		/* aligned to U_64 required by the shared classes */
+		classDataCursor->padToAlignment(sizeof(U_64), Cursor::GENERIC);
 	}
 }
 
@@ -506,6 +508,13 @@ public:
 		/* assumes format: { U32 cpIndex, (cfrKind << 4) || cpType } */
 		_cursor->writeU32(cpIndex, Cursor::GENERIC);
 		_cursor->writeU32((cfrKind << BCT_J9DescriptionCpTypeShift) | BCT_J9DescriptionCpTypeMethodHandle, Cursor::GENERIC);
+	}
+
+	void visitConstantDynamic(U_16 bsmIndex, U_16 cfrCPIndex, U_32 primitiveFlag)
+	{
+		/* assumes format: { SRP to NameAndSignature, primitiveFlag || (bsmIndex << 4) || cpType } */
+		_cursor->writeSRP(_srpKeyProducer->mapCfrConstantPoolIndexToKey(cfrCPIndex), Cursor::SRP_TO_NAME_AND_SIGNATURE);
+		_cursor->writeU32((bsmIndex << BCT_J9DescriptionCpTypeShift) | BCT_J9DescriptionCpTypeConstantDynamic | primitiveFlag, Cursor::GENERIC);
 	}
 
 	void visitSingleSlotConstant(U_32 slot1)
@@ -651,7 +660,7 @@ CFR_STACKMAP_TYPE_INT_ARRAY, CFR_STACKMAP_TYPE_LONG_ARRAY,  0,                  
 0,                           0,                             0,                             0,
 0,                           0,                             CFR_STACKMAP_TYPE_SHORT_ARRAY, 0,
 0,                           0,                             0,                             0,
-0,                           CFR_STACKMAP_TYPE_BYTE_ARRAY,  0};
+0,                           CFR_STACKMAP_TYPE_BOOL_ARRAY,  0};
 
 class ROMClassWriter::CallSiteWriter : public ConstantPoolMap::CallSiteVisitor
 {
@@ -880,6 +889,7 @@ private:
 			 *  Encode the primitive array type in the tag field.
 			 *  One of:
 			 *   CFR_STACKMAP_TYPE_BYTE_ARRAY
+			 *   CFR_STACKMAP_TYPE_BOOL_ARRAY
 			 *   CFR_STACKMAP_TYPE_CHAR_ARRAY
 			 *   CFR_STACKMAP_TYPE_DOUBLE_ARRAY
 			 *   CFR_STACKMAP_TYPE_FLOAT_ARRAY
@@ -893,9 +903,19 @@ private:
 			 * (i.e., number of dimensions of the array - 1)
 			 * in the next 2 bytes in Big Endian (since we are maintaining Sun StackMapTable format).
 			 *
-			 * See: https://jtcjazz.ottawa.ibm.com:9443/jazz/resource/itemName/com.ibm.team.workitem.WorkItem/18860
-			 * for explanation of why arity -1 is encoded instead of arity.
-			 *  */
+			 * The reason for encoding arity - 1 in verification type info in Stack maps for primitive array special cases are:
+			 * The newarray and anewarray bytecodes assume that the array has only a single dimension.
+			 * To create a multidimension array, multianewarray must be used.
+			 * The primitive array access bytecodes (ie: iaload) can only be used on single dimension arrays.
+			 * aaload must be used to access every dimension prior to the base dimension in a multi-arity primitive array.
+			 * The constants in vrfytbl.c are based off the constants for the primitive types, and can't have the arity of 1 encoded if the constant is to be used for both purposes.
+			 * (See rtverify.c verifyBytecodes() - the RTV_ARRAY_FETCH_PUSH & RTV_ARRAY_STORE cases of the switch)
+			 * In addition, the code all through the verifier assumes this condition.
+			 * Notes:
+			 * See util/vrfytbl.c for bytecode tables.
+			 * See constant definitions in cfreader.h and oti/bytecodewalk.h.
+			 * bcverify/bcverify.c simulateStack() is the other place that creates stack maps.
+			 */
 			_cursor->writeBigEndianU16(nameLength - 2, Cursor::GENERIC);
 		} else {
 			/*
@@ -1086,7 +1106,8 @@ void
 ROMClassWriter::writeUTF8s(Cursor *cursor)
 {
 	Helper(cursor, false, _classFileOracle, _srpKeyProducer, _srpOffsetTable, _constantPoolMap, 0).writeUTF8Block();
-	cursor->padToAlignment(sizeof(U_64), Cursor::GENERIC); // TODO why U_64 alignment and not U_32
+	/* aligned to U_64 required by the shared classes */
+	cursor->padToAlignment(sizeof(U_64), Cursor::GENERIC);
 }
 
 void
@@ -1349,7 +1370,7 @@ ROMClassWriter::writeMethods(Cursor *cursor, Cursor *lineNumberCursor, Cursor *v
 			if (markAndCountOnly) {
 				/* Following is adding PAD to stackmap size. First round is always markAndCountOnly.
 				 * This logic is very difficult to catch. Cause of the padded stackmapsize, we dont use padding in nextROMMethod() in mthutil.
-				 * Also I find this markAndCountOnly unneccesary and confusing for the following reasons
+				 * Also I find this markAndCountOnly unnecessary and confusing for the following reasons
 				 * 1. It is used partially : See above, we dont use it for the first 6 bytes and we write them down.
 				 * It should be used properly, either always or never.
 				 * 2. Also when it is counting, it is a counting cursor and it actually do not write (see Cursor.hpp).

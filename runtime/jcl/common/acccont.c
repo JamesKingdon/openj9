@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1998, 2014 IBM Corp. and others
+ * Copyright (c) 1998, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "jni.h"
@@ -50,15 +50,13 @@ jboolean JNICALL Java_java_security_AccessController_initializeInternal(JNIEnv *
 	if(mid == NULL) goto fail;
 	javaVM->doPrivilegedWithContextMethodID2 = (UDATA) mid;
 
-	if ((J2SE_VERSION_FROM_ENV(env) & J2SE_VERSION_MASK) >= J2SE_18) {
-		mid = (*env)->GetStaticMethodID(env, accessControllerClass, "doPrivileged", "(Ljava/security/PrivilegedAction;Ljava/security/AccessControlContext;[Ljava/security/Permission;)Ljava/lang/Object;");
-		if (NULL == mid) goto fail;
-		javaVM->doPrivilegedWithContextPermissionMethodID1 = (UDATA) mid;
+	mid = (*env)->GetStaticMethodID(env, accessControllerClass, "doPrivileged", "(Ljava/security/PrivilegedAction;Ljava/security/AccessControlContext;[Ljava/security/Permission;)Ljava/lang/Object;");
+	if (NULL == mid) goto fail;
+	javaVM->doPrivilegedWithContextPermissionMethodID1 = (UDATA) mid;
 
-		mid = (*env)->GetStaticMethodID(env, accessControllerClass, "doPrivileged", "(Ljava/security/PrivilegedExceptionAction;Ljava/security/AccessControlContext;[Ljava/security/Permission;)Ljava/lang/Object;");
-		if (NULL == mid) goto fail;
-		javaVM->doPrivilegedWithContextPermissionMethodID2 = (UDATA) mid;
-	}
+	mid = (*env)->GetStaticMethodID(env, accessControllerClass, "doPrivileged", "(Ljava/security/PrivilegedExceptionAction;Ljava/security/AccessControlContext;[Ljava/security/Permission;)Ljava/lang/Object;");
+	if (NULL == mid) goto fail;
+	javaVM->doPrivilegedWithContextPermissionMethodID2 = (UDATA) mid;
 
 	return JNI_TRUE;
 

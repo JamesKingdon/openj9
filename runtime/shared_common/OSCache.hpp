@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #if !defined(OSCACHE_HPP_INCLUDED)
 #define OSCACHE_HPP_INCLUDED
@@ -61,7 +61,7 @@
 #define OSCACHE_LOWEST_ACTIVE_GEN 1
 
 /* Always increment this value by 2. For testing we use the (current generation - 1) and expect the cache contents to be compatible. */
-#define OSCACHE_CURRENT_CACHE_GEN 35
+#define OSCACHE_CURRENT_CACHE_GEN 37
 
 #define J9SH_VERSION(versionMajor, versionMinor) (versionMajor*100 + versionMinor)
 
@@ -69,12 +69,16 @@
 											 j9str_printf(portLib, versionStr, J9SH_VERSION_STRING_LEN, J9SH_VERSION_STRING_SPEC,\
 											 version, modlevel, feature, addrmode)
 
+#define J9SH_GET_VERSION_STRING_JAVA9ANDLOWER(portLib, versionStr, version, modlevel, feature, addrmode)\
+											 j9str_printf(portLib, versionStr, J9SH_VERSION_STRING_LEN - J9SH_VERSTRLEN_INCREASED_SINCEJAVA10, J9SH_VERSION_STRING_SPEC,\
+											 version, modlevel, feature, addrmode)
+
 #define J9SH_GET_VERSION_G07TO29_STRING(portLib, versionStr, version, modlevel, addrmode)\
-											 j9str_printf(portLib, versionStr, J9SH_VERSION_STRING_LEN - J9SH_VERSTRLEN_INCREASED_SINCEG29, J9SH_VERSION_STRING_G07TO29_SPEC,\
+											 j9str_printf(portLib, versionStr, J9SH_VERSION_STRING_LEN - J9SH_VERSTRLEN_INCREASED_SINCEG29 - J9SH_VERSTRLEN_INCREASED_SINCEJAVA10, J9SH_VERSION_STRING_G07TO29_SPEC,\
 											 version, modlevel, addrmode)
 
 #define J9SH_GET_VERSION_G07ANDLOWER_STRING(portLib, versionStr, version, modlevel, addrmode)\
-											 j9str_printf(portLib, versionStr, J9SH_VERSION_STRING_LEN - J9SH_VERSTRLEN_INCREASED_SINCEG29, J9SH_VERSION_STRING_G07ANDLOWER_SPEC,\
+											 j9str_printf(portLib, versionStr, J9SH_VERSION_STRING_LEN - J9SH_VERSTRLEN_INCREASED_SINCEG29 - J9SH_VERSTRLEN_INCREASED_SINCEJAVA10, J9SH_VERSION_STRING_G07ANDLOWER_SPEC,\
 											 version, modlevel, addrmode)
 
 #define OSC_TRACE(var) if (_verboseFlags) j9nls_printf(PORTLIB, J9NLS_INFO, var)
@@ -105,7 +109,7 @@ typedef struct SH_OSCache_Info {
         UDATA isCompatible; /** Is the cache compatible with this VM */
         UDATA isCorrupt; /** Is set when the cache is found to be corrupt */
         UDATA isJavaCorePopulated; /** Is set when the javacoreData contains valid data */
-        J9SharedClassJavacoreDataDescriptor javacoreData; /** If isCompatible is true, then extra information about the cache is availaible in here*/
+        J9SharedClassJavacoreDataDescriptor javacoreData; /** If isCompatible is true, then extra information about the cache is available in here*/
 } SH_OSCache_Info;
 
 /* DO NOT use UDATA/IDATA in the cache headers so that 32-bit/64-bit JVMs can read each others headers
@@ -164,7 +168,7 @@ typedef struct LastErrorInfo {
 class SH_OSCache
 {
 public:
-	class SH_OSCacheInitialiser
+	class SH_OSCacheInitializer
 	{
 		public:
 		virtual void init(char* data, U_32 len, I_32 minAOT, I_32 maxAOT, I_32 minJIT, I_32 maxJIT, U_32 readWriteLen, U_32 softMaxBytes) = 0;
@@ -183,7 +187,7 @@ public:
 
 	static UDATA getRequiredConstrBytes(void);
 	
-	static IDATA getCacheDir(J9PortLibrary* portLibrary, const char* ctrlDirName, char* buffer, UDATA bufferSize, U_32 cacheType);
+	static IDATA getCacheDir(J9JavaVM* vm, const char* ctrlDirName, char* buffer, UDATA bufferSize, U_32 cacheType, bool allowVerbose = true);
 	
 	static IDATA createCacheDir(J9PortLibrary* portLibrary, char* cacheDirName, UDATA cacheDirPerm, bool cleanMemorySegments);
 
@@ -202,7 +206,7 @@ public:
 	bool isRunningReadOnly();
 
 	virtual bool startup(J9JavaVM* vm, const char* cacheDirName, UDATA cacheDirPerm, const char* cacheName, J9SharedClassPreinitConfig* piconfig_, IDATA numLocks,
-			UDATA createFlag, UDATA verboseFlags, U_64 runtimeFlags, I_32 openMode, UDATA storageKeyTesting, J9PortShcVersion* versionData, SH_OSCacheInitialiser* i, UDATA reason) = 0;
+			UDATA createFlag, UDATA verboseFlags, U_64 runtimeFlags, I_32 openMode, UDATA storageKeyTesting, J9PortShcVersion* versionData, SH_OSCacheInitializer* i, UDATA reason) = 0;
 
 	virtual IDATA destroy(bool suppressVerbose, bool isReset = false) = 0;
 

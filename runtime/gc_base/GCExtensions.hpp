@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -182,11 +182,16 @@ public:
 #if defined(J9VM_GC_IDLE_HEAP_MANAGER)
 	MM_IdleGCManager* idleGCManager; /**< Manager which registers for VM Runtime State notification & manages free heap on notification */
 #endif
+
+	double maxRAMPercent; /**< Value of -XX:MaxRAMPercentage specified by the user */
+	double initialRAMPercent; /**< Value of -XX:InitialRAMPercentage specified by the user */
+
 protected:
 private:
 protected:
 	virtual bool initialize(MM_EnvironmentBase* env);
 	virtual void tearDown(MM_EnvironmentBase* env);
+	virtual void computeDefaultMaxHeap(MM_EnvironmentBase* env);
 
 public:
 	static MM_GCExtensions* newInstance(MM_EnvironmentBase* env);
@@ -297,6 +302,8 @@ public:
 #if defined(J9VM_GC_IDLE_HEAP_MANAGER)
 		, idleGCManager(NULL)
 #endif
+		, maxRAMPercent(0.0) /* this would get overwritten by user specified value */
+		, initialRAMPercent(0.0) /* this would get overwritten by user specified value */
 	{
 		_typeId = __FUNCTION__;
 	}

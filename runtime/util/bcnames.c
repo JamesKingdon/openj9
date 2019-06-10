@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,10 +17,11 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9comp.h"
+#include "j9.h"
 
 const char * const JavaBCNames[] = {
 "JBnop" /* 0 */,
@@ -226,43 +227,30 @@ const char * const JavaBCNames[] = {
 "JBgotow" /* 200 */,
 "JBunimplemented" /* 201 */,
 "JBbreakpoint" /* 202 */,
-"JBiloadw" /* 203 */,
-"JBlloadw" /* 204 */,
-"JBfloadw" /* 205 */,
-"JBdloadw" /* 206 */,
-"JBaloadw" /* 207 */,
-"JBistorew" /* 208 */,
-"JBlstorew" /* 209 */,
-"JBfstorew" /* 210 */,
-"JBdstorew" /* 211 */,
-"JBastorew" /* 212 */,
+"JBdefaultvalue" /* 203 */,
+"JBwithfield" /* 204 */,
+"JBunimplemented" /* 205 */,
+"JBunimplemented" /* 206 */,
+"JBunimplemented" /* 207 */,
+"JBunimplemented" /* 208 */,
+"JBunimplemented" /* 209 */,
+"JBunimplemented" /* 210 */,
+"JBunimplemented" /* 211 */,
+"JBunimplemented" /* 212 */,
 "JBiincw" /* 213 */,
 "JBunimplemented" /* 214 */,
 "JBaload0getfield" /* 215 */,
 "JBnewdup" /* 216 */,
-#if defined(J9_VALHALLA_MVT)
-"JBvload" /* 217 */,
-"JBvstore" /* 218 */,
-"JBvreturn" /* 219 */,
-"JBvbox" /* 220 */,
-"JBvunbox" /* 221 */,
-"JBvaload" /* 222 */,
-"JBvastore" /* 223 */,
-"JBvdefault" /* 224 */,
-"JBvgetfield" /* 225 */,
-"JBvwithfield" /* 226 */,
-#else /* defined(J9_VALHALLA_MVT) */
-"JBunimplemented" /* 217 */,
-"JBunimplemented" /* 218 */,
-"JBunimplemented" /* 219 */,
-"JBunimplemented" /* 220 */,
-"JBunimplemented" /* 221 */,
-"JBunimplemented" /* 222 */,
-"JBunimplemented" /* 223 */,
-"JBunimplemented" /* 224 */,
-"JBunimplemented" /* 225 */,
-"JBunimplemented" /* 226 */,
-#endif /* defined(J9_VALHALLA_MVT) */
+"JBiloadw" /* 217 */,
+"JBlloadw" /* 218 */,
+"JBfloadw" /* 219 */,
+"JBdloadw" /* 220 */,
+"JBaloadw" /* 221 */,
+"JBistorew" /* 222 */,
+"JBlstorew" /* 223 */,
+"JBfstorew" /* 224 */,
+"JBdstorew" /* 225 */,
+"JBastorew" /* 226 */,
 "JBunimplemented" /* 227 */,
 "JBreturnFromConstructor" /* 228 */,
 "JBgenericReturn" /* 229 */,
@@ -272,10 +260,10 @@ const char * const JavaBCNames[] = {
 "JBinvokehandlegeneric" /* 233 */,
 "JBinvokestaticsplit" /* 234 */,
 "JBinvokespecialsplit" /* 235 */,
-"JBunimplemented" /* 236 */,
-"JBunimplemented" /* 237 */,
-"JBunimplemented" /* 238 */,
-"JBunimplemented" /* 239 */,
+"JBreturnC" /* 236 */,
+"JBreturnS" /* 237 */,
+"JBreturnB" /* 238 */,
+"JBreturnZ" /* 239 */,
 "JBunimplemented" /* 240 */,
 "JBunimplemented" /* 241 */,
 "JBunimplemented" /* 242 */,
@@ -498,8 +486,13 @@ const char * const sunJavaBCNames[] = {
 "JBgotow" /* 200 */,
 "JBjsrw" /* 201 */,
 "JBbreakpoint" /* 202 */,
+#if defined(J9VM_OPT_VALHALLA_VALUE_TYPES)
+"JBdefaultvalue" /* 203 */,
+"JBwithfield" /* 204 */,
+#else /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 "JBunimplemented" /* 203 */,
 "JBunimplemented" /* 204 */,
+#endif /* defined(J9VM_OPT_VALHALLA_VALUE_TYPES) */
 "JBunimplemented" /* 205 */,
 "JBunimplemented" /* 206 */,
 "JBunimplemented" /* 207 */,
@@ -512,18 +505,6 @@ const char * const sunJavaBCNames[] = {
 "JBunimplemented" /* 214 */,
 "JBunimplemented" /* 215 */,
 "JBunimplemented" /* 216 */,
-#if defined(J9_VALHALLA_MVT)
-"JBvload" /* 217 */,
-"JBvstore" /* 218 */,
-"JBvreturn" /* 219 */,
-"JBvbox" /* 220 */,
-"JBvunbox" /* 221 */,
-"JBvaload" /* 222 */,
-"JBvastore" /* 223 */,
-"JBvdefault" /* 224 */,
-"JBvgetfield" /* 225 */,
-"JBvwithfield" /* 226 */,
-#else /* defined(J9_VALHALLA_MVT) */
 "JBunimplemented" /* 217 */,
 "JBunimplemented" /* 218 */,
 "JBunimplemented" /* 219 */,
@@ -534,7 +515,6 @@ const char * const sunJavaBCNames[] = {
 "JBunimplemented" /* 224 */,
 "JBunimplemented" /* 225 */,
 "JBunimplemented" /* 226 */,
-#endif /* defined(J9_VALHALLA_MVT) */
 "JBunimplemented" /* 227 */,
 "JBunimplemented" /* 228 */,
 "JBunimplemented" /* 229 */,

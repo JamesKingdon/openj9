@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2016, 2017 IBM Corp. and others
+ * Copyright (c) 2016, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #include "jvmtiHelpers.h"
 #include "jvmti_internal.h"
@@ -65,11 +65,7 @@ addModuleExportsOrOpens(jvmtiEnv* jvmtiEnv, jobject fromModule, const char* pkgN
 		fromJ9Module = J9OBJECT_ADDRESS_LOAD(currentThread, fromModuleObj, vm->modulePointerOffset);
 		fromInstanceClazz = J9OBJECT_CLAZZ(currentThread, fromModuleObj);
 		toInstanceClazz = J9OBJECT_CLAZZ(currentThread, J9_JNI_UNWRAP_REFERENCE(toModule));
-		if(J2SE_SHAPE(vm) < J2SE_SHAPE_B165) {
-			moduleClass = J9VMJAVALANGREFLECTMODULE_OR_NULL(vm);
-		} else {
-			moduleClass = J9VMJAVALANGMODULE_OR_NULL(vm);
-		}
+		moduleClass = J9VMJAVALANGMODULE_OR_NULL(vm);
 
 		Assert_JVMTI_notNull(moduleClass);
 
@@ -116,82 +112,27 @@ addModuleExportsOrOpens(jvmtiEnv* jvmtiEnv, jobject fromModule, const char* pkgN
 		vmFuncs->internalExitVMToJNI(currentThread);
 		if ((JVMTI_ERROR_NONE == rc) && (FALSE == isUnnamedOrOpen)) {
 			jstring pkg = NULL;
-			if (J2SE_SHAPE(vm) >= J2SE_SHAPE_B148) {
-				if (NULL == vm->addExports) {
-					jmethodID addExports = NULL;
+			if (NULL == vm->addExports) {
+				jmethodID addExports = (*env)->GetMethodID(env, moduleJClass, "implAddExportsOrOpens", "(Ljava/lang/String;Ljava/lang/Module;ZZ)V");
 
-					if(J2SE_SHAPE(vm) < J2SE_SHAPE_B165) {
-						addExports = (*env)->GetMethodID(env, moduleJClass, "implAddExportsOrOpens", "(Ljava/lang/String;Ljava/lang/reflect/Module;ZZ)V");
-					} else {
-						addExports = (*env)->GetMethodID(env, moduleJClass, "implAddExportsOrOpens", "(Ljava/lang/String;Ljava/lang/Module;ZZ)V");
-					}
-
-					if (NULL == addExports) {
-						rc = JVMTI_ERROR_INTERNAL;
-						goto done;
-					}
-
-					vm->addExports = addExports;
+				if (NULL == addExports) {
+					rc = JVMTI_ERROR_INTERNAL;
+					goto done;
 				}
-				pkg = (*env)->NewStringUTF(env, pkgName);
-				if (NULL == pkg) {
-					rc = JVMTI_ERROR_OUT_OF_MEMORY;
-				} else {
-					(*env)->CallObjectMethod(env,
-											fromModule,
-											vm->addExports,
-											pkg,
-											toModule,
-											!exports,
-											JNI_TRUE);
-				}
+
+				vm->addExports = addExports;
+			}
+			pkg = (*env)->NewStringUTF(env, pkgName);
+			if (NULL == pkg) {
+				rc = JVMTI_ERROR_OUT_OF_MEMORY;
 			} else {
-				if (exports) {
-					if (NULL == vm->addExports) {
-						jmethodID addExports = NULL;
-
-						addExports = (*env)->GetMethodID(env, moduleJClass, "implAddExports", "(Ljava/lang/String;Ljava/lang/reflect/Module;Z)V");
-						if (NULL == addExports) {
-							rc = JVMTI_ERROR_INTERNAL;
-							goto done;
-						}
-
-						vm->addExports = addExports;
-					}
-					pkg = (*env)->NewStringUTF(env, pkgName);
-					if (NULL == pkg) {
-						rc = JVMTI_ERROR_OUT_OF_MEMORY;
-					} else {
-						(*env)->CallObjectMethod(env,
-												fromModule,
-												vm->addExports,
-												pkg,
-												toModule,
-												JNI_TRUE);
-					}
-				} else {
-					if (NULL == vm->addOpens) {
-						jmethodID addOpens = NULL;
-
-						addOpens = (*env)->GetMethodID(env, moduleJClass, "implAddOpens", "(Ljava/lang/String;Ljava/lang/reflect/Module;)V");
-						if (NULL == addOpens) {
-							rc = JVMTI_ERROR_OUT_OF_MEMORY;
-							goto done;
-						}
-
-						vm->addOpens = addOpens;
-					}
-					pkg = (*env)->NewStringUTF(env, pkgName);
-					if (NULL == pkg) {
-						rc = JVMTI_ERROR_INTERNAL;
-					} else {
-						(*env)->CallObjectMethod(env,
-												fromModule,
-												vm->addExports,
-												pkg,
-												toModule);
-					}
-				}
+				(*env)->CallObjectMethod(env,
+										fromModule,
+										vm->addExports,
+										pkg,
+										toModule,
+										!exports,
+										JNI_TRUE);
 			}
 			if ((*env)->ExceptionOccurred(env)) {
 				rc = JVMTI_ERROR_INTERNAL;
@@ -217,6 +158,8 @@ jvmtiGetAllModules(jvmtiEnv* jvmtiEnv, jint* module_count_ptr, jobject** modules
 	J9JavaVM *vm = JAVAVM_FROM_ENV(jvmtiEnv);
 	jvmtiError rc = JVMTI_ERROR_NONE;
 	J9VMThread *currentThread = NULL;
+	jint rv_module_count = 0;
+	jobject *rv_modules = NULL;
 
 	rc = getCurrentVMThread(vm, &currentThread);
 	if (JVMTI_ERROR_NONE == rc) {
@@ -283,8 +226,8 @@ jvmtiGetAllModules(jvmtiEnv* jvmtiEnv, jint* module_count_ptr, jobject** modules
 			vmFuncs->allClassLoadersEndDo(&walkState);
 			Assert_JVMTI_true(i == moduleCount);
 
-			*module_count_ptr = moduleCount;
-			*modules_ptr = modules;
+			rv_module_count = moduleCount;
+			rv_modules = modules;
 		}
 
 
@@ -293,7 +236,13 @@ jvmtiGetAllModules(jvmtiEnv* jvmtiEnv, jint* module_count_ptr, jobject** modules
 		omrthread_monitor_exit(vm->classLoaderBlocksMutex);
 #endif
 done:
-		vmFuncs->internalReleaseVMAccess(currentThread);
+		vmFuncs->internalExitVMToJNI(currentThread);
+	}
+	if (NULL != module_count_ptr) {
+		*module_count_ptr = rv_module_count;
+	}
+	if (NULL != modules_ptr) {
+		*modules_ptr = rv_modules;
 	}
 	return rc;
 }
@@ -315,6 +264,7 @@ jvmtiGetNamedModule(jvmtiEnv* jvmtiEnv, jobject class_loader, const char* packag
 	J9JavaVM *vm = JAVAVM_FROM_ENV(jvmtiEnv);
 	jvmtiError rc = JVMTI_ERROR_NONE;
 	J9VMThread *currentThread = NULL;
+	jobject rv_module = NULL;
 
 	rc = getCurrentVMThread(vm, &currentThread);
 	if (JVMTI_ERROR_NONE == rc) {
@@ -366,13 +316,16 @@ jvmtiGetNamedModule(jvmtiEnv* jvmtiEnv, jobject class_loader, const char* packag
 		J9UTF8_DATA(packageName)[packageNameLength] = '\0';
 		vmModule = vmFuncs->findModuleForPackageUTF8(currentThread, vmClassLoader, packageName);
 		if (NULL != vmModule) {
-			*module_ptr = (jobject)vmFuncs->j9jni_createLocalRef((JNIEnv *) currentThread, vmModule->moduleObject);
+			rv_module = (jobject)vmFuncs->j9jni_createLocalRef((JNIEnv *) currentThread, vmModule->moduleObject);
 		}
 		if (packageName != (J9UTF8 *) buf) {
 			j9mem_free_memory(packageName);
 		}
 done:
-		vmFuncs->internalReleaseVMAccess(currentThread);
+		vmFuncs->internalExitVMToJNI(currentThread);
+	}
+	if (NULL != module_ptr) {
+		*module_ptr = rv_module;
 	}
 	return rc;
 }
@@ -383,7 +336,7 @@ done:
  * @param [in] fromModule module being read
  * @param [in] toModule module receiving read access
  *
- * @return JVMTI_ERROR_NONE if successfull, JVMTI_ERROR_INVALID_MODULE if either module is
+ * @return JVMTI_ERROR_NONE if successful, JVMTI_ERROR_INVALID_MODULE if either module is
  * invalid and JVMTI_ERROR_NULL_POINTER if either module is NULL
  */
 jvmtiError JNICALL
@@ -414,11 +367,7 @@ jvmtiAddModuleReads(jvmtiEnv* jvmtiEnv, jobject fromModule, jobject toModule)
 		fromJ9Module = J9OBJECT_ADDRESS_LOAD(currentThread, fromModuleObj, vm->modulePointerOffset);
 		fromInstanceClazz = J9OBJECT_CLAZZ(currentThread, fromModuleObj);
 		toInstanceClazz = J9OBJECT_CLAZZ(currentThread, J9_JNI_UNWRAP_REFERENCE(toModule));
-		if(J2SE_SHAPE(vm) < J2SE_SHAPE_B165) {
-			moduleClass = J9VMJAVALANGREFLECTMODULE_OR_NULL(vm);
-		} else {
-			moduleClass = J9VMJAVALANGMODULE_OR_NULL(vm);
-		}
+		moduleClass = J9VMJAVALANGMODULE_OR_NULL(vm);
 
 		Assert_JVMTI_notNull(moduleClass);
 
@@ -437,13 +386,8 @@ jvmtiAddModuleReads(jvmtiEnv* jvmtiEnv, jobject fromModule, jobject toModule)
 			JNIEnv *env = (JNIEnv *) currentThread;
 
 			if (NULL == vm->addReads) {
-				jmethodID addReads = NULL;
+				jmethodID addReads = (*env)->GetMethodID(env, moduleJClass, "implAddReads", "(Ljava/lang/Module;Z)V");
 
-				if(J2SE_SHAPE(vm) < J2SE_SHAPE_B165) {
-					addReads = (*env)->GetMethodID(env, moduleJClass, "implAddReads", "(Ljava/lang/reflect/Module;Z)V");
-				} else {
-					addReads = (*env)->GetMethodID(env, moduleJClass, "implAddReads", "(Ljava/lang/Module;Z)V");
-				}
 				if (NULL == addReads) {
 					rc = JVMTI_ERROR_INTERNAL;
 					goto done;
@@ -467,9 +411,9 @@ done:
  *
  * @param [in] fromModule module containing package
  * @param [in] pkgName name must not contain '/' only '.'
- * @param [in] toModule module recinving access to package
+ * @param [in] toModule module receiving access to package
  *
- * @return JVMTI_ERROR_NONE if successfull, JVMTI_ERROR_INVALID_MODULE if either module is
+ * @return JVMTI_ERROR_NONE if successful, JVMTI_ERROR_INVALID_MODULE if either module is
  * invalid and JVMTI_ERROR_NULL_POINTER if either module is NULL
  */
 jvmtiError JNICALL
@@ -483,9 +427,9 @@ jvmtiAddModuleExports(jvmtiEnv* jvmtiEnv, jobject fromModule, const char* pkgNam
  *
  * @param [in] fromModule module containing package
  * @param [in] pkgName name must not contain '/' only '.'
- * @param [in] toModule module recinving access to package
+ * @param [in] toModule module receiving access to package
  *
- * @return JVMTI_ERROR_NONE if successfull, JVMTI_ERROR_INVALID_MODULE if either module is
+ * @return JVMTI_ERROR_NONE if successful, JVMTI_ERROR_INVALID_MODULE if either module is
  * invalid and JVMTI_ERROR_NULL_POINTER if either module is NULL
  */
 jvmtiError JNICALL
@@ -530,11 +474,7 @@ jvmtiAddModuleUses(jvmtiEnv* jvmtiEnv, jobject module, jclass service)
 
 		moduleObject = J9_JNI_UNWRAP_REFERENCE(module);
 		serviceClassObject = J9_JNI_UNWRAP_REFERENCE(service);
-		if(J2SE_SHAPE(vm) < J2SE_SHAPE_B165) {
-			moduleJ9Class = J9VMJAVALANGREFLECTMODULE_OR_NULL(vm);
-		} else {
-			moduleJ9Class = J9VMJAVALANGMODULE_OR_NULL(vm);
-		}
+		moduleJ9Class = J9VMJAVALANGMODULE_OR_NULL(vm);
 		jlClass = J9VMJAVALANGCLASS_OR_NULL(vm);
 
 		Assert_JVMTI_notNull(moduleJ9Class);
@@ -583,7 +523,7 @@ done:
  * @param [in] env pointer to JVMTIEnv
  * @param [in] module module being updated
  * @param [in] service service to be added
- * @param [in] implClass implementor of the service
+ * @param [in] implClass implementer of the service
  *
  * @return jvmtiError, JVMTI_ERROR_NONE on success, non-zero on failure
  */
@@ -616,11 +556,7 @@ jvmtiAddModuleProvides(jvmtiEnv* jvmtiEnv,
 		moduleObject = J9_JNI_UNWRAP_REFERENCE(module);
 		serviceClassObject = J9_JNI_UNWRAP_REFERENCE(service);
 		implClassObject = J9_JNI_UNWRAP_REFERENCE(implClass);
-		if(J2SE_SHAPE(vm) < J2SE_SHAPE_B165) {
-			moduleJ9Class = J9VMJAVALANGREFLECTMODULE_OR_NULL(vm);
-		} else {
-			moduleJ9Class = J9VMJAVALANGMODULE_OR_NULL(vm);
-		}
+		moduleJ9Class = J9VMJAVALANGMODULE_OR_NULL(vm);
 		jlClass = J9VMJAVALANGCLASS_OR_NULL(vm);
 
 		Assert_JVMTI_notNull(moduleJ9Class);
@@ -640,37 +576,14 @@ jvmtiAddModuleProvides(jvmtiEnv* jvmtiEnv,
 
 		if ((rc == JVMTI_ERROR_NONE) && (FALSE == isUnnamed)) {
 			JNIEnv *env = (JNIEnv *) currentThread;
-			if (NULL == vm->jimModules) {
-				omrthread_monitor_enter(vm->jlmModulesInitMutex);
-				if (NULL == vm->jimModules) {
-					jclass globalModules = NULL;
-					jclass jimModules = (*env)->FindClass(env, "jdk/internal/module/Modules");
-					if (NULL == jimModules) {
-						rc = JVMTI_ERROR_INTERNAL;
-						omrthread_monitor_exit(vm->jlmModulesInitMutex);
-						goto done;
-					}
-
-					globalModules = (*env)->NewGlobalRef(env, jimModules);
-					if (NULL == globalModules) {
-						rc = JVMTI_ERROR_OUT_OF_MEMORY;
-						omrthread_monitor_exit(vm->jlmModulesInitMutex);
-						goto done;
-					}
-
-					vm->jimModules = globalModules;
-				}
-				omrthread_monitor_exit(vm->jlmModulesInitMutex);
+			jclass jimModules = vmFuncs->getJimModules(currentThread);
+			if (NULL == jimModules) {
+				rc = JVMTI_ERROR_INTERNAL;
+				goto done;
 			}
-
 			if (NULL == vm->addProvides) {
-				jmethodID addProvides = NULL;
+				jmethodID addProvides = (*env)->GetStaticMethodID(env, jimModules, "addProvides", "(Ljava/lang/Module;Ljava/lang/Class;Ljava/lang/Class;)V");
 
-				if(J2SE_SHAPE(vm) < J2SE_SHAPE_B165) {
-					addProvides = (*env)->GetStaticMethodID(env, vm->jimModules, "addProvides", "(Ljava/lang/reflect/Module;Ljava/lang/Class;Ljava/lang/Class;)V");
-				} else {
-					addProvides = (*env)->GetStaticMethodID(env, vm->jimModules, "addProvides", "(Ljava/lang/Module;Ljava/lang/Class;Ljava/lang/Class;)V");
-				}
 				if (NULL == addProvides) {
 					rc = JVMTI_ERROR_INTERNAL;
 					goto done;
@@ -678,7 +591,7 @@ jvmtiAddModuleProvides(jvmtiEnv* jvmtiEnv,
 
 				vm->addProvides = addProvides;
 			}
-			(*env)->CallStaticVoidMethod(env, vm->jimModules, vm->addProvides, module, service, implClass);
+			(*env)->CallStaticVoidMethod(env, jimModules, vm->addProvides, module, service, implClass);
 		}
 	}
 
@@ -710,11 +623,11 @@ jvmtiIsModifiableModule(jvmtiEnv* env,
 	J9VMThread *currentThread = NULL;
 	J9JavaVM *vm = JAVAVM_FROM_ENV(env);
 	jvmtiError rc = JVMTI_ERROR_NONE;
+	jboolean rv_is_modifiable_module = JNI_FALSE;
+
 	ENSURE_PHASE_LIVE(env);
 	ENSURE_NON_NULL(module);
 	ENSURE_NON_NULL(is_modifiable_module_ptr);
-
-	*is_modifiable_module_ptr = JNI_FALSE;
 
 	rc = getCurrentVMThread(vm, &currentThread);
 	if (JVMTI_ERROR_NONE == rc) {
@@ -725,18 +638,14 @@ jvmtiIsModifiableModule(jvmtiEnv* env,
 		vmFuncs->internalEnterVMFromJNI(currentThread);
 
 		moduleObject = J9_JNI_UNWRAP_REFERENCE(module);
-		if(J2SE_SHAPE(vm) < J2SE_SHAPE_B165) {
-			moduleJ9Class = J9VMJAVALANGREFLECTMODULE_OR_NULL(vm);
-		} else {
-			moduleJ9Class = J9VMJAVALANGMODULE_OR_NULL(vm);
-		}
+		moduleJ9Class = J9VMJAVALANGMODULE_OR_NULL(vm);
 
 		Assert_JVMTI_notNull(moduleJ9Class);
 
 		if (!isSameOrSuperClassOf(moduleJ9Class, J9OBJECT_CLAZZ(currentThread, moduleObject))) {
 			rc = JVMTI_ERROR_INVALID_MODULE;
 		} else if (J9_IS_J9MODULE_UNNAMED(vm, J9OBJECT_ADDRESS_LOAD(currentThread, moduleObject, vm->modulePointerOffset))) {
-			*is_modifiable_module_ptr = JNI_TRUE;
+			rv_is_modifiable_module = JNI_TRUE;
 		} else {
 			/* No criteria specified to tag modules as unmodifiable.
 			 * Assuming all modules are modifiable at this point.
@@ -744,12 +653,15 @@ jvmtiIsModifiableModule(jvmtiEnv* env,
 			 * REMINDER: Track future changes to the definition of jvmtiIsModifiableModule,
 			 * and appropriately update the implementation.
 			 */
-			*is_modifiable_module_ptr = JNI_TRUE;
+			rv_is_modifiable_module = JNI_TRUE;
 		}
 
 		vmFuncs->internalExitVMToJNI(currentThread);
 	}
 
 done:
+	if (NULL != is_modifiable_module_ptr) {
+		*is_modifiable_module_ptr = rv_is_modifiable_module;
+	}
 	return rc;
 }

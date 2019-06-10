@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar17]*/
 /*******************************************************************************
- * Copyright (c) 2009, 2009 IBM Corp. and others
+ * Copyright (c) 2009, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package java.lang.invoke;
 
@@ -86,7 +86,7 @@ final class ReceiverBoundHandle extends DirectHandle {
 	/* We don't want to have the receiver object buried deep in the
 	 * MethodHandle chain, necessitating a long dereference chain to load it.
 	 * Thus, we want permuteArguments and insertArguments to return
-	 * ArgumentMoverHandles that have the receiver in them.
+	 * BruteArgumentMoverHandles that have the receiver in them.
 	 */
 	/*[ENDIF]*/
 	MethodHandle permuteArguments(MethodType permuteType, int... permute) throws NullPointerException, IllegalArgumentException {
@@ -114,7 +114,7 @@ final class ReceiverBoundHandle extends DirectHandle {
 	/* Null check the receiver if the handle isn't for a static method.
 	 * This is the lowest risk change for this failure.
 	 * TODO: Investigate introducing a new handle subclass: 
-	 * NullRecieverBoundHandle as a subclass of RBH that only
+	 * NullReceiverBoundHandle as a subclass of RBH that only
 	 * throws NPE.  We should always know at creation time
 	 * which kind of handle it will be - NRBH or RBH.
 	 * 

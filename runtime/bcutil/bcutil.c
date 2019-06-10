@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2016 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <stdlib.h>
@@ -127,7 +127,6 @@ bcutil_J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved)
 	PORT_ACCESS_FROM_JAVAVM(vm);
 	VMI_ACCESS_FROM_JAVAVM((JavaVM*)vm);
 
-#define VERBOSE_DYNLOAD 8 																/* temp hack */
 #define BUFFERS_ALLOC_STAGE BYTECODE_TABLE_SET			/* defined separately to ensure dependencies below */
 
 	switch(stage) {
@@ -135,7 +134,7 @@ bcutil_J9VMDllMain(J9JavaVM* vm, IDATA stage, void* reserved)
 		/* Note that verbose support should have already been initialized in an earlier stage */
 		case BUFFERS_ALLOC_STAGE :
 			loadInfo = FIND_DLL_TABLE_ENTRY( THIS_DLL_NAME );
-			if (J2SE_VERSION(vm) >= J2SE_19) {
+			if (J2SE_VERSION(vm) >= J2SE_V11) {
 				rc = initJImageIntf(&jimageIntf, vm, PORTLIB);
 				if (J9JIMAGE_NO_ERROR != rc) {
 					loadInfo->fatalErrorStr = "failed to initialize JImage interface";

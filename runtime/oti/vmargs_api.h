@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "jni.h"
@@ -48,7 +48,12 @@
 #define ARG_ENCODING_LATIN 3
 
 #define ENV_LIBPATH "LIBPATH"
+
+#if defined(OSX)
+#define ENV_LD_LIB_PATH "DYLD_LIBRARY_PATH"
+#else /* defined(OSX) */
 #define ENV_LD_LIB_PATH "LD_LIBRARY_PATH"
+#endif /* defined(OSX) */
 
 /**
  * Walks the j9vm_args to find the entry for a given argument. optionValue can be
@@ -188,6 +193,7 @@ addExtDir(J9PortLibrary *portLib, J9JavaVMArgInfoList *vmArgumentsList, char *jr
 IDATA
 addUserDir(J9PortLibrary * portLib, J9JavaVMArgInfoList *vmArgumentsList, char *cwd);
 
+#if !defined(OPENJ9_BUILD)
 /**
  * Add -D options to define java properties
  * @param portLib port library
@@ -197,6 +203,7 @@ addUserDir(J9PortLibrary * portLib, J9JavaVMArgInfoList *vmArgumentsList, char *
  */
 IDATA
 addJavaPropertiesOptions(J9PortLibrary * portLib, J9JavaVMArgInfoList *vmArgumentsList, UDATA verboseFlags);
+#endif /* !defined(OPENJ9_BUILD) */
 
 /**
  * Open the executable JAR file and add arguments from the manifest file.

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /*
@@ -36,16 +36,16 @@
 
 #include "shmem.h"
 #include "testProcessHelpers.h"
-#if defined(LINUX) || defined (J9ZOS390) || defined (AIXPPC)
+#if defined(LINUX) || defined(J9ZOS390) || defined(AIXPPC) || defined(OSX)
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include "../port/sysvipc/j9shmem.h"
-#else /* defined(LINUX) || defined (J9ZOS390) || defined (AIXPPC) */
+#else /* defined(LINUX) || defined (J9ZOS390) || defined (AIXPPC) || defined(OSX) */
 #include "../port/win32_include/j9shmem.h"
-#endif /* defined(LINUX) || defined (J9ZOS390) || defined (AIXPPC) */
+#endif /* defined(LINUX) || defined (J9ZOS390) || defined (AIXPPC) || defined(OSX) */
 
 #define SHAREDMEMORYA "sharedmemoryA"
 #define SHAREDMEMORYB "sharedmemoryB"
@@ -169,8 +169,8 @@ j9shmem_test1(J9PortLibrary *portLibrary)
 
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -207,8 +207,8 @@ j9shmem_test2(J9PortLibrary* portLibrary)
 
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -280,8 +280,8 @@ j9shmem_test3(J9PortLibrary *portLibrary) {
 
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -342,8 +342,8 @@ j9shmem_test4(J9PortLibrary *portLibrary, char* argv0)
 
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -406,8 +406,8 @@ j9shmem_test4_child(J9PortLibrary *portLibrary)
 
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -457,7 +457,7 @@ int j9shmem_test5(J9PortLibrary *portLibrary) {
 	PORT_ACCESS_FROM_PORT(portLibrary);
 	const char* testName = "j9shmem_test5";
 
-#if defined(LINUX) | defined(J9ZOS390) | defined(AIXPPC)
+#if defined(LINUX) || defined(J9ZOS390) || defined(AIXPPC) || defined(OSX)
 	char cacheDir[J9SH_MAXPATH];
 /*
  * test open after reboot
@@ -479,8 +479,8 @@ int j9shmem_test5(J9PortLibrary *portLibrary) {
 
 	reportTestEntry(portLibrary, testName);
 
-	rc2 = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc2 == -1) {
+	rc2 = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc2 < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -591,7 +591,7 @@ j9shmem_test6(J9PortLibrary *portLibrary)
 	char cacheDir[J9SH_MAXPATH];
 	const char* testName = "j9shmem_test6";
 
-#if defined(LINUX) | defined(J9ZOS390) | defined(AIXPPC)
+#if defined(LINUX) || defined(J9ZOS390) || defined(AIXPPC) || defined(OSX)
 	/* UNIX only
 	 * test that our code can handle missing basefile
 	 * If someone has deleted the baseFile by mistake, we should be able to recreate/open the old area without problem.
@@ -610,8 +610,8 @@ j9shmem_test6(J9PortLibrary *portLibrary)
 
 	reportTestEntry(PORTLIB, testName);
 
-	rc2 = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc2 == -1) {
+	rc2 = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc2 < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -741,8 +741,8 @@ j9shmem_test7(J9PortLibrary *portLibrary)
 
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto cleanup;
 	}
@@ -822,8 +822,8 @@ j9shmem_test8(J9PortLibrary *portLibrary) {
 
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto cleanup;
 	}
@@ -874,8 +874,8 @@ j9shmem_test9 (J9PortLibrary *portLibrary, const char* argv0)
 
 	reportTestEntry(PORTLIB, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -954,8 +954,8 @@ j9shmem_test9_child (J9PortLibrary* portLibrary)
 
 	reportTestEntry(PORTLIB, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -1011,8 +1011,8 @@ j9shmem_test10(J9PortLibrary *portLibrary)
 
 	reportTestEntry(PORTLIB, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -1049,8 +1049,8 @@ j9shmem_test11(J9PortLibrary *portLibrary) {
 
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -1107,8 +1107,8 @@ j9shmem_test12(J9PortLibrary *portLibrary) {
 	
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -1186,8 +1186,8 @@ j9shmem_test13(J9PortLibrary *portLibrary) {
 
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -1335,8 +1335,8 @@ j9shmem_test14(J9PortLibrary *portLibrary) {
 	UDATA pageSize;
 	UDATA i;
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -1490,10 +1490,10 @@ exit:
 	return reportTestExit(portLibrary, testName);
 }
 
-#if defined(LINUX) | defined (J9ZOS390) | defined (AIXPPC)
+#if defined(LINUX) || defined(J9ZOS390) || defined(AIXPPC) || defined(OSX)
 /*Note:
  * This is more than one test. The first test that fails blocks the rest of the test. The test should not fail :-) 
- * This test is meant to excercise the race conditions that can occur when mutliple vm's create sysv obj
+ * This test is meant to exercise the race conditions that can occur when multiple vm's create sysv obj
  * at the same time.
  */
 int
@@ -1521,8 +1521,8 @@ j9shmem_test15(J9PortLibrary *portLibrary, char* argv0)
 
 	/*Get the control file name*/
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto cleanup;
 	}
@@ -1551,7 +1551,7 @@ j9shmem_test15(J9PortLibrary *portLibrary, char* argv0)
 		}
 	}
 
-	/*This test starts multuple process we use a semaphore to synchronize the launch*/
+	/*This test starts multiple process we use a semaphore to synchronize the launch*/
 	launchSemaphore = openLaunchSemaphore(PORTLIB, TEST15_LAUNCH_SEM_NAME, 1);
 	if(-1 == launchSemaphore) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot open launch semaphore");
@@ -1894,8 +1894,8 @@ j9shmem_test15_testchild(J9PortLibrary *portLibrary) {
 	outputComment(PORTLIB, "\t\tStarting test \t%s\n", testName);
 #endif
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto cleanup;
 	}
@@ -1951,8 +1951,8 @@ j9shmem_test16(J9PortLibrary* portLibrary)
 
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto exit;
 	}
@@ -2058,8 +2058,8 @@ j9shmem_test17(J9PortLibrary *portLibrary) {
 
 	reportTestEntry(portLibrary, testName);
 
-	rc = j9shmem_getDir(NULL, TRUE, cacheDir, J9SH_MAXPATH);
-	if (rc == -1) {
+	rc = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, cacheDir, J9SH_MAXPATH);
+	if (rc < 0) {
 		outputErrorMessage(PORTTEST_ERROR_ARGS, "Cannot get a directory");
 		goto cleanup;
 	}
@@ -2107,14 +2107,14 @@ j9shmem_runTests(J9PortLibrary *portLibrary, char* argv0, const char* shmem_chil
 		} else if(strcmp(shmem_child, "j9shmem_test9") == 0) {
 			return j9shmem_test9_child(portLibrary);
 		}
-#if defined(LINUX) | defined (J9ZOS390) | defined (AIXPPC) 
+#if defined(LINUX) || defined(J9ZOS390) || defined(AIXPPC) || defined(OSX)
 		else if(strcmp(shmem_child, "j9shmem_test15") == 0) {
 			return j9shmem_test15_testchild(portLibrary);
 		}
 #endif 
 	}
-	rc2 = j9shmem_getDir(NULL, TRUE, basedir, J9SH_MAXPATH);
-	if (rc2 == -1) {
+	rc2 = j9shmem_getDir(NULL, J9SHMEM_GETDIR_APPEND_BASEDIR, basedir, J9SH_MAXPATH);
+	if (rc2 < 0) {
 		j9tty_printf(PORTLIB, "Cannot get a directory\n");
 		return -1;
 	}
@@ -2150,7 +2150,7 @@ j9shmem_runTests(J9PortLibrary *portLibrary, char* argv0, const char* shmem_chil
 	rc |= j9shmem_test13(PORTLIB);
 	rc |= j9shmem_test14(PORTLIB);
 
-#if defined(LINUX) | defined (J9ZOS390) | defined (AIXPPC)
+#if defined(LINUX) || defined(J9ZOS390) || defined(AIXPPC) || defined(OSX)
 	rc |= j9shmem_test15(portLibrary, argv0);	
 #endif
 

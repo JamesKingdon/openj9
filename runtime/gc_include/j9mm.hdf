@@ -1,27 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
 <!--
-  Copyright (c) 2010, 2017 IBM Corp. and others
- 
-  This program and the accompanying materials are made available under
-  the terms of the Eclipse Public License 2.0 which accompanies this
-  distribution and is available at https://www.eclipse.org/legal/epl-2.0/
-  or the Apache License, Version 2.0 which accompanies this distribution and
-  is available at https://www.apache.org/licenses/LICENSE-2.0.
- 
-  This Source Code may also be made available under the following
-  Secondary Licenses when the conditions for such availability set
-  forth in the Eclipse Public License, v. 2.0 are satisfied: GNU
-  General Public License, version 2 with the GNU Classpath
-  Exception [1] and GNU General Public License, version 2 with the
-  OpenJDK Assembly Exception [2].
- 
-  [1] https://www.gnu.org/software/classpath/license.html
-  [2] http://openjdk.java.net/legal/assembly-exception.html
+Copyright (c) 2010, 2019 IBM Corp. and others
 
-  SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+This program and the accompanying materials are made available under
+the terms of the Eclipse Public License 2.0 which accompanies this
+distribution and is available at https://www.eclipse.org/legal/epl-2.0/
+or the Apache License, Version 2.0 which accompanies this distribution and
+is available at https://www.apache.org/licenses/LICENSE-2.0.
+
+This Source Code may also be made available under the following
+Secondary Licenses when the conditions for such availability set
+forth in the Eclipse Public License, v. 2.0 are satisfied: GNU
+General Public License, version 2 with the GNU Classpath
+Exception [1] and GNU General Public License, version 2 with the
+OpenJDK Assembly Exception [2].
+
+[1] https://www.gnu.org/software/classpath/license.html
+[2] http://openjdk.java.net/legal/assembly-exception.html
+
+SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
 -->
-
 <interface>
 	<publicHeader>../include/mmhook.h</publicHeader>
 	<privateHeader>../gc_base/mmhook_internal.h</privateHeader>
@@ -29,13 +27,11 @@
 	<description>Memory manager hookable events</description>
 
 	<declarations>
-
 /* @ddr_namespace: default */
 #include "mmhook_common.h"
 #include "objectdescription.h"
 
 struct J9VMThread;
-
 	</declarations>
 
 	<event>
@@ -63,6 +59,22 @@ struct J9VMThread;
 		</description>
 		<struct>MM_InterruptCompilationEvent</struct>
 		<data type="struct J9VMThread*" name="currentThread" description="current thread" />
+	</event>
+	
+	<event>
+		<name>J9HOOK_MM_OBJECT_ALLOCATION_SAMPLING</name>
+		<description>
+			Triggered when the object allocations sampling threshold is reached. The current thread has VM access,
+			but a handler may safely release and reacquire access.  If VM access is released, the listener is
+			responsible for keeping the object up-to-date.
+		</description>
+		<struct>MM_ObjectAllocationSamplingEvent</struct>
+		<data type="struct J9VMThread*" name="currentThread" description="current thread" />
+		<data type="U_64" name="timestamp" description="time of event" />
+		<data type="UDATA" name="eventid" description="unique identifier for event" />
+		<data type="j9object_t" name="object" return="true" description="the object which has been allocated." />
+		<data type="struct J9Class*" name="clazz" description="the class of the object just allocated" />
+		<data type="uintptr_t" name="objectSize" description="the size of the object just allocated" />
 	</event>
 
 </interface>

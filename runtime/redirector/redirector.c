@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #if 0
@@ -48,11 +48,6 @@
 #include "omriarv64.h"
 #endif /* defined(J9ZOS39064) */
 
-/* Ensure J9VM_JAVA9_BUILD is always defined to simplify conditions. */
-#ifndef J9VM_JAVA9_BUILD
-#define J9VM_JAVA9_BUILD 0
-#endif /* J9VM_JAVA9_BUILD */
-
 extern void lookupJVMFunctions(void *vmdll);
 
 typedef jint (JNICALL *CreateVM)(JavaVM**, void**, void*);
@@ -77,9 +72,9 @@ static JavaVM * globalVM = NULL;
 static int attempted_to_open_master = 0;
 
 int openLibraries(const char *libraryDir);
-#else
+#else /* defined(AIXPPC) */
 static int openLibraries(const char *libraryDir);
-#endif
+#endif /* defined(AIXPPC) */
 static const char *isPackagedWithCompressedRefs(void);
 static BOOLEAN isPackagedWithSubdir(const char *subdir);
 static void showVMChoices(void);
@@ -109,9 +104,10 @@ typedef enum gc_policy{
 	GC_POLICY_GENCON,
 	GC_POLICY_BALANCED,
 	GC_POLICY_METRONOME,
+	GC_POLICY_NOGC
 } gc_policy;
 
-#ifdef LINUX
+#if defined(LINUX) || defined(OSX)
 /* defining _GNU_SOURCE allows the use of dladdr() in dlfcn.h */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -125,7 +121,7 @@ typedef enum gc_policy{
 #include <sys/ldr.h>
 #include <load.h>
 #include <dlfcn.h>
-#endif
+#endif /* defined(AIXPPC) */
 
 #if defined(J9ZOS390)
 #include <dll.h>
@@ -137,16 +133,17 @@ typedef enum gc_policy{
 #define dlclose dllfree
 #define getj9bin        getj9binZOS
 #define J9FSTAT fstat
-#endif
+#endif /* defined(J9ZOS390) */
 
 #ifndef PATH_MAX
 #define PATH_MAX 1023
 #endif
+#define ENVVAR_OPENJ9_JAVA_OPTIONS "OPENJ9_JAVA_OPTIONS"
 #define ENVVAR_IBM_JAVA_OPTIONS "IBM_JAVA_OPTIONS"
 
 #if defined(AIXPPC)
 static J9StringBuffer* getLibraryNameWithPath(J9StringBuffer *buffer);
-#endif
+#endif /* defined(AIXPPC) */
 static J9StringBuffer* getjvmBin(BOOLEAN removeSubdir);
 static void chooseJVM(JavaVMInitArgs *args, char *retBuffer, size_t bufferLength);
 static void addToLibpath(const char *dir);
@@ -181,6 +178,8 @@ static BOOLEAN parseGCPolicy(char *buffer, int *value);
 #define JVM_ARCH_DIR "amd64"
 #elif defined(J9ARM)
 #define JVM_ARCH_DIR "arm"
+#elif defined(J9AARCH64)
+#define JVM_ARCH_DIR "aarch64"
 #else
 #error "Must define an architecture"
 #endif
@@ -191,13 +190,12 @@ static BOOLEAN parseGCPolicy(char *buffer, int *value);
 #define XMX	"-Xmx"
 
 /* We use forward slashes here because J9VM_LIB_ARCH_DIR is not used on Windows. */
-#if J9VM_JAVA9_BUILD >= 150
+#if (JAVA_SPEC_VERSION >= 9) || defined(OSX)
+/* On OSX, <arch> doesn't exist, so JVM_ARCH_DIR shouldn't be included in J9VM_LIB_ARCH_DIR. */
 #define J9VM_LIB_ARCH_DIR "/lib/"
-#elif defined(JVM_ARCH_DIR)
+#else /* (JAVA_SPEC_VERSION >= 9) || defined(OSX) */
 #define J9VM_LIB_ARCH_DIR "/lib/" JVM_ARCH_DIR "/"
-#else
-#error "No matching ARCH found"
-#endif /* J9VM_JAVA9_BUILD >= 150 */
+#endif /* (JAVA_SPEC_VERSION >= 9) || defined(OSX) */
 
 #if defined(WIN32)
 #define DIR_SLASH_CHAR '\\'
@@ -223,7 +221,7 @@ truncatePath(char *inputPath, BOOLEAN keepSlashChar) {
 	}
 }
 
-#if defined(AIXPPC) || (J9VM_JAVA9_BUILD < 150)
+#if (JAVA_SPEC_VERSION == 8) || defined(AIXPPC)
 /*
  * Remove the suffix from string if present.
  */
@@ -241,7 +239,7 @@ removeSuffix(char *string, const char *suffix)
 		}
 	}
 }
-#endif /* defined(AIXPPC) || (J9VM_JAVA9_BUILD < 150) */
+#endif /* (JAVA_SPEC_VERSION == 8) || defined(AIXPPC) */
 
 static void
 addToLibpath(const char *dir)
@@ -303,7 +301,6 @@ addToLibpath(const char *dir)
 	}
 #endif
 }
-
 
 void
 freeGlobals(void)
@@ -531,13 +528,22 @@ chooseJVM(JavaVMInitArgs *args, char *retBuffer, size_t bufferLength)
 	char *xmxstr = NULL;
 	U_64 requestedHeapSize = 0;
 
-	/* the command line is handled below but look into the ENVVAR_IBM_JAVA_OPTIONS here, since it is a special case */
-	envOptions = getenv(ENVVAR_IBM_JAVA_OPTIONS);
+	/* the command line is handled below but look into the ENVVAR_OPENJ9_JAVA_OPTIONS here, since it is a special case */
+	envOptions = getenv(ENVVAR_OPENJ9_JAVA_OPTIONS);
+	if (NULL == envOptions) {
+		envOptions = getenv(ENVVAR_IBM_JAVA_OPTIONS);
+	}
 	if (NULL != envOptions) {
 		/* we need a non-zero index to point to where this occurs to use the first index we don't have - the number of arguments in the list */
 		int i = 0;
 
 		gcPolicyString = findStartOfMostRightOption(envOptions, gcPolicyOption);
+		if (NULL == gcPolicyString) {
+			if (hasEnvOption(envOptions, "-XX:+UseNoGC")) {
+				gcPolicyString = "nogc";
+			}
+		}
+
 		if (NULL != gcPolicyString) {
 			parseGCPolicy(gcPolicyString + gcPolicyOptionLength, &gcPolicy);
 		}
@@ -703,6 +709,24 @@ chooseJVM(JavaVMInitArgs *args, char *retBuffer, size_t bufferLength)
 			fprintf(stdout, "by option %s ", optionUsed);
 		}
 		fprintf(stdout, "does not exist.\n");
+
+		/* direct user to OpenJ9 build configurations to properly generate the requested build. */
+		if (DEFAULT_DIR == basePointer) {
+			fprintf(stdout,
+					"This JVM package only includes the '-Xcompressedrefs' configuration. Please run "
+					"the VM without specifying the '-Xnocompressedrefs' option or by specifying the "
+					"'-Xcompressedrefs' option.\nTo compile the other configuration, please run configure "
+					"with '--with-noncompressedrefs.\n"
+			);
+		}
+		if (COMPRESSEDREFS_DIR == basePointer) {
+			fprintf(stdout,
+					"This JVM package only includes the '-Xnocompressedrefs' configuration. Please run "
+					"the VM without specifying the '-Xcompressedrefs' option or by specifying the "
+					"'-Xnocompressedrefs' option.\nTo compile the other configuration, please run configure "
+					"without '--with-noncompressedrefs.\n"
+			);
+		}
 		exit(-1);
 	}
 }
@@ -747,18 +771,23 @@ JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *vm_args)
 	memset(namedVM, 0, J9_VM_DIR_LENGTH);
 	chooseJVM(args, namedVM, J9_VM_DIR_LENGTH);
 
-	envOptions = getenv(ENVVAR_IBM_JAVA_OPTIONS);
-	if(NULL != envOptions && hasEnvOption(envOptions, "-locateVM")) {
+	envOptions = getenv(ENVVAR_OPENJ9_JAVA_OPTIONS);
+	if (NULL == envOptions) {
+		envOptions = getenv(ENVVAR_IBM_JAVA_OPTIONS);
+	}
+	if ((NULL != envOptions) && hasEnvOption(envOptions, "-locateVM")) {
 		J9StringBuffer *buffer = findDir(namedVM);
 		fprintf(stdout, "%s\n", jvmBufferData(buffer));
 		free(buffer);
 		exit(0);
-	} else for(i=0; i<args->nOptions; i++) {
-		if(0 == strcmp(args->options[i].optionString, "-locateVM")) {
-			J9StringBuffer *buffer = findDir(namedVM);
-			fprintf(stdout, "%s\n", jvmBufferData(buffer));
-			free(buffer);
-			exit(0);
+	} else {
+		for (i = 0; i < args->nOptions; i++) {
+			if (0 == strcmp(args->options[i].optionString, "-locateVM")) {
+				J9StringBuffer *buffer = findDir(namedVM);
+				fprintf(stdout, "%s\n", jvmBufferData(buffer));
+				free(buffer);
+				exit(0);
+			}
 		}
 	}
 
@@ -844,7 +873,7 @@ JNI_GetCreatedJavaVMs(JavaVM **vmBuf, jsize bufLen, jsize *nVMs)
 #if defined (LINUXPPC64) || (defined (AIXPPC) && defined (PPC64)) || defined (J9ZOS39064)
 		/* there was a bug in Sovereign VMs on these platforms where jsize was defined to
 		 * be 64-bits, rather than the 32-bits required by the JNI spec. Provide backwards
-		 * compatability if the JAVA_JSIZE_COMPAT environment variable is set
+		 * compatibility if the JAVA_JSIZE_COMPAT environment variable is set
 		 */
 		if (getenv("JAVA_JSIZE_COMPAT")) {
 			*(jlong*)nVMs = (jlong)0;
@@ -862,7 +891,7 @@ JNI_GetCreatedJavaVMs(JavaVM **vmBuf, jsize bufLen, jsize *nVMs)
 /**
  *	jint JNICALL JNI_GetDefaultJavaVMInitArgs(void *vm_args)
  *  Return a default configuration for the java virtual machine
- *  implementaiton.
+ *  implementation.
  *	This provides an invocation API that runs the J9 VM in BFU/sidecar mode
  *
  *  @param vm_args pointer to a vm-specific initialization structure
@@ -898,7 +927,12 @@ JNI_GetDefaultJavaVMInitArgs(void *vm_args)
 			|| (jniVersion == JNI_VERSION_1_4)
 			|| (jniVersion == JNI_VERSION_1_6)
 			|| (jniVersion == JNI_VERSION_1_8)
+#if JAVA_SPEC_VERSION >= 9
 			|| (jniVersion == JNI_VERSION_9)
+#endif /* JAVA_SPEC_VERSION >= 9 */
+#if JAVA_SPEC_VERSION >= 10
+			|| (jniVersion == JNI_VERSION_10)
+#endif /* JAVA_SPEC_VERSION >= 10 */
 		) {
 			return JNI_OK;
 		} else {
@@ -955,10 +989,10 @@ isPackagedWithSubdir(const char *subdir)
 		jvmBufferData(buffer)[jvmBinLength - 1] = '\0';
 		/* remove /bin, /lib or /<arch> */
 		truncatePath(jvmBufferData(buffer), FALSE);
-#if J9VM_JAVA9_BUILD < 150
+#if JAVA_SPEC_VERSION == 8
 		/* if the path ended with /lib/<arch> we need to remove another segment */
 		removeSuffix(jvmBufferData(buffer), "/lib");
-#endif /* J9VM_JAVA9_BUILD < 150 */
+#endif /* JAVA_SPEC_VERSION == 8 */
 		buffer = jvmBufferCat(buffer, J9VM_LIB_ARCH_DIR);
 		buffer = jvmBufferCat(buffer, subdir);
 
@@ -997,10 +1031,10 @@ findDir(const char *libraryDir) {
 		truncatePath(tmpBufferData, FALSE); /* at jre/bin/classic or jre/lib/<arch>/classic */
 		truncatePath(tmpBufferData, FALSE); /* at jre/bin         or jre/lib/<arch>         */
 		truncatePath(tmpBufferData, FALSE); /* at jre             or jre/lib                */
-#if J9VM_JAVA9_BUILD < 150
+#if JAVA_SPEC_VERSION == 8
 		/* if the path ends with .../lib we need to remove another segment */
 		removeSuffix(jvmBufferData(buffer), "/lib");
-#endif /* J9VM_JAVA9_BUILD < 150 */
+#endif /* JAVA_SPEC_VERSION == 8 */
 		tmpBuffer = jvmBufferCat(tmpBuffer, J9VM_LIB_ARCH_DIR "j9vm/");
 		DBG_MSG(("classic mode - trying J6 UNIX shape: %s\n", jvmBufferData(tmpBuffer)));
 
@@ -1114,9 +1148,8 @@ openLibraries(const char *libraryDir)
 		fprintf(stderr,"jvm.dll failed to load: global entrypoints not found\n");
 		return JNI_ERR;
 	}
-
-#else
-	buffer = jvmBufferCat(buffer, "/libjvm.so");
+#else /* WIN32 */
+	buffer = jvmBufferCat(buffer, "/libjvm" J9PORT_LIBRARY_SUFFIX);
 	/* open the DLL and look up the symbols */
 #if defined(AIXPPC)
 	/* CMVC 137341:
@@ -1130,7 +1163,7 @@ openLibraries(const char *libraryDir)
 	 * time. We can then call dlopen() as per normal and the just loaded library will be found.
 	 * */
 	loadAndInit(jvmBufferData(buffer), L_RTLD_LOCAL, NULL);
-#endif
+#endif /* defined(AIXPPC) */
 	j9vm_dllHandle = dlopen(jvmBufferData(buffer), RTLD_LAZY);
 	if(!j9vm_dllHandle) {
 			fprintf(stderr, "failed to open <%s> - reason: <%s>\n", jvmBufferData(buffer), dlerror());
@@ -1145,8 +1178,7 @@ openLibraries(const char *libraryDir)
 		fprintf(stderr,"jvm.dll failed to load: global entrypoints not found\n");
 		return JNI_ERR;
 	}
-
-#endif
+#endif /* WIN32 */
 
 	lookupJVMFunctions(j9vm_dllHandle);
 	free(buffer);
@@ -1183,14 +1215,14 @@ getjvmBin(BOOLEAN removeSubdir)
 		/* remove jvm.dll */
 		truncatePath(jvmBufferData(buffer), FALSE);
 	}
-	/* remove jvm.dll or classis */
+	/* remove jvm.dll or classes */
 	truncatePath(jvmBufferData(buffer), TRUE);
 
 	return buffer;
 }
 #endif
 
-#if defined(LINUX) && !defined(J9ZTPF)
+#if (defined(LINUX) || defined(OSX)) && !defined(J9ZTPF)
 static J9StringBuffer*
 getjvmBin(BOOLEAN removeSubdir)
 {
@@ -1212,7 +1244,7 @@ getjvmBin(BOOLEAN removeSubdir)
 
 	return buffer;
 }
-#endif /* defined(LINUX) && !defined(J9ZTPF) */
+#endif /* (defined(LINUX) || defined(OSX)) && !defined(J9ZTPF) */
 
 #ifdef AIXPPC
 static J9StringBuffer*
@@ -1333,7 +1365,7 @@ isFileInDir(char *dir, char *file)
 	char *fullpath;
 	FILE *f;
 
-	/* Constuct 'full' path */
+	/* Construct 'full' path */
 	if (dir[strlen(dir)-1] == DIR_SLASH_CHAR) {
 		/* remove trailing DIR_SLASH_CHAR */
 		dir[strlen(dir)-1] = '\0';
@@ -1423,7 +1455,7 @@ getjvmBin(BOOLEAN removeSubdir)
 #if defined(J9ZOS390)
 	buffer = findDirUplevelToDirContainingFile(buffer, "LIBPATH", ':', "libjvm.so", 0);
 #else
-	buffer = findDirUplevelToDirContainingFile(buffer, "LD_LIBRARY_PATH", ':', "libjvm.so", 0);
+	buffer = findDirUplevelToDirContainingFile(buffer, "LD_LIBRARY_PATH", ':', "libjvm" J9PORT_LIBRARY_SUFFIX, 0);
 #endif
 
 	if (NULL != buffer) {
@@ -1496,6 +1528,7 @@ static BOOLEAN parseGCPolicy(char *buffer, int *value)
 			"gencon",
 			"balanced",
 			"metronome",
+			"nogc",
 			NULL,
 	};
 

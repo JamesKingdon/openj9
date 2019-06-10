@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "stackmap_internal.h"
@@ -134,24 +134,56 @@ getReturnBytecode(J9ROMClass * romClass, J9ROMMethod * romMethod, UDATA * return
 	*returnSlots = 0;
 	sigChar = sigData[sigLength - 1];
 
+	/* Update the sig char in the case we are dealing with an array */
+	if ('[' == sigData[sigLength - 2]) {
+		sigChar = '[';
+	}
+
 	if (sigChar != 'V') {
 		*returnSlots = 1;
 		if (sigChar == 'J' || sigChar == 'D') {
-			if (sigData[sigLength - 2] != '[') {
-				*returnSlots = 2;
-			}
+			*returnSlots = 2;
 		}
 	}
 
 	/* Determine the correct return bytecode to insert */
-
-	returnBytecode = JBreturn0 + (U_8) *returnSlots;
-
 	if ((J9UTF8_DATA(name)[0] == '<') && (J9UTF8_DATA(name)[1] == 'i')) {
 		returnBytecode = JBreturnFromConstructor;
-	} else if (romMethod->modifiers & J9AccSynchronized) {
-		returnBytecode = JBsyncReturn0 + (U_8) *returnSlots;
+	} else {
+		/* bool, byte, char, and short need special treatment since they need to be truncated before return */
+		if (romMethod->modifiers & J9AccSynchronized) {
+			switch(sigChar){
+			case 'Z':
+			case 'B':
+			case 'C':
+			case 'S':
+				returnBytecode = JBgenericReturn;
+				break;
+			default:
+				returnBytecode = JBsyncReturn0 + (U_8) *returnSlots;
+				break;
+			}
+		} else {
+			switch(sigChar){
+			case 'Z':
+				returnBytecode = JBreturnZ;
+				break;
+			case 'B':
+				returnBytecode = JBreturnB;
+				break;
+			case 'C':
+				returnBytecode = JBreturnC;
+				break;
+			case 'S':
+				returnBytecode = JBreturnS;
+				break;
+			default:
+				returnBytecode = JBreturn0 + (U_8) *returnSlots;
+				break;
+			}
+		}
 	}
+
 
 	return returnBytecode;
 }
@@ -534,7 +566,7 @@ fixReturnsWithStackMaps(J9ROMClass * romClass, J9ROMMethod * romMethod, U_32 * s
 			if ((size & 0xE0) == 0) {
 				bcIndex += (size & 7);
 				if (size == 0) {
-					/* Must check for zero else it will infinitiely loop */
+					/* Must check for zero else it will infinitely loop */
 					/* Unknown bytecode - will fail verification later */
 					Trc_Map_fixReturnsWithStackMaps_UnknownBytecode(bc, (bcIndex - bcStart));
 					return BCT_ERR_NO_ERROR;
@@ -710,7 +742,7 @@ getNextStackIndex (U_8 * stackMapData, UDATA mapPC, UDATA stackMapCount)
 
 /* 
 	Calculate the stack depth from the current stack map.
-	Most occurences will be zero. 
+	Most occurrences will be zero. 
 */
 
 static UDATA

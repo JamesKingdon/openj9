@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -577,7 +577,7 @@ zipCache_addElement(J9ZipCache * zipCache, char *elementName, IDATA elementNameL
 	for (;;) {
 		J9ZipDirEntry *d;
 
-		/* scan forwards in curName until we find '/' or whole string is exhaused */
+		/* scan forwards in curName until we find '/' or whole string is exhausted */
 		for (curSize = 0; (curSize != nameLength) && (curName[curSize] != '/'); curSize++)
 			/* nothing */ ;
 
@@ -670,7 +670,7 @@ zipCache_findElement(J9ZipCache * zipCache, const char *elementName, IDATA eleme
 	nameLength = elementNameLength;
 	for (;;) {
 
-		/* scan forwards in curName until we find '/' or whole string is exhaused */
+		/* scan forwards in curName until we find '/' or whole string is exhausted */
 		for (curSize = 0; (curSize != nameLength) && (curName[curSize] != '/'); curSize++)
 			/* nothing */ ;
 

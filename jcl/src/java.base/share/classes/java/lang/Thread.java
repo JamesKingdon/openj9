@@ -2,7 +2,7 @@
 package java.lang;
 
 /*******************************************************************************
- * Copyright (c) 1998, 2017 IBM Corp. and others
+ * Copyright (c) 1998, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -20,7 +20,7 @@ package java.lang;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 import java.util.Map;
@@ -184,8 +184,12 @@ void completeInitialization() {
 	contextClassLoader = ClassLoader.getSystemClassLoader();
 	/*[IF Sidecar19-SE]*/
 	jdk.internal.misc.VM.initLevel(4);
+	/*[ELSE]*/ // Sidecar19-SE
+	sun.misc.VM.booted();
+	/*[ENDIF]*/ // Sidecar19-SE
+	/*[IF Sidecar19-SE|Sidecar18-SE-OpenJ9]*/
 	System.startSNMPAgent();
-	/*[ENDIF]*/
+	/*[ENDIF]*/ // Sidecar19-SE|Sidecar18-SE-OpenJ9
 }
 
 /**
@@ -343,6 +347,12 @@ public Thread(ThreadGroup group, Runnable runnable, String threadName, long stac
  */
 public Thread(ThreadGroup group, Runnable runnable, String threadName) {
 	this(group, runnable, threadName, null, true);
+}
+
+Thread(Runnable runnable, String threadName, boolean isSystemThreadGroup, boolean inheritThreadLocals, boolean isDaemon, ClassLoader contextClassLoader) {
+	this(isSystemThreadGroup ? systemThreadGroup : null, runnable, threadName, null, inheritThreadLocals);
+	this.isDaemon = isDaemon;
+	this.contextClassLoader = contextClassLoader;
 }
 
 private Thread(ThreadGroup group, Runnable runnable, String threadName, AccessControlContext acc, boolean inheritThreadLocals) {
@@ -534,6 +544,7 @@ public int countStackFrames() {
  */
 public static native Thread currentThread();
 
+/*[IF !Java11]*/
 /**
  * 	Destroys the receiver without any monitor cleanup. Not implemented.
  * 
@@ -548,6 +559,7 @@ public void destroy() {
 	/*[PR 121318] Should throw NoSuchMethodError */
 	throw new NoSuchMethodError();
 }
+/*[ENDIF]*/
 
 
 /**
@@ -1122,6 +1134,7 @@ public final void stop() {
 	}
 }
 
+/*[IF !Java11]*/
 /**
  * Throws UnsupportedOperationException.
  *
@@ -1137,6 +1150,7 @@ public final void stop() {
 public final void stop(Throwable throwable) {
 	throw new UnsupportedOperationException();
  }
+/*[ENDIF]*/
 
 private final synchronized void stopWithThrowable(Throwable throwable) {
 	checkAccess();
@@ -1244,9 +1258,18 @@ public static native void yield();
  */
 public static native boolean holdsLock(Object object);
 
+/*[IF Java11]*/
+static
+/*[ENDIF]*/
 void blockedOn(sun.nio.ch.Interruptible interruptible) {
-	synchronized(lock) {
-		blockOn = interruptible;
+	Thread currentThread;
+	/*[IF Java11]*/
+	currentThread = currentThread();
+	/*[ELSE]
+	currentThread = this;
+	/*[ENDIF]*/
+	synchronized(currentThread.lock) {
+		currentThread.blockOn = interruptible;
 	}
 }
 

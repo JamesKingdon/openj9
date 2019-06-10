@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef util_api_h
@@ -42,11 +42,6 @@
 #include "omrutil.h"
 #include "omrutilbase.h"
 #include "shchelp.h"
-
-/* Ensure J9VM_JAVA9_BUILD is always defined to simplify conditions. */
-#ifndef J9VM_JAVA9_BUILD
-#define J9VM_JAVA9_BUILD 0
-#endif /* J9VM_JAVA9_BUILD */
 
 #ifdef __cplusplus
 extern "C" {
@@ -510,7 +505,7 @@ void helperConvertIntegerToFloat(I_32 *src, jfloat *dst);
 /**
 * @brief Helper function called by VM interpreter, using pointers 
 *        to values. Converts a long number to double precision.
-* @param[in] *src Pointer to long value to be converted to doble.
+* @param[in] *src Pointer to long value to be converted to double.
 * @param[out] *dst Pointer to the resulting double value.
 * @return Void.
 *
@@ -1304,14 +1299,13 @@ void validateLibrary(J9JavaVM *javaVM, J9NativeLibrary *library);
 * @param *vm
 * @param *romMethod
 * @param *romClass
-* @param offset
 * @param *classLoader
 * @param relativePC
 * @param *romClass
 * @return UDATA
 */
 UDATA
-getLineNumberForROMClassFromROMMethod(J9JavaVM *vm, J9ROMMethod *romMethod, J9ROMClass *romClass, UDATA offset, J9ClassLoader *classLoader, UDATA relativePC);
+getLineNumberForROMClassFromROMMethod(J9JavaVM *vm, J9ROMMethod *romMethod, J9ROMClass *romClass, J9ClassLoader *classLoader, UDATA relativePC);
 
 /**
 * @brief
@@ -1873,9 +1867,41 @@ getReturnTypeFromSignature(U_8 * inData, UDATA inLength, U_8 **outData);
 /* ---------------- mthutil.c ---------------- */
 
 /**
+ * @brief Retrieve the J9Method which maps to the index within the iTable for interfaceClass.
+ * @param interfaceClass The interface class to query
+ * @param index The iTable index
+ * @return J9Method* The J9Method which maps to index within interfaceClass
+  */
+J9Method *
+iTableMethodAtIndex(J9Class *interfaceClass, UDATA index);
+
+/**
+ * @brief Retrieve the iTable index of an interface method within the iTable for
+ *        its declaring class.
+ * @param method The interface method
+ * @return UDATA The iTable index (not including the fixed J9ITable header)
+ */
+UDATA
+getITableIndexWithinDeclaringClass(J9Method *method);
+
+/**
+ * @brief Retrieve the index of an interface method within the iTable for an interface
+ *        (not necessarily the same interface, as iTables contain methods from all
+ *        extended interfaces as well as the local one).
+ * @param method The interface method
+ * @param targetInterface The interface in whose table to search
+ *                        (NULL to use the declaring class of method)
+ * @return UDATA The iTable index (not including the fixed J9ITable header)
+ */
+UDATA
+getITableIndexForMethod(J9Method * method, J9Class *targetInterface);
+
+/**
  * Returns the first ROM method following the argument.
  * If this is called on the last ROM method in a ROM class
  * it will return an undefined value.
+ * The defining class of method must be an interface; do not use this
+ * for methods inherited from java.lang.Object.
  *
  * @param[in] romMethod - the current ROM method
  * @return - the ROM method following the current one
@@ -2015,7 +2041,7 @@ typedef struct J9JVMTIHCRJitEventData {
 	UDATA * dataCursor;      /*!< cursor into the data buffer */
 	UDATA * data;            /*!< data buffer containing the jit class redefinition event data */
 	UDATA classCount;        /*!< number of classes in the data buffer */
-	UDATA initialized;       /*!< indicates that the strucutre has been initialized and is ready for use and dealloc */
+	UDATA initialized;       /*!< indicates that the structure has been initialized and is ready for use and dealloc */
 } J9JVMTIHCRJitEventData;
 
 void
@@ -2035,9 +2061,6 @@ fixSubclassHierarchy (J9VMThread * currentThread, J9HashTable* classHashTable);
 
 void
 fixITables(J9VMThread * currentThread, J9HashTable* classHashTable);
-
-void
-fixITablesForFastHCR(J9VMThread *currentThread, J9HashTable *classHashTable);
 
 void
 fixArrayClasses(J9VMThread * currentThread, J9HashTable* classHashTable);
@@ -2113,6 +2136,11 @@ jitClassRedefineEvent(J9VMThread * currentThread, J9JVMTIHCRJitEventData * jitEv
 
 void
 notifyGCOfClassReplacement(J9VMThread * currentThread, J9HashTable * classPairs, UDATA isFastHCR);
+
+#if defined(J9VM_OPT_VALHALLA_NESTMATES)
+void
+fixNestMembers(J9VMThread * currentThread, J9HashTable * classPairs);
+#endif /* defined(J9VM_OPT_VALHALLA_NESTMATES) */
 
 #endif /* J9VM_INTERP_HOT_CODE_REPLACEMENT */
 
@@ -2191,6 +2219,14 @@ setCurrentCacheVersion(J9JavaVM *vm, UDATA j2seVersion, J9PortShcVersion* result
 U_32
 getJVMFeature(J9JavaVM *vm);
 
+/**
+ * Get the OpenJ9 SHA
+ *
+ * @return uint64_t The OpenJ9 SHA
+ */
+uint64_t
+getOpenJ9Sha();
+
 /* ---------------- cphelp.c ---------------- */
 
 /**
@@ -2241,7 +2277,7 @@ getModuleJRTURL(J9VMThread *currentThread, J9ClassLoader *classLoader, J9Module 
 UDATA
 addJarToSystemClassLoaderClassPathEntries(J9JavaVM *vm, const char *filename);
 
-/* ---------------- genericSignalHander.c ---------------- */
+/* ---------------- genericSignalHandler.c ---------------- */
 
 /**
 * @brief generic signal handler that dumps the registers contents from the time of crash and aborts.
@@ -2311,7 +2347,7 @@ void props_file_do(j9props_file_t file, j9props_file_iterator iterator, void* us
  * Function to determine if the zos version is at least a given
  * release and version.  The implementation is based on uname(),
  * NOT on __osname() as the __osname() release numbers are not
- * guarenteed to increase.
+ * guaranteed to increase.
  *
  * For release and version numbers, see
  * 	http://publib.boulder.ibm.com/infocenter/zos/v1r10/index.jsp?topic=/com.ibm.zos.r10.bpxbd00/osnm.htm
@@ -2594,24 +2630,6 @@ isModuleDefined(J9VMThread * currentThread, J9Module * fromModule);
  * @param[in] currentThread the current J9VMThread
  * @param[in] fromModule the module containing the package
  * @param[in] packageName the package to be checked if it is exported to toModule
- * @param[in] toModule the module to be checked if the package is exported to it
- * @param[in] toUnnamed the flag indicating if toModule is an unnamed module
- * @param[in] errCode the status code returned
- *
- * @return true if the package is exported to toModule, false if otherwise
- */
-BOOLEAN
-#if J9VM_JAVA9_BUILD >= 156
-isPackageExportedToModule(J9VMThread * currentThread, J9Module * fromModule, const char *packageName, J9Module * toModule, BOOLEAN toUnnamed, UDATA * errCode);
-#else /* J9VM_JAVA9_BUILD >= 156 */
-isPackageExportedToModule(J9VMThread * currentThread, J9Module * fromModule, j9object_t packageName, J9Module * toModule, BOOLEAN toUnnamed, UDATA * errCode);
-#endif /* J9VM_JAVA9_BUILD >= 156 */
-/**
- * Determine if a package within fromModule is exported to toModule
- *
- * @param[in] currentThread the current J9VMThread
- * @param[in] fromModule the module containing the package
- * @param[in] packageName the package to be checked if it is exported to toModule
  * @param[in] len length of the package name to be checked
  * @param[in] toModule the module to be checked if the package is exported to it
  * @param[in] toUnnamed the flag indicating if toModule is an unnamed module
@@ -2633,11 +2651,7 @@ isPackageExportedToModuleWithName(J9VMThread *currentThread, J9Module *fromModul
  * @return the package definition
  */
 J9Package*
-#if J9VM_JAVA9_BUILD >= 156
 getPackageDefinition(J9VMThread * currentThread, J9Module * fromModule, const char *packageName, UDATA * errCode);
-#else /* J9VM_JAVA9_BUILD >= 156 */
-getPackageDefinition(J9VMThread * currentThread, J9Module * fromModule, j9object_t packageName, UDATA * errCode);
-#endif /* J9VM_JAVA9_BUILD >= 156 */
 /**
  * Get a pointer to J9Package structure associated with incoming classloader and package name
  *
@@ -2648,11 +2662,7 @@ getPackageDefinition(J9VMThread * currentThread, J9Module * fromModule, j9object
  * @return a pointer to J9Package structure associated with incoming classloader and package name
  */
 J9Package*
-#if J9VM_JAVA9_BUILD >= 156
 hashPackageTableAt(J9VMThread * currentThread, J9ClassLoader * classLoader, const char *packageName);
-#else /* J9VM_JAVA9_BUILD >= 156 */
-hashPackageTableAt(J9VMThread * currentThread, J9ClassLoader * classLoader, j9object_t packageName);
-#endif /* J9VM_JAVA9_BUILD >= 156 */
 /**
  * Add UTF package name to construct a J9Package for hashtable query
  *
@@ -2665,12 +2675,7 @@ hashPackageTableAt(J9VMThread * currentThread, J9ClassLoader * classLoader, j9ob
  * @return true if finished successfully, false if NativeOutOfMemoryError occurred
  */
 BOOLEAN
-#if J9VM_JAVA9_BUILD >= 156
 addUTFNameToPackage(J9VMThread *currentThread, J9Package *j9package, const char *packageName, U_8 *buf, UDATA bufLen);
-#else /* J9VM_JAVA9_BUILD >= 156 */
-addUTFNameToPackage(J9VMThread *currentThread, J9Package *j9package, j9object_t packageName, U_8 *buf, UDATA bufLen);
-#endif /* J9VM_JAVA9_BUILD >= 156 */
-
 
 /**
  * Find the J9Package with given package name. Caller needs to hold the

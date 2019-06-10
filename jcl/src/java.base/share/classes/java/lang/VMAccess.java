@@ -2,7 +2,7 @@
 package java.lang;
 
 /*******************************************************************************
- * Copyright (c) 2012, 2017 IBM Corp. and others
+ * Copyright (c) 2012, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -20,9 +20,10 @@ package java.lang;
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
+import java.util.Objects;
 import java.util.Properties;
 
 /*[IF Sidecar19-SE]*/
@@ -195,12 +196,28 @@ final class VMAccess implements VMLangAccess {
 	}
 	
 	/**
-	 * Returns a ConstanPool object
+	 * Returns a ConstantPool object
 	 * @param internalRamClass An object ref to a j9class
-	 * @return ContanstPool instance
+	 * @return ConstantPool instance
 	 */
 	@Override
 	public ConstantPool getConstantPool(Object internalRamClass) {
 		return Access.getConstantPool(internalRamClass);
+	}
+	
+	/*[IF Sidecar19-SE]*/
+	@Override
+	public void addPackageToList(java.lang.Class<?> newClass, ClassLoader loader) {
+		java.lang.ClassLoader packageLoader = loader;
+		if (Objects.isNull(packageLoader)) {
+			packageLoader = ClassLoader.getSystemClassLoader();
+		}
+		packageLoader.addPackageToList(newClass);
+	}
+	/*[ENDIF] Sidecar19-SE */
+
+	@Override
+	public Thread createThread(Runnable runnable, String threadName, boolean isSystemThreadGroup, boolean inheritThreadLocals, boolean isDaemon, ClassLoader contextClassLoader) {
+		return new Thread(runnable, threadName, isSystemThreadGroup, inheritThreadLocals, isDaemon, contextClassLoader);
 	}
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -312,7 +312,7 @@ j9shmem_statDeprecated(struct J9PortLibrary *portLibrary, const char* cacheDirNa
  * \arg J9PORT_INFO_SHMEM_STAT_PASSED			Success - Successfully retrieved stats of the shared memory
  * \arg J9PORT_ERROR_SHMEM_HANDLE_INVALID 		Failure - 'handle' is NULL
  * \arg J9PORT_ERROR_SHMEM_STAT_BUFFER_INVALID	Failure - 'statbuf' is NULL
- * \arg J9PORT_ERROR_SHMEM_STAT_FAILED			Failure - Error in retrieving stats of the shared memroy
+ * \arg J9PORT_ERROR_SHMEM_STAT_FAILED			Failure - Error in retrieving stats of the shared memory
  */
 intptr_t
 j9shmem_handle_stat(struct J9PortLibrary *portLibrary, struct j9shmem_handle *handle, struct J9PortShmemStatistic *statbuf)
@@ -331,14 +331,21 @@ j9shmem_handle_stat(struct J9PortLibrary *portLibrary, struct j9shmem_handle *ha
  * 
  * @param[in] portLibrary The port library
  * @param[in] ctrlDirName The name of the control directory, ignored if cacheDirName is set
- * @param[in] appendBaseDir Indicates if the J9SH_BASEDIR should be appended
+ * @param[in] flags extra flags passed in
  * @param[out] buffer Pointer to a buffer to hold the returned path
  * @param[in] length the length of the buffer
  *
- * Returns -1 for error, >=0 for success
+ * @return 0 for success
+ * J9PORT_ERROR_SHMEM_GET_DIR_BUF_OVERFLOW The cache directory is too long
+ * J9PORT_ERROR_SHMEM_GET_DIR_FAILED_TO_GET_HOME Cannot get the home directory
+ * J9PORT_ERROR_SHMEM_GET_DIR_HOME_BUF_OVERFLOW The home directory is too long
+ * J9PORT_ERROR_SHMEM_GET_DIR_HOME_ON_NFS The home directory is on network file system
+ * J9PORT_ERROR_SHMEM_GET_DIR_CANNOT_STAT_HOME Failed to stat the home directory
+ * J9PORT_ERROR_SHMEM_NOSPACE Cannot allocate native memory
+ *  
  */
 intptr_t
-j9shmem_getDir(struct J9PortLibrary* portLibrary, const char* ctrlDirName, BOOLEAN appendBaseDir, char* buffer, uintptr_t length)
+j9shmem_getDir(struct J9PortLibrary* portLibrary, const char* ctrlDirName, uint32_t flags, char* buffer, uintptr_t length)
 {
 	return -1;
 }
@@ -383,7 +390,7 @@ j9shmem_getFilepath(struct J9PortLibrary* portLibrary, char* cacheDirName, char*
  * Sets the protection as specified by flags for the memory pages containing all or part of the interval address->(address+len).
  * The size of the memory page for a specified memory region can be requested via @ref j9shmem_get_region_granularity
  *
- * The memory region must have been aquired using j9shmap_file
+ * The memory region must have been acquired using j9shmap_file
  *
  * This call has no effect on the protection of other processes.
  *
@@ -411,7 +418,7 @@ j9shmem_protect(struct J9PortLibrary *portLibrary, const char* cacheDirName, uin
 }
  
 /**
- * Returns the minumum granularity in bytes on which permissions can be set for a memory region containing the address provided.
+ * Returns the minimum granularity in bytes on which permissions can be set for a memory region containing the address provided.
  *
  * @param[in] portLibrary the Port Library.
  * @param[in] cacheDirName The name of the cache directory

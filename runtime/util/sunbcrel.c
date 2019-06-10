@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,8 +17,9 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
+#include "j9.h"
 
 const unsigned char sunJavaByteCodeRelocation[] = {
 0x01 /* JBnop = 0 */ ,
@@ -224,8 +225,8 @@ const unsigned char sunJavaByteCodeRelocation[] = {
 0x0D /* JBgotow = 200 */ ,
 0x0D /* JBjsrw = 201 */ ,
 0x01 /* JBbreakpoint = 202 */ ,
-0x01 /* JBunimplemented = 203 */ ,
-0x01 /* JBunimplemented = 204 */ ,
+0x0B /* JBdefaultvalue = 203 */ ,
+0x0B /* JBwithfield = 204 */ ,
 0x01 /* JBunimplemented = 205 */ ,
 0x01 /* JBunimplemented = 206 */ ,
 0x01 /* JBunimplemented = 207 */ ,
@@ -238,18 +239,6 @@ const unsigned char sunJavaByteCodeRelocation[] = {
 0x01 /* JBunimplemented = 214 */ ,
 0x01 /* JBunimplemented = 215 */ ,
 0x01 /* JBunimplemented = 216 */ ,
-#if defined(J9_VALHALLA_MVT)
-0x02 /* JBvload = 217 */ ,
-0x02 /* JBvstore = 218 */ ,
-0x01 /* JBvreturn = 219 */ ,
-0x01 /* JBvbox = 220 */ ,
-0x01 /* JBvunbox = 221 */ ,
-0x01 /* JBvaload = 222 */ ,
-0x01 /* JBvastore = 223 */ ,
-0x01 /* JBvdefault = 224 */ ,
-0x0B /* JBvgetfield = 225 */ ,
-0x0B /* JBvwithfield = 226 */ ,
-#else /* defined(J9_VALHALLA_MVT) */
 0x01 /* JBunimplemented = 217 */ ,
 0x01 /* JBunimplemented = 218 */ ,
 0x01 /* JBunimplemented = 219 */ ,
@@ -260,7 +249,6 @@ const unsigned char sunJavaByteCodeRelocation[] = {
 0x01 /* JBunimplemented = 224 */ ,
 0x01 /* JBunimplemented = 225 */ ,
 0x01 /* JBunimplemented = 226 */ ,
-#endif /* defined(J9_VALHALLA_MVT) */
 0x01 /* JBunimplemented = 227 */ ,
 0x01 /* JBunimplemented = 228 */ ,
 0x01 /* JBunimplemented = 229 */ ,

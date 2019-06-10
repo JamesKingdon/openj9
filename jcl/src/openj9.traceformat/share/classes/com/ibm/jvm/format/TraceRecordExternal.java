@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar18-SE]*/
 /*******************************************************************************
- * Copyright (c) 2000, 2016 IBM Corp. and others
+ * Copyright (c) 2000, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.jvm.format;
 
@@ -125,7 +125,7 @@ final public class TraceRecordExternal extends TraceRecord {
                 if ( buffer[entry+2]==0 && buffer[entry+1]==0 ) {
                      Util.Debug.println("Entry with data length > 256");
 
-                     // remember the ID and lenght of the special entry
+                     // remember the ID and length of the special entry
                      longEntryID     = buffer[entry+3];
                      longEntryLength = Util.constructUnsignedByte(buffer,entry);
 
@@ -145,7 +145,7 @@ final public class TraceRecordExternal extends TraceRecord {
                      entry = entry - (longEntryLength + longEntryID*256);
 
                      // push the real TraceID and copy in the special trace entry
-                     longEntryTraceIDs.push(new Integer(Util.constructTraceID(buffer, entry + 1)));
+                     longEntryTraceIDs.push(Integer.valueOf(Util.constructTraceID(buffer, entry + 1)));
                      buffer[entry+1]=0;
                      buffer[entry+2]=0;
                      buffer[entry+3]=(byte)longEntryID;
@@ -270,4 +270,3 @@ final public class TraceRecordExternal extends TraceRecord {
     }
 
 }
-

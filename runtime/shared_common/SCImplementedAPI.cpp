@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2017 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,14 +17,14 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 #include "shrinit.h"
-#include "verbose.h"
+#include "verbose_api.h"
 #include "j2sever.h"
 #include "ut_j9shr.h"
 #ifdef __cplusplus
@@ -473,7 +473,7 @@ j9shr_classStoreTransaction_start(void * tobj, J9VMThread* currentThread, J9Clas
 		IDATA helperID = 0;
 		U_16 cpType = CP_TYPE_CLASSPATH;
 
-		if ((J2SE_VERSION(vm) >= J2SE_19)
+		if ((J2SE_VERSION(vm) >= J2SE_V11)
 			|| ((NULL != classPathEntries) && (-1 != obj->entryIndex))
 		) {
 			/* For class loaded from modules that entryIndex is -1. classPathEntries can be NULL. */
@@ -489,7 +489,7 @@ j9shr_classStoreTransaction_start(void * tobj, J9VMThread* currentThread, J9Clas
 			if (!classpath && !infoFound) {
 				UDATA pathEntryCount = cpEntryCount;
 
-				if (J2SE_VERSION(vm) >= J2SE_19) {
+				if (J2SE_VERSION(vm) >= J2SE_V11) {
 					if (classloader == vm->systemClassLoader) {
 						if (J9_ARE_NO_BITS_SET(localRuntimeFlags, J9SHR_RUNTIMEFLAG_ENABLE_CACHEBOOTCLASSES)) {
 							/* User specified noBootclasspath - do not continue */
@@ -843,16 +843,16 @@ j9shr_classStoreTransaction_createSharedClass(void * tobj, const J9RomClassRequi
 	
 	/*ROM Class size must be doubled aligned*/
 	if (0 != (sizes->romClassSizeFullSize & (sizeof(U_64) - 1))) {
-		Trc_SHR_Assert_True(0 != (sizes->romClassSizeFullSize & (sizeof(U_64) - 1)));
 		Trc_SHR_API_j9shr_createSharedClass_DblAlign_Event(currentThread);
+		Trc_SHR_Assert_ShouldNeverHappen();
 		retval = -1;
 		goto done;
 	}
 
 	/*ROM Class size must be doubled aligned*/
 	if (0 != (sizes->romClassMinimalSize & (sizeof(U_64) - 1))) {
-		Trc_SHR_Assert_True(0 != (sizes->romClassMinimalSize & (sizeof(U_64) - 1)));
 		Trc_SHR_API_j9shr_createSharedClass_DblAlign_Event(currentThread);
+		Trc_SHR_Assert_ShouldNeverHappen();
 		retval = -1;
 		goto done;
 	}
@@ -992,7 +992,7 @@ j9shr_classStoreTransaction_updateSharedClassSize(void * tobj, U_32 sizeUsed)
 }
 
 /**
- * Called by JCL natives, this function updates the metadtata (e.g. classpath info) for a shared ROMClass.
+ * Called by JCL natives, this function updates the metadata (e.g. classpath info) for a shared ROMClass.
  *
  * @param [in] currentThread thread calling this function
  * @param [in] classloader

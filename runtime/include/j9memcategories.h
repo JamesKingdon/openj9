@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010, 2016 IBM Corp. and others
+ * Copyright (c) 2010, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef J9MEMCATEGORIES_H
@@ -76,7 +76,7 @@
 #define J9MEM_CATEGORY_CLASSLIB_GUI_MEDIALIB 34
 #define J9MEM_CATEGORY_CLASSLIB_FONT 35
 #define J9MEM_CATEGORY_CLASSLIB_SOUND 36
-#define J9MEM_CATEGORY_NATIVE_PACKED_DATA 37
+#define J9MEM_CATEGORY_UNUSED37 37
 #define J9MEM_CATEGORY_SUN_MISC_UNSAFE_ALLOCATEDBB 38
 #define J9MEM_CATEGORY_MODULES 39
 

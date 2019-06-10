@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015, 2016 IBM Corp. and others
+ * Copyright (c) 2015, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "errormessage_internal.h"
@@ -291,7 +291,10 @@ printJ9CfrErrorMessages(MessageBuffer* msgBuf, J9CfrError* error, MethodContextI
 		case J9NLS_CFR_ERR_BAD_INDEX__ID:
 			printMessage(msgBuf, "Constant pool index %u is invalid.", error->errorDataIndex);
 			break;
-		case J9NLS_CFR_ERR_BC_LDC_NOT_CONSTANT__ID:				/* FALLTHROUGH */
+		case J9NLS_CFR_ERR_BC_LDC_NOT_CONSTANT_OR_CONSTANT_DYNAMIC__ID:			/* FALLTHROUGH */
+		case J9NLS_CFR_ERR_BC_LDC2W_NOT_CONSTANT_OR_CONSTANT_DYNAMIC__ID:		/* FALLTHROUGH */
+		case J9NLS_CFR_ERR_BC_LDC_CONSTANT_DYNAMIC_RETURNS_LONG_OR_DOUBLE__ID:	/* FALLTHROUGH */
+		case J9NLS_CFR_ERR_BC_LDC2W_CONSTANT_DYNAMIC_NOT_LONG_OR_DOUBLE__ID:		/* FALLTHROUGH */
 		case J9NLS_CFR_ERR_BC_NEW_NOT_CLASS__ID:				/* FALLTHROUGH */
 		case J9NLS_CFR_ERR_BC_ANEWARRAY_NOT_CLASS__ID:			/* FALLTHROUGH */
 		case J9NLS_CFR_ERR_BC_CHECKCAST_NOT_CLASS__ID:			/* FALLTHROUGH */

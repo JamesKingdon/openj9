@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015, 2016 IBM Corp. and others
+ * Copyright (c) 2015, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #ifndef errormessage_internal_h
@@ -60,9 +60,6 @@ extern "C" {
 #define INDEX_SIGNATURE				0x02
 #define INDEX_CLASSNAME				0x03
 #define	INDEX_CLASSNAMELIST			0x04
-
-/* Internal use in the error message framework to tag the BOOL array */
-#define STACKMAP_TYPE_BOOL_ARRAY	0x10
 
 #define INDENT(n) (n), " "
 
@@ -313,7 +310,7 @@ decodeStackFrameDataFromStackMapTable(StackMapFrame* stackMapFrame, U_8* nextSta
 
 
 /**
- * Decode all data of the specified stackmap frame from verifyData->stackMaps (the decompessed stackmap table)
+ * Decode all data of the specified stackmap frame from verifyData->stackMaps (the decompressed stackmap table)
  * as the stackmap table doesn't exist in the class file, and push the information of all data type
  * to the verification type buffer (Only used for the 'Stackmap Frame' section).
  * @param stackMapFrame - pointer to the current stackmap frame data
@@ -354,7 +351,7 @@ bcvToBaseTypeNameIndex(UDATA bcvType);
  * on 'locals'/'stack' in liveStack or stackmap frame.
  * @param stackMapFrame - pointer to the current frame (liveStack) or the specified stackmap frame
  * @param methodInfo - pointer to the MethodContextInfo that holds all method-related data and utilities
- * @return TRUE on sucess or FALSE if out-of-memory
+ * @return TRUE on success or FALSE if out-of-memory
  */
 BOOLEAN
 prepareVerificationTypeBuffer(StackMapFrame* stackMapFrame, MethodContextInfo* methodInfo);

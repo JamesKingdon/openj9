@@ -1,6 +1,6 @@
 
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 /**
@@ -73,6 +73,7 @@ private:
 	MM_GCExtensions *_extensions;
 
 	enum ScanReason {
+		SCAN_REASON_NONE = 0, /**< Indicates there is no item for scan */
 		SCAN_REASON_PACKET = 1, /**< Indicates the object being scanned came from a work packet */
 		SCAN_REASON_COPYSCANCACHE = 2,
 		SCAN_REASON_DIRTY_CARD = 3, /**< Indicates the object being scanned was found in a dirty card */
@@ -118,9 +119,13 @@ private:
 	MM_CopyScanCacheListVLHGC _cacheFreeList;  /**< Caches which are not bound to heap memory and available to be populated */
 	MM_CopyScanCacheListVLHGC *_cacheScanLists;  /**< An array of per-node caches which contains objects still to be scanned (1+node_count elements in array)*/
 	UDATA _scanCacheListSize;	/**< The number of entries in _cacheScanLists */
-	UDATA _scanCacheWaitCount;	/**< The number of threads currently sleeping on _scanCacheMonitor, awaiting scan cache work */
+	volatile UDATA _scanCacheWaitCount;	/**< The number of threads currently sleeping on _scanCacheMonitor, awaiting scan cache work */
 	omrthread_monitor_t _scanCacheMonitor;	/**< Used when waiting on work on any of the _cacheScanLists */
-	volatile UDATA _doneIndex;	/**< Incremented when _cacheScanLists are empty and we want all threads to fall out of _scanCacheMonitor */
+
+	volatile UDATA* _workQueueWaitCountPtr;	/**< The number of threads currently sleeping on *_workQueueMonitorPtr, awaiting scan cache work or work from packets*/
+	omrthread_monitor_t* _workQueueMonitorPtr;	/**< Used when waiting on work on any of the _cacheScanLists or workPackets*/
+
+	volatile UDATA _doneIndex;	/**< Incremented when _cacheScanLists are empty and we want all threads to fall out of *_workQueueMonitorPtr */
 
 	MM_MarkMap *_markMap;  /**< Cached reference to the previous mark map */
 
@@ -129,6 +134,9 @@ private:
 
 	volatile bool _abortFlag;  /**< Flag indicating whether the current copy forward cycle should be aborted due to insufficient heap to complete */
 	bool _abortInProgress;  /**< Flag indicating that the copy forward mechanism is now operating in abort mode, which is attempting to secure integrity of the heap to continue execution */
+
+	UDATA _regionCountCannotBeEvacuated; /**<The number of regions, which can not be copyforward in collectionSet */
+	UDATA _regionCountReservedNonEvacuated; /** the number of regions need to set Mark only in order to try to avoid abort case */
 
 	UDATA _cacheLineAlignment; /**< The number of bytes per cache line which is used to determine which boundaries in memory represent the beginning of a cache line */
 
@@ -153,7 +161,6 @@ private:
 
 protected:
 public:
-
 private:
 
 	/* Temporary verification functions */
@@ -578,6 +585,13 @@ private:
 	bool isAnyScanCacheWorkAvailable();
 
 	/**
+	 * Checks to see if there is any scan work in any of scanCacheLists or workPackets
+	 * it is only for CopyForwardHybrid mode
+	 * @return True if there is any scan work
+	 */
+	bool isAnyScanWorkAvailable(MM_EnvironmentVLHGC *env);
+
+	/**
 	 * Return the next available survivor (destination) copy scan cache that has work available for scanning.
 	 * @param env GC thread.
 	 * @return a copy scan cache to be scanned, or NULL if none are available.
@@ -585,20 +599,26 @@ private:
 	MM_CopyScanCacheVLHGC *getSurvivorCacheForScan(MM_EnvironmentVLHGC *env);
 
 	/**
-	 * Returns a scan cache.  Tries to find one on preferredNumaNode first but will silently fall back and find one on another node to 
-	 * satisfy the request.  Returns NULL only when all threads have finished work and synchronized on realizing this fact.
+	 * Tries to find next scan work from both scanCache and workPackets
+	 * return SCAN_REASON_NONE if there is no scan work
 	 * @param env[in] The GC thread
 	 * @param preferredNumaNode[in] The NUMA node number where the caller would prefer to find a scan cache
-	 * @return A scan cache (most likely from preferredNumaNode) or NULL if all threads have finished work
+	 * @return possible return value(SCAN_REASON_NONE, SCAN_REASON_COPYSCANCACHE, SCAN_REASON_PACKET)
 	 */
-	MM_CopyScanCacheVLHGC *getNextScanCache(MM_EnvironmentVLHGC *env, UDATA preferredNumaNode);
+	ScanReason getNextWorkUnit(MM_EnvironmentVLHGC *env, UDATA preferredNumaNode);
+
 	/**
-	 * Returns a scan cache from the specified NUMA node or NULL if there was no work available on that node
 	 * @param env[in] The GC thread
-	 * @param numaNode[in] The node from which work is being requested
-	 * @return A scan cache from numaNode or NULL if there was no scan work on that node
+	 * @param preferredNumaNode[in] The NUMA node number where the caller would prefer to find a scan cache
+	 * @return possible return value(SCAN_REASON_NONE, SCAN_REASON_COPYSCANCACHE, SCAN_REASON_PACKET)
 	 */
-	MM_CopyScanCacheVLHGC *getNextScanCacheOnNode(MM_EnvironmentVLHGC *env, UDATA numaNode);
+	ScanReason getNextWorkUnitNoWait(MM_EnvironmentVLHGC *env, UDATA preferredNumaNode);
+
+	/**
+	 * Tries to find a scan cache from the specified NUMA node or return SCAN_REASON_NONE if there was no work available on that node
+	 * @return possible return value(SCAN_REASON_NONE, SCAN_REASON_COPYSCANCACHE)
+	 */
+	ScanReason getNextWorkUnitOnNode(MM_EnvironmentVLHGC *env, UDATA numaNode);
 
 	/**
 	 * Complete scanning in Copy-Forward fashion (consume&produce CopyScanCaches)
@@ -624,7 +644,18 @@ private:
 	 */
 	bool handleOverflow(MM_EnvironmentVLHGC *env);
 
+	/**
+	 * Check if Work Packets overflow
+	 * @return true if overflow flag is set
+	 */
+	bool isWorkPacketsOverflow(MM_EnvironmentVLHGC *env);
+
 	void completeScanCache(MM_EnvironmentVLHGC *env);
+	/**
+	 * complete scan works from _workStack
+	 * only for CopyForward Hybrid mode
+	 */
+	void completeScanWorkPacket(MM_EnvironmentVLHGC *env);
 
 	/**
 	 * Scans all the slots of the given object. Used only in copy-scan cache driven phase.
@@ -635,7 +666,6 @@ private:
  	 */
 	MMINLINE void scanObject(MM_EnvironmentVLHGC *env, MM_AllocationContextTarok *reservingContext, J9Object *objectPtr, ScanReason reason);
 
-	MMINLINE void updateHotFieldStats(MM_EnvironmentVLHGC *env, J9Object *childPtr);
 	/**
 	 * Update scan for abort phase (workstack phase)
 	 * @param env[in] the current thread
@@ -643,14 +673,6 @@ private:
 	 * @param reason[in] reason to scan (dirty card, packet, scan cache, overflow)
 	 */
 	MMINLINE void updateScanStats(MM_EnvironmentVLHGC *env, J9Object *objectPtr, ScanReason reason);
-
-	MMINLINE void setFieldHotness(MM_EnvironmentVLHGC *env, fj9object_t* slotPtr, uintptr_t instanceHotFieldDescription);
-
-	MMINLINE void setCurrentObjectForHotFieldStats(MM_EnvironmentVLHGC *env, J9Object *objectPtr);
-	void masterClearHotFieldStats();
-	void masterReportHotFieldStats();
-	void clearHotFieldStats(MM_EnvironmentVLHGC *env);
-	void mergeHotFieldStats(MM_EnvironmentVLHGC *env);
 	
 	MMINLINE UDATA scanToCopyDistance(MM_CopyScanCacheVLHGC* cache);
 	MMINLINE bool bestCacheForScanning(MM_CopyScanCacheVLHGC* copyCache, MM_CopyScanCacheVLHGC** scanCache);
@@ -790,9 +812,10 @@ private:
 	 * @param reservingContext[in] The context to which we would prefer to copy any objects discovered in this method
 	 * @param objectPtr[in] Object being scanned.
 	 * @param slot the slot to be copied or updated
+	 * @param leafType true if slotObject is leaf Object
 	 * @return true if copy succeeded (or no copying was involved)
 	 */
-	MMINLINE bool copyAndForward(MM_EnvironmentVLHGC *env, MM_AllocationContextTarok *reservingContext, J9Object *objectPtr, GC_SlotObject *slotObject);
+	MMINLINE bool copyAndForward(MM_EnvironmentVLHGC *env, MM_AllocationContextTarok *reservingContext, J9Object *objectPtr, GC_SlotObject *slotObject, bool leafType = false);
 
 	/**
 	 * Update the given slot to point at the new location of the object, after copying the object if it was not already.
@@ -815,9 +838,10 @@ private:
 	 *
 	 * @param reservingContext[in] The context to which we would prefer to copy any objects discovered in this method
 	 * @param objectPtrIndirect the slot to be copied or updated
+	 * @param leafType true if the slot is leaf Object
 	 * @return true if copy succeeded (or no copying was involved)
 	 */
-	MMINLINE bool copyAndForward(MM_EnvironmentVLHGC *env, MM_AllocationContextTarok *reservingContext, volatile j9object_t* objectPtrIndirect);
+	MMINLINE bool copyAndForward(MM_EnvironmentVLHGC *env, MM_AllocationContextTarok *reservingContext, volatile j9object_t* objectPtrIndirect, bool leafType = false);
 
 	/**
 	 * If class unloading is enabled, copy the specified object's class object and remember the object as an instance.
@@ -834,11 +858,12 @@ private:
 	 * been copied, or the copy is successful, return the updated information.  If the copy is not successful due to insufficient
 	 * heap memory, return the original object pointer and raise the "abort" flag.
 	 * @param reservingContext[in] The context to which we would prefer to copy any objects discovered in this method
+	 * @param leafType true if the object is leaf object, default = false
 	 * @note This routine can set the abort flag for a copy forward.
 	 * @note This will respect any alignment requirements due to hot fields etc.
 	 * @return an object pointer representing the new location of the object, or the original object pointer on failure.
 	 */
-	J9Object *copy(MM_EnvironmentVLHGC *env, MM_AllocationContextTarok *reservingContext, MM_ScavengerForwardedHeader* forwardedHeader);
+	J9Object *copy(MM_EnvironmentVLHGC *env, MM_AllocationContextTarok *reservingContext, MM_ScavengerForwardedHeader* forwardedHeader, bool leafType = false);
 #if defined(J9VM_GC_ARRAYLETS)
 	void updateInternalLeafPointersAfterCopy(J9IndexableObject *destinationPtr, J9IndexableObject *sourcePtr);
 #endif /* J9VM_GC_ARRAYLETS */
@@ -913,7 +938,7 @@ private:
 	 * The caller is responsible for calling rememberAndResetReferenceLists() on the list once it's released all locks.
 	 * @param env[in] the current thread
 	 * @param region[in] the tail region to convert
-	 * @param survivorBase the lowest address in the region where surviviro objects can be found
+	 * @param survivorBase the lowest address in the region where survivor objects can be found
 	 */
 	void convertTailCandidateToSurvivorRegion(MM_EnvironmentVLHGC* env, MM_HeapRegionDescriptorVLHGC *region, void* survivorBase);
 
@@ -939,6 +964,19 @@ private:
 	 * @param[in] region The region to adjust age to
 	 */
 	void setAllocationAgeForMergedRegion(MM_EnvironmentVLHGC* env, MM_HeapRegionDescriptorVLHGC *region);
+
+	/**
+	 * check if the Object in jni critical region
+	 */
+	bool isObjectInNoEvacuationRegions(MM_EnvironmentVLHGC *env, J9Object *objectPtr);
+
+	bool randomDecideForceNonEvacuatedRegion(UDATA ratio);
+
+	/**
+	 *  Iterate the slot reference and parse and pass leaf bit of the reference to copy forward
+	 *  to avoid to push leaf object to work stack in case the reference need to be marked instead of copied.
+	 */
+	MMINLINE bool iterateAndCopyforwardSlotReference(MM_EnvironmentVLHGC *env, MM_AllocationContextTarok *reservingContext, J9Object *objectPtr);
 
 protected:
 
@@ -1037,9 +1075,22 @@ public:
 	/**
 	 * Run a copy forward collection operation on the already determined collection set.
 	 * @param env[in] Main thread.
-	 * @return Flag indicating if the copy forward collection was succesful or not.
+	 * @return Flag indicating if the copy forward collection was successful or not.
 	 */
 	bool copyForwardCollectionSet(MM_EnvironmentVLHGC *env);
+
+	/**
+	 * Return true if CopyForward is running under Hybrid mode
+	 */
+	bool isHybrid(MM_EnvironmentVLHGC *env)
+	{
+		return (0 != _regionCountCannotBeEvacuated);
+	}
+
+	void setReservedNonEvacuatedRegions(UDATA regionCount)
+	{
+		_regionCountReservedNonEvacuated = regionCount;
+	}
 
 	friend class MM_CopyForwardGMPCardCleaner;
 	friend class MM_CopyForwardNoGMPCardCleaner;

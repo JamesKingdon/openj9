@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2014 IBM Corp. and others
+ * Copyright (c) 2001, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package com.ibm.j9ddr.vm29.tools.ddrinteractive;
 
@@ -33,7 +33,6 @@ import static com.ibm.j9ddr.vm29.structure.J9ConstantPool.J9CPTYPE_INTERFACE_MET
 import static com.ibm.j9ddr.vm29.structure.J9ConstantPool.J9CPTYPE_LONG;
 import static com.ibm.j9ddr.vm29.structure.J9ConstantPool.J9CPTYPE_METHODHANDLE;
 import static com.ibm.j9ddr.vm29.structure.J9ConstantPool.J9CPTYPE_METHOD_TYPE;
-import static com.ibm.j9ddr.vm29.structure.J9ConstantPool.J9CPTYPE_SHARED_METHOD;
 import static com.ibm.j9ddr.vm29.structure.J9ConstantPool.J9CPTYPE_STATIC_METHOD;
 import static com.ibm.j9ddr.vm29.structure.J9ConstantPool.J9CPTYPE_STRING;
 import static com.ibm.j9ddr.vm29.structure.J9ConstantPool.J9CPTYPE_UNUSED;
@@ -53,8 +52,8 @@ import com.ibm.j9ddr.corereaders.memory.MemoryFault;
 import com.ibm.j9ddr.tools.ddrinteractive.Context;
 import com.ibm.j9ddr.vm29.j9.AlgorithmVersion;
 import com.ibm.j9ddr.vm29.j9.BCNames;
+import static com.ibm.j9ddr.vm29.j9.BCNames.*;
 import com.ibm.j9ddr.vm29.j9.ConstantPoolHelpers;
-import com.ibm.j9ddr.vm29.j9.DataType;
 import com.ibm.j9ddr.vm29.j9.J9ROMFieldShapeIterator;
 import com.ibm.j9ddr.vm29.j9.OptInfo;
 import com.ibm.j9ddr.vm29.j9.ROMHelp;
@@ -68,11 +67,9 @@ import com.ibm.j9ddr.vm29.pointer.StructurePointer;
 import com.ibm.j9ddr.vm29.pointer.U16Pointer;
 import com.ibm.j9ddr.vm29.pointer.U32Pointer;
 import com.ibm.j9ddr.vm29.pointer.U8Pointer;
-import com.ibm.j9ddr.vm29.pointer.generated.J9BuildFlags;
 import com.ibm.j9ddr.vm29.pointer.generated.J9EnclosingObjectPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ExceptionHandlerPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ExceptionInfoPointer;
-import com.ibm.j9ddr.vm29.pointer.generated.J9JavaVMPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9LineNumberPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9MethodDebugInfoPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9MethodParameterPointer;
@@ -88,25 +85,22 @@ import com.ibm.j9ddr.vm29.pointer.generated.J9ROMMethodRefPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ROMMethodTypeRefPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ROMNameAndSignaturePointer;
 import com.ibm.j9ddr.vm29.pointer.generated.J9ROMStringRefPointer;
-import com.ibm.j9ddr.vm29.pointer.generated.J9VariableInfoPointer;
-import com.ibm.j9ddr.vm29.pointer.helper.J9JavaVMHelper;
 import com.ibm.j9ddr.vm29.pointer.helper.J9MethodDebugInfoHelper;
-import com.ibm.j9ddr.vm29.pointer.helper.J9RASHelper;
 import com.ibm.j9ddr.vm29.pointer.helper.J9ROMClassHelper;
 import com.ibm.j9ddr.vm29.pointer.helper.J9ROMMethodHelper;
-import com.ibm.j9ddr.vm29.structure.J9Consts;
 import com.ibm.j9ddr.vm29.structure.J9EnclosingObject;
 import com.ibm.j9ddr.vm29.structure.J9ExceptionHandler;
 import com.ibm.j9ddr.vm29.structure.J9ExceptionInfo;
 import com.ibm.j9ddr.vm29.structure.J9MethodDebugInfo;
 import com.ibm.j9ddr.vm29.structure.J9ROMClass;
 import com.ibm.j9ddr.vm29.structure.J9ROMConstantPoolItem;
-import com.ibm.j9ddr.vm29.structure.J9VariableInfo;
 import com.ibm.j9ddr.vm29.tools.ddrinteractive.IClassWalkCallbacks.SlotType;
 import com.ibm.j9ddr.vm29.types.I32;
 import com.ibm.j9ddr.vm29.types.U16;
 import com.ibm.j9ddr.vm29.types.U32;
 import com.ibm.j9ddr.vm29.types.U64;
+import com.ibm.j9ddr.vm29.types.UDATA;
+
 /**
  * Walk every slot and sections of a ROMClass
  * @author jeanpb
@@ -155,10 +149,8 @@ public class RomClassWalker extends ClassWalker {
 		allSlotsInCPShapeDescriptionDo();
 		allSlotsInOptionalInfoDo();
 		
-		if (J9BuildFlags.interp_useSplitSideTables) {
-			allSlotsInStaticSplitMethodRefIndexesDo();
-			allSlotsInSpecialSplitMethodRefIndexesDo();
-		}
+		allSlotsInStaticSplitMethodRefIndexesDo();
+		allSlotsInSpecialSplitMethodRefIndexesDo();
 	}
 	private void allSlotsInROMHeaderDo() throws CorruptDataException {
 		classWalkerCallback.addSection(clazz, clazz, J9ROMClass.SIZEOF, "romHeader", true);
@@ -180,7 +172,7 @@ public class RomClassWalker extends ClassWalker {
 			srpCursor = srpCursor.add(1);
 		}
 
-		/* walk innner classes SRPs block */
+		/* walk inner classes SRPs block */
 		srpCursor = romClass.innerClasses();
 		count = romClass.innerClassCount().intValue();
 		classWalkerCallback.addSection(clazz, srpCursor, count * SelfRelativePointer.SIZEOF, "innerClassesSRPs", true);
@@ -330,7 +322,7 @@ public class RomClassWalker extends ClassWalker {
 		int fieldLength = 0;
 		
 		U32Pointer initialValue;
-		U32 modifiers;
+		UDATA modifiers;
 		
 		J9ROMNameAndSignaturePointer fieldNAS = field.nameAndSignature();
 		classWalkerCallback.addSlot(clazz, SlotType.J9_ROM_UTF8, fieldNAS.nameEA(), "name");
@@ -410,173 +402,158 @@ public class RomClassWalker extends ClassWalker {
 			I32 low;
 			I32 high;
 			long i;
-			switch (bc) {
+			if ((bc == JBbipush)
+				|| (bc == JBldc)
+				|| (bc == JBiload)
+				|| (bc == JBlload)
+				|| (bc == JBfload)
+				|| (bc == JBdload)
+				|| (bc == JBaload)
+				|| (bc == JBistore)
+				|| (bc == JBlstore)
+				|| (bc == JBfstore)
+				|| (bc == JBdstore)
+				|| (bc == JBastore)
+				|| (bc == JBnewarray)
+			) {
 				/* Single 8-bit argument, no flip. */
-				case BCNames.JBbipush:
-				case BCNames.JBldc:
-				case BCNames.JBiload:
-				case BCNames.JBlload:
-				case BCNames.JBfload:
-				case BCNames.JBdload:
-				case BCNames.JBaload:
-				case BCNames.JBistore:
-				case BCNames.JBlstore:
-				case BCNames.JBfstore:
-				case BCNames.JBdstore:
-				case BCNames.JBastore:
-				case BCNames.JBnewarray:
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
-					pc = pc.add(1);
-					break;
-					
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
+				pc = pc.add(1);
+			} else if (bc == JBinvokeinterface2) {
 				/* Single 16-bit argument */
-				case BCNames.JBinvokeinterface2:
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
-					pc = pc.add(1);
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
-					pc = pc.add(1);
-					/* Deliberate fall through */
-				case BCNames.JBsipush:
-				case BCNames.JBldcw:
-				case BCNames.JBldc2dw:
-				case BCNames.JBldc2lw:
-				case BCNames.JBiloadw:
-				case BCNames.JBlloadw:
-				case BCNames.JBfloadw:
-				case BCNames.JBdloadw:
-				case BCNames.JBaloadw:
-				case BCNames.JBistorew:
-				case BCNames.JBlstorew:
-				case BCNames.JBfstorew:
-				case BCNames.JBdstorew:
-				case BCNames.JBastorew:
-				case BCNames.JBifeq:
-				case BCNames.JBifne:
-				case BCNames.JBiflt:
-				case BCNames.JBifge:
-				case BCNames.JBifgt:
-				case BCNames.JBifle:
-				case BCNames.JBificmpeq:
-				case BCNames.JBificmpne:
-				case BCNames.JBificmplt:
-				case BCNames.JBificmpge:
-				case BCNames.JBificmpgt:
-				case BCNames.JBificmple:
-				case BCNames.JBifacmpeq:
-				case BCNames.JBifacmpne:
-				case BCNames.JBgoto:
-				case BCNames.JBifnull:
-				case BCNames.JBifnonnull:
-				case BCNames.JBgetstatic:
-				case BCNames.JBputstatic:
-				case BCNames.JBgetfield:
-				case BCNames.JBputfield:
-				case BCNames.JBinvokevirtual:
-				case BCNames.JBinvokespecial:
-				case BCNames.JBinvokestatic:
-				case BCNames.JBinvokehandle:
-				case BCNames.JBinvokehandlegeneric:
-				case BCNames.JBnew:
-				case BCNames.JBnewdup:
-				case BCNames.JBanewarray:
-				case BCNames.JBcheckcast:
-				case BCNames.JBinstanceof:
-				case BCNames.JBinvokestaticsplit:
-				case BCNames.JBinvokespecialsplit:
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U16, pc, "bcArg16");
-					pc = pc.add(2);
-					break;
-
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
+				pc = pc.add(1);
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
+				pc = pc.add(1);
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U16, pc, "bcArg16");
+				pc = pc.add(2);
+			} else if ((bc == JBsipush)
+				|| (bc == JBldcw)
+				|| (bc == JBldc2dw)
+				|| (bc == JBldc2lw)
+				|| (bc == JBiloadw)
+				|| (bc == JBlloadw)
+				|| (bc == JBfloadw)
+				|| (bc == JBdloadw)
+				|| (bc == JBaloadw)
+				|| (bc == JBistorew)
+				|| (bc == JBlstorew)
+				|| (bc == JBfstorew)
+				|| (bc == JBdstorew)
+				|| (bc == JBastorew)
+				|| (bc == JBifeq)
+				|| (bc == JBifne)
+				|| (bc == JBiflt)
+				|| (bc == JBifge)
+				|| (bc == JBifgt)
+				|| (bc == JBifle)
+				|| (bc == JBificmpeq)
+				|| (bc == JBificmpne)
+				|| (bc == JBificmplt)
+				|| (bc == JBificmpge)
+				|| (bc == JBificmpgt)
+				|| (bc == JBificmple)
+				|| (bc == JBifacmpeq)
+				|| (bc == JBifacmpne)
+				|| (bc == JBgoto)
+				|| (bc == JBifnull)
+				|| (bc == JBifnonnull)
+				|| (bc == JBgetstatic)
+				|| (bc == JBputstatic)
+				|| (bc == JBgetfield)
+				|| (bc == JBputfield)
+				|| (bc == JBwithfield)
+				|| (bc == JBinvokevirtual)
+				|| (bc == JBinvokespecial)
+				|| (bc == JBinvokestatic)
+				|| (bc == JBinvokehandle)
+				|| (bc == JBinvokehandlegeneric)
+				|| (bc == JBnew)
+				|| (bc == JBdefaultvalue)
+				|| (bc == JBnewdup)
+				|| (bc == JBanewarray)
+				|| (bc == JBcheckcast)
+				|| (bc == JBinstanceof)
+				|| (bc == JBinvokestaticsplit)
+				|| (bc == JBinvokespecialsplit)
+			) {
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U16, pc, "bcArg16");
+				pc = pc.add(2);
+			} else if (bc == JBiinc) {
 				/* Two 8-bit arguments. */
-				case BCNames.JBiinc:
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
-					pc = pc.add(1);
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
-					pc = pc.add(1);
-					break;
-
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
+				pc = pc.add(1);
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
+				pc = pc.add(1);
+			} else if (bc == JBiincw) {
 				/* Two 16-bit arguments */
-				case BCNames.JBiincw:
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U16, pc, "bcArg16");
-					pc = pc.add(2);
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U16, pc, "bcArg16");
-					pc = pc.add(2);
-					break;
-
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U16, pc, "bcArg16");
+				pc = pc.add(2);
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U16, pc, "bcArg16");
+				pc = pc.add(2);
+			} else if (bc == JBmultianewarray) {
 				/* 16-bit argument followed by 8-bit argument */
-				case BCNames.JBmultianewarray:
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U16, pc, "bcArg16");
-					pc = pc.add(2);
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
-					pc = pc.add(1);
-					break;
-
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U16, pc, "bcArg16");
+				pc = pc.add(2);
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
+				pc = pc.add(1);
+			} else if (bc == JBgotow) {
 				/* Single 32-bit argument */
-				case BCNames.JBgotow:
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
+				pc = pc.add(4);
+			} else if (bc == JBtableswitch) {
+				int delta = (int) (pc.getAddress() - bytecodes.getAddress() - 1);
+				switch(delta % 4) {
+					case 0:
+						classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcPad");
+						pc = pc.add(1);
+					case 1:
+						classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcPad");
+						pc = pc.add(1);
+					case 2:
+						classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcPad");
+						pc = pc.add(1);
+					case 3:
+						break;
+				}
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
+				pc = pc.add(4);
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
+				low = I32Pointer.cast(pc).at(0);
+				pc = pc.add(4);
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
+				high = I32Pointer.cast(pc).at(0);
+				pc = pc.add(4);
+				for (i = 0; i <= high.sub(low).longValue(); ++i) {
 					classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
 					pc = pc.add(4);
-					break;
-
-				case BCNames.JBtableswitch:
-					int delta = (int) (pc.getAddress() - bytecodes.getAddress() - 1);
-					switch(delta % 4) {
-						case 0:
-							classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcPad");
-							pc = pc.add(1);
-						case 1:
-							classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcPad");
-							pc = pc.add(1);
-						case 2:
-							classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcPad");
-							pc = pc.add(1);
-						case 3:
-							break;
-					}
+				}
+			} else if (bc == JBlookupswitch) {
+				int delta2 = (int) (pc.getAddress() - bytecodes.getAddress() - 1);
+				switch(delta2 % 4) {
+					case 0:
+						classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
+						pc = pc.add(1);
+					case 1:
+						classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
+						pc = pc.add(1);
+					case 2:
+						classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
+						pc = pc.add(1);
+					case 3:
+						break;
+				}
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
+				pc = pc.add(4);
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
+				i = U32Pointer.cast(pc).at(0).longValue();
+				pc = pc.add(4);
+				while (i-- > 0) {
 					classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
 					pc = pc.add(4);
 					classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
-					low = I32Pointer.cast(pc).at(0);
 					pc = pc.add(4);
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
-					high = I32Pointer.cast(pc).at(0);
-					pc = pc.add(4);
-					for (i = 0; i <= high.sub(low).longValue(); ++i) {
-						classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
-						pc = pc.add(4);
-					}
-					break;
-					
-
-				case BCNames.JBlookupswitch:
-					int delta2 = (int) (pc.getAddress() - bytecodes.getAddress() - 1);
-					switch(delta2 % 4) {
-						case 0:
-							classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
-							pc = pc.add(1);
-						case 1:
-							classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
-							pc = pc.add(1);
-						case 2:
-							classWalkerCallback.addSlot(clazz, SlotType.J9_U8, pc, "bcArg8");
-							pc = pc.add(1);
-						case 3:
-							break;
-					}
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
-					pc = pc.add(4);
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
-					i = U32Pointer.cast(pc).at(0).longValue();
-					pc = pc.add(4);
-					while (i-- > 0) {
-						classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
-						pc = pc.add(4);
-						classWalkerCallback.addSlot(clazz, SlotType.J9_U32, pc, "bcArg32");
-						pc = pc.add(4);
-					}
-					break;
-
-				default:
-					break;
+				}
 			}
 		}
 
@@ -590,33 +567,26 @@ public class RomClassWalker extends ClassWalker {
 	}
 	void allSlotsInCPShapeDescriptionDo() throws CorruptDataException
 	{
-		int i, count;
-		U32Pointer cpShapeDescription = romClass.cpShapeDescription();
+		U32Pointer cpShapeDescription = J9ROMClassHelper.cpShapeDescription(romClass);
 		final int romConstantPoolCount = romClass.romConstantPoolCount().intValue();
-		
-		count = (romConstantPoolCount + (U32.SIZEOF * 2) - 1) / (U32.SIZEOF * 2);
+		int count = (romConstantPoolCount + (U32.SIZEOF * 2) - 1) / (U32.SIZEOF * 2);
 
 		classWalkerCallback.addSection(clazz, cpShapeDescription, count * U32.SIZEOF, "cpShapeDescription", true);
-		for (i = 0; i < count; i++) {
+		for (int i = 0; i < count; i++) {
 			classWalkerCallback.addSlot(clazz, SlotType.J9_U32, cpShapeDescription.add(i), "cpShapeDescriptionU32");
 			//callbacks.slotCallback(romClass, J9ROM_U32, &cpShapeDescription[i], "cpShapeDescriptionU32", userData);
 		}
 	}
 	private void allSlotsInConstantPoolDo() throws CorruptDataException
 	{
-		J9ROMConstantPoolItemPointer constantPool;
-		int index;
-		U32Pointer cpShapeDescription;
-		int constPoolCount;
+		J9ROMConstantPoolItemPointer constantPool = J9ROMClassHelper.constantPool(romClass);
+		U32Pointer cpShapeDescription = J9ROMClassHelper.cpShapeDescription(romClass);
 
-		constantPool = J9ROMClassHelper.constantPool(romClass);
-		cpShapeDescription = romClass.cpShapeDescription();
-		
 		if (cpShapeDescription.isNull()) {
 			return;
 		}
 		
-		constPoolCount = romClass.romConstantPoolCount().intValue();
+		int constPoolCount = romClass.romConstantPoolCount().intValue();
 		PointerPointer cpEntry = PointerPointer.cast(J9ROMClassHelper.constantPool(romClass));
 		
 		// The spaces at the end of "Constant Pool" are important since the
@@ -624,7 +594,7 @@ public class RomClassWalker extends ClassWalker {
 		// by address and size, but when they are equal they are sorted by
 		// longest name and "Constant Pool" has to come first
 		classWalkerCallback.addSection(clazz, constantPool, constPoolCount * U64.SIZEOF, "constantPool              ", true);
-		for (index = 0; index < constPoolCount; index++) {
+		for (int index = 0; index < constPoolCount; index++) {
 			long shapeDesc = ConstantPoolHelpers.J9_CP_TYPE(cpShapeDescription, index);
 			if (shapeDesc == J9CPTYPE_CLASS) {
 				J9ROMStringRefPointer ref = J9ROMStringRefPointer.cast(cpEntry);
@@ -657,8 +627,7 @@ public class RomClassWalker extends ClassWalker {
 				classWalkerCallback.addSlot(clazz, SlotType.J9_SRPNAS, ref.nameAndSignatureEA(), "cpFieldNAS");
 				classWalkerCallback.addSlot(clazz, SlotType.J9_U32, ref.classRefCPIndexEA(), "cpFieldClassRef");
 				
-			} else if (((!J9BuildFlags.interp_useSplitSideTables) && (shapeDesc == J9CPTYPE_SHARED_METHOD)) ||
-					(shapeDesc == J9CPTYPE_HANDLE_METHOD) ||
+			} else if ((shapeDesc == J9CPTYPE_HANDLE_METHOD) ||
 					(shapeDesc == J9CPTYPE_STATIC_METHOD) || 
 					(shapeDesc == J9CPTYPE_INSTANCE_METHOD) ||
 					(shapeDesc == J9CPTYPE_INTERFACE_METHOD)) {
@@ -684,7 +653,7 @@ public class RomClassWalker extends ClassWalker {
 	}
 	void allSlotsInOptionalInfoDo() throws CorruptDataException
 	{
-		U32Pointer optionalInfo = romClass.optionalInfo();
+		U32Pointer optionalInfo = J9ROMClassHelper.optionalInfo(romClass);
 		SelfRelativePointer cursor = SelfRelativePointer.cast(optionalInfo);
 
 		if (romClass.optionalFlags().anyBitsIn(J9NonbuilderConstants.J9_ROMCLASS_OPTINFO_SOURCE_FILE_NAME)) {
@@ -723,7 +692,7 @@ public class RomClassWalker extends ClassWalker {
 	}
 	void allSlotsInIntermediateClassDataDo () throws CorruptDataException
 	{
-		U32 count = romClass.intermediateClassDataLength();
+		UDATA count = romClass.intermediateClassDataLength();
 		if (count.gt(0)) {
 			U8Pointer cursor = romClass.intermediateClassData();
 			String j9xHelp = "!j9x "+cursor.getHexAddress()+","+count.getHexValue();
@@ -975,49 +944,30 @@ public class RomClassWalker extends ClassWalker {
 				}
 			}
 		}
-		
-		if (AlgorithmVersion.getVersionOf("VM_LOCAL_VARIABLE_TABLE_VERSION").getAlgorithmVersion() < 1) {
-			J9VariableInfoPointer variableTable = OptInfo.getV0VariableTableForROMClass(methodDebugInfo);
-			if (variableTable.notNull()) {
-				for (int j = 0; j < methodDebugInfo.varInfoCount().longValue(); j++) {
-					long entryLength = J9VariableInfo.SIZEOF;
-	
-					addObjectsasSlot(variableTable);
-	
-					if (variableTable.visibilityLength().anyBitsIn(J9NonbuilderConstants.J9_ROMCLASS_OPTINFO_VARIABLE_TABLE_HAS_GENERIC)) {
-						U32Pointer typePtr = U32Pointer.cast(variableTable.add(1));
-						classWalkerCallback.addSlot(clazz, SlotType.J9_ROM_UTF8, typePtr, "methodVariableGeneric");
-						entryLength += SelfRelativePointer.SIZEOF;
-					}
-					classWalkerCallback.addSection(clazz, variableTable, entryLength, "variableInfo" + (inlineDebugExtension?" Inline":""), inlineDebugExtension);
-					variableTable = J9VariableInfoPointer.cast(variableTable.addOffset(entryLength));
-				}
-			}
-		} else {
-			U8Pointer variableTable = OptInfo.getV1VariableTableForMethodDebugInfo(methodDebugInfo);
-			if (variableTable.notNull()) {
-				LocalVariableTableIterator variableInfoValuesIterator = LocalVariableTableIterator.localVariableTableIteratorFor(methodDebugInfo);
-				U8Pointer start = variableInfoValuesIterator.getLocalVariableTablePtr();
-				while (variableInfoValuesIterator.hasNext()) {
-					LocalVariableTable values = variableInfoValuesIterator.next();
 
-					// Need to walk the name and signature to add them to the UTF8 section
-					classWalkerCallback.addSlot(clazz, SlotType.J9_UTF8, values.getName(), "name");
-					classWalkerCallback.addSlot(clazz, SlotType.J9_UTF8, values.getSignature(), "getSignature");
-					if (values.getGenericSignature().notNull()) {
-						classWalkerCallback.addSlot(clazz, SlotType.J9_UTF8, values.getGenericSignature(), "getGenericSignature");
-					}
+		U8Pointer variableTable = OptInfo.getV1VariableTableForMethodDebugInfo(methodDebugInfo);
+		if (variableTable.notNull()) {
+			LocalVariableTableIterator variableInfoValuesIterator = LocalVariableTableIterator.localVariableTableIteratorFor(methodDebugInfo);
+			U8Pointer start = variableInfoValuesIterator.getLocalVariableTablePtr();
+			while (variableInfoValuesIterator.hasNext()) {
+				LocalVariableTable values = variableInfoValuesIterator.next();
+
+				// Need to walk the name and signature to add them to the UTF8 section
+				classWalkerCallback.addSlot(clazz, SlotType.J9_UTF8, values.getName(), "name");
+				classWalkerCallback.addSlot(clazz, SlotType.J9_UTF8, values.getSignature(), "getSignature");
+				if (values.getGenericSignature().notNull()) {
+					classWalkerCallback.addSlot(clazz, SlotType.J9_UTF8, values.getGenericSignature(), "getGenericSignature");
 				}
-				U8Pointer end = variableInfoValuesIterator.getLocalVariableTablePtr();
-				int localVariableSectionSize = end.sub(start).intValue();
-				
-				for (int j = 0; j < localVariableSectionSize; j++) {
-					classWalkerCallback.addSlot(clazz, SlotType.J9_U8, start, "variableInfo compressed");
-					start = start.add(1);
-				}
-				
-				classWalkerCallback.addSection(clazz, variableTable, localVariableSectionSize, "variableInfo" + (inlineDebugExtension?" Inline":""), inlineDebugExtension);
 			}
+			U8Pointer end = variableInfoValuesIterator.getLocalVariableTablePtr();
+			int localVariableSectionSize = end.sub(start).intValue();
+
+			for (int j = 0; j < localVariableSectionSize; j++) {
+				classWalkerCallback.addSlot(clazz, SlotType.J9_U8, start, "variableInfo compressed");
+				start = start.add(1);
+			}
+
+			classWalkerCallback.addSection(clazz, variableTable, localVariableSectionSize, "variableInfo" + (inlineDebugExtension?" Inline":""), inlineDebugExtension);
 		}
 		classWalkerCallback.addSection(clazz, methodDebugInfo, sectionSizeBytes, "methodDebugInfo" + (inlineDebugExtension?" Inline":""), inlineDebugExtension);
 		return inlineSize;

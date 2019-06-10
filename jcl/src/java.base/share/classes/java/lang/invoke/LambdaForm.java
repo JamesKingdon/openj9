@@ -19,7 +19,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 package java.lang.invoke;
@@ -41,7 +41,7 @@ class LambdaForm {
 	LambdaForm(String str, int num, Name[] names, boolean flag) {
 		OpenJDKCompileStub.OpenJDKCompileStubThrowError();
 	}
-	/*[IF Java18.3]*/
+	/*[IF Java10]*/
 	LambdaForm(int a, Name[] b, int c) {
 		OpenJDKCompileStub.OpenJDKCompileStubThrowError();
 	}
@@ -87,7 +87,7 @@ class LambdaForm {
 		NamedFunction(Method m) {
 			OpenJDKCompileStub.OpenJDKCompileStubThrowError();
 		}
-		/*[IF Java18.3]*/
+		/*[IF Java10]*/
 		NamedFunction(MethodHandle a, MethodHandleImpl.Intrinsic b){
 			OpenJDKCompileStub.OpenJDKCompileStubThrowError();
 		}
@@ -114,7 +114,7 @@ class LambdaForm {
 			throw OpenJDKCompileStub.OpenJDKCompileStubThrowError();
 		}
 	}
-	/*[IF Java18.3]*/
+	/*[IF Java10]*/
 	enum Kind {
 		CONVERT,
 		SPREAD,

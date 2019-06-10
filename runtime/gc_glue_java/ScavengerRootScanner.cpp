@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2015, 2017 IBM Corp. and others
+ * Copyright (c) 2015, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,7 +17,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include "j9cfg.h"
@@ -46,10 +46,10 @@
 
 #if defined(J9VM_GC_FINALIZATION)
 void
-MM_ScavengerRootScanner::startUnfinalizedProcessing(MM_EnvironmentStandard *env)
+MM_ScavengerRootScanner::startUnfinalizedProcessing(MM_EnvironmentBase *env)
 {
 	if(J9MODRON_HANDLE_NEXT_WORK_UNIT(env)) {
-		_clij->scavenger_setShouldScavengeUnfinalizedObjects(false);
+		_scavengerDelegate->setShouldScavengeUnfinalizedObjects(false);
 
 		MM_HeapRegionDescriptorStandard *region = NULL;
 		GC_HeapRegionIteratorStandard regionIterator(env->getExtensions()->getHeap()->getHeapRegionManager());
@@ -60,7 +60,7 @@ MM_ScavengerRootScanner::startUnfinalizedProcessing(MM_EnvironmentStandard *env)
 					MM_UnfinalizedObjectList *list = &regionExtension->_unfinalizedObjectLists[i];
 					list->startUnfinalizedProcessing();
 					if (!list->wasEmpty()) {
-						_clij->scavenger_setShouldScavengeUnfinalizedObjects(true);
+						_scavengerDelegate->setShouldScavengeUnfinalizedObjects(true);
 					}
 				}
 			}
@@ -75,7 +75,7 @@ MM_ScavengerRootScanner::scavengeFinalizableObjects(MM_EnvironmentStandard *env)
 
 	/* this code must be run single-threaded and we should only be here if work is actually required */
 	Assert_MM_true(env->_currentTask->isSynchronized());
-	Assert_MM_true(_clij->scavenger_getShouldScavengeFinalizableObjects());
+	Assert_MM_true(_scavengerDelegate->getShouldScavengeFinalizableObjects());
 	Assert_MM_true(finalizeListManager->isFinalizableObjectProcessingRequired());
 
 	{

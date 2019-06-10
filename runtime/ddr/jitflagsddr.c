@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2017 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -17,12 +17,13 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
 #include <limits.h>
 #include "j9ddr.h"
 #include "ddrtable.h"
+#include "env/defines.h" /* for TR_HOST_XXX */
 
 /* @ddr_namespace: map_to_type=TRBuildFlags */
 
@@ -34,13 +35,20 @@ J9DDRConstantTableBegin(TRBuildFlags)
 	#define host_ARM 0
 #endif
 J9DDRConstantTableEntryWithValue("host_ARM", host_ARM)
-	
+
+#if defined(TR_HOST_AARCH64)
+	#define host_AARCH64 1
+#else
+	#define host_AARCH64 0
+#endif
+J9DDRConstantTableEntryWithValue("host_AARCH64", host_AARCH64)
+
 #if defined(TR_HOST_IA32)
 	#define host_IA32 1
 #else
 	#define host_IA32 0
 #endif
-J9DDRConstantTableEntryWithValue("host_IA32", host_IA32) 
+J9DDRConstantTableEntryWithValue("host_IA32", host_IA32)
 
 #if defined(TR_HOST_POWER)
 	#define host_POWER 1
@@ -83,6 +91,7 @@ J9DDRConstantTableEntryWithValue("host_32BIT", host_32BIT)
 	#define host_64BIT 0
 #endif
 J9DDRConstantTableEntryWithValue("host_64BIT", host_64BIT)
+
 J9DDRConstantTableEnd
 
 J9DDRConstantTableBegin(CLimits)
@@ -107,9 +116,8 @@ J9DDRStructTableBegin(JIT)
 	J9DDREmptyStruct(CLimits, NULL)
 J9DDRStructTableEnd
 
-const J9DDRStructDefinition* getJITStructTable()
+const J9DDRStructDefinition *
+getJITStructTable()
 {
 	return J9DDR_JIT_structs;
 }
-
-

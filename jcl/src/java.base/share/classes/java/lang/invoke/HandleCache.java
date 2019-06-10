@@ -1,6 +1,6 @@
 /*[INCLUDE-IF Sidecar17]*/
 /*******************************************************************************
- * Copyright (c) 2010, 2010 IBM Corp. and others
+ * Copyright (c) 2010, 2018 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -18,7 +18,7 @@
  * [1] https://www.gnu.org/software/classpath/license.html
  * [2] http://openjdk.java.net/legal/assembly-exception.html
  *
- * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 package java.lang.invoke;
 
@@ -35,21 +35,6 @@ final class Cache extends ClassValue<Map<CacheKey, WeakReference<MethodHandle>>>
 	protected Map<CacheKey, WeakReference<MethodHandle>> computeValue(Class<?> arg0) {
 		return Collections.synchronizedMap(new WeakHashMap<CacheKey, WeakReference<MethodHandle>>());
 	}	
-}
-
-abstract class CacheKey {
-	final String name;
-	private final int hashcode;
-	
-	public CacheKey(String name, int hashcode){
-		this.name = name;
-		this.hashcode = hashcode;
-	}
-	
-	@Override
-	public int hashCode() {
-		return hashcode;
-	}
 }
 
 /* Cache key for mapping the methodName and MethodType to the actual MethodHandle */
