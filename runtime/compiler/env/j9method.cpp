@@ -5390,7 +5390,8 @@ U_16
 TR_ResolvedJ9Method::numberOfPendingPushes()
    {
    if (_pendingPushSlots < 0)
-      _pendingPushSlots = J9_MAX_STACK_FROM_ROM_METHOD(romMethod());
+      // XXX JBK HACK FOR TESTING XXX
+      _pendingPushSlots = J9_MAX_STACK_FROM_ROM_METHOD(romMethod()) + 2;
    return _pendingPushSlots;
    }
 

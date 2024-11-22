@@ -55,6 +55,10 @@
 #include "env/j9methodServer.hpp"
 #endif
 
+#include <execinfo.h>
+#include <unistd.h> /* STDOUT_FILENO */
+
+
 #define JAVA_SERIAL_CLASS_NAME "Ljava/io/ObjectInputStream;"
 #define JAVA_SERIAL_CLASS_NAME_LEN 27
 #define JAVA_SERIAL_CALLEE_METHOD_NAME_LEN 10
@@ -1325,6 +1329,8 @@ TR_J9ByteCodeIlGenerator::saveStack(int32_t targetIndex, bool anchorLoads)
    if (_stack->isEmpty())
       return;
 
+   printf("saveStack targetIndex=%d\n", targetIndex);
+
    static const char *disallowOSRPPS2 = feGetEnv("TR_DisallowOSRPPS2");
    bool loadPP = !disallowOSRPPS2 && comp()->getOption(TR_EnableOSR) && !comp()->isOSRTransitionTarget(TR::postExecutionOSR);
    bool createTargetStack = (targetIndex >= 0 && !_stacks[targetIndex]);
@@ -1366,6 +1372,7 @@ TR_J9ByteCodeIlGenerator::saveStack(int32_t targetIndex, bool anchorLoads)
 
       if (!isPlaceholderCall(n))
          {
+         printf("JBK1 i=%d slot=%d\n", i, slot);
          TR::SymbolReference * symRef = symRefTab()->findOrCreatePendingPushTemporary(_methodSymbol, slot, getDataType(n));
          if (_stackTemps.topIndex() < tempIndex || _stackTemps[tempIndex] != n)
             {
@@ -1414,6 +1421,7 @@ TR_J9ByteCodeIlGenerator::saveStack(int32_t targetIndex, bool anchorLoads)
          for (int32_t j = 0; j < n->getNumChildren(); ++j)
             {
             TR::Node* child = n->getChild(j);
+            printf("JBK2\n");
             TR::SymbolReference * symRef = symRefTab()->findOrCreatePendingPushTemporary(_methodSymbol, slot, getDataType(child));
             if (_stackTemps.topIndex() < tempIndex || _stackTemps[tempIndex] != child)
                {
@@ -1699,6 +1707,7 @@ TR_J9ByteCodeIlGenerator::stashArgumentsForOSR(TR_J9ByteCode byteCode)
       TR::Node * n = _stack->element(i);
       if (_stack->size() - numArgs <= i)
          {
+         printf("JBK3\n");
          TR::SymbolReference * symRef = symRefTab()->findOrCreatePendingPushTemporary(_methodSymbol, slot, getDataType(n));
          osrMethodData->addArgInfo(_bcIndex, arg, symRef->getReferenceNumber());
          arg++;
@@ -1733,6 +1742,7 @@ TR_J9ByteCodeIlGenerator::stashPendingPushLivenessForOSR(int32_t offset)
    for (int32_t i = 0; i < _stack->size(); ++i)
       {
       TR::Node *n = _stack->element(i);
+      printf("JBK4\n");
       TR::SymbolReference *symRef = symRefTab()->findOrCreatePendingPushTemporary(_methodSymbol, slot, getDataType(n));
       if (livePP)
          livePP->set(symRef->getReferenceNumber());
@@ -3194,8 +3204,8 @@ static char *suffixedName(char *baseName, char typeSuffix, char *buf, int32_t bu
 void
 TR_J9ByteCodeIlGenerator::genInvokeDynamic(int32_t callSiteIndex)
    {
-   if (comp()->getOption(TR_FullSpeedDebug) && !isPeekingMethod())
-      comp()->failCompilation<J9::FSDHasInvokeHandle>("FSD_HAS_INVOKEHANDLE 0");
+   // if (comp()->getOption(TR_FullSpeedDebug) && !isPeekingMethod())
+   //    comp()->failCompilation<J9::FSDHasInvokeHandle>("FSD_HAS_INVOKEHANDLE 0");
 #if defined(J9VM_OPT_OPENJDK_METHODHANDLE)
    if (comp()->compileRelocatableCode() && (!comp()->getOption(TR_EnableMHRelocatableCompile) || !comp()->getOption(TR_UseSymbolValidationManager)))
       {
