@@ -1082,6 +1082,10 @@ onLoadInternal(
    {
    PORT_ACCESS_FROM_JAVAVM(javaVM);
 
+   // XXX diagnostics
+   I_64 start = j9time_nano_time();
+   I_64 t0 = start, t1;
+
    jitConfig->javaVM = javaVM;
    jitConfig->jitLevelName = TR_BUILD_NAME;
 
@@ -1098,6 +1102,12 @@ onLoadInternal(
       if ((jitConfig->dataCacheList = javaVM->internalVMFunctions->allocateMemorySegmentList(javaVM, 3, J9MEM_CATEGORY_JIT)) == NULL)
          return -1;
       }
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("code/data cache allocations");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
    // Callbacks for code cache allocation pointers
    jitConfig->codeCacheWarmAlloc = getCodeCacheWarmAlloc;
@@ -1165,6 +1175,12 @@ onLoadInternal(
    TR_VerboseLog::initialize(jitConfig);
    initializePersistentMemory(jitConfig);
 
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after vlog initialize");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    // set up entry point for starting JITServer
 #if defined(J9VM_OPT_JITSERVER)
    jitConfig->startJITServer = startJITServer;
@@ -1188,6 +1204,12 @@ onLoadInternal(
    TR_J9VMBase * feWithoutThread(TR_J9VMBase::get(jitConfig, NULL));
    if (!feWithoutThread)
       return -1;
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after feWithoutThread");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
    /*aotmcc-move it here from below !!!! this is after the jitConfig->runtimeFlags=AOT is set*/
    /*also jitConfig->javaVM = javaVM has to be set for the case we run j9.exe -Xnoaot ....*/
@@ -1370,6 +1392,12 @@ onLoadInternal(
    if (TR::Options::_perfToolEnabled == TR_yes)
       TR::Options::getCmdLineOptions()->setOption(TR_PerfTool);
 
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after options processing");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    // Now that the options have been processed we can initialize the RuntimeAssumptionTables
    // If we cannot allocate various runtime assumption hash tables, fail the JVM
 
@@ -1389,6 +1417,12 @@ onLoadInternal(
       if (!persistentMemory->getPersistentInfo()->getRuntimeAssumptionTable()->init())
          return -1;
       }
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after assumptions init");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
    TR_PersistentClassLoaderTable *loaderTable = new (PERSISTENT_NEW) TR_PersistentClassLoaderTable(persistentMemory);
    if (loaderTable == NULL)
@@ -1424,6 +1458,12 @@ onLoadInternal(
 
    // must initialize manager using the global (not thread specific) fe because current thread isn't guaranteed to live longer than the manager
    new (codeCacheManager) TR::CodeCacheManager(feWithoutThread, TR::Compiler->rawAllocator);
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after CCM construct");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
    TR::CodeCacheConfig &codeCacheConfig = codeCacheManager->codeCacheConfig();
 
@@ -1468,6 +1508,12 @@ onLoadInternal(
    if (!TR_TranslationArtifactManager::initializeGlobalArtifactManager(jitConfig->translationArtifacts, jitConfig->javaVM))
       return -1;
 
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after initializeGlobalArtifactManager");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    codeCacheConfig._allowedToGrowCache = (javaVM->jitConfig->runtimeFlags & J9JIT_GROW_CACHES) != 0;
    codeCacheConfig._lowCodeCacheThreshold = TR::Options::_lowCodeCacheThreshold;
    codeCacheConfig._verboseCodeCache = TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCodeCache);
@@ -1498,6 +1544,12 @@ onLoadInternal(
       numCodeCachesToCreateAtStartup = maxNumberOfCodeCaches;
 
    firstCodeCache = codeCacheManager->initialize(useConsolidatedCodeCache, numCodeCachesToCreateAtStartup);
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after codeCacheManager->initialize");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
    // large code page size may have been updated by initialize(), so copy back to jitConfig
    jitConfig->largeCodePageSize = (UDATA) codeCacheConfig.largeCodePageSize();
@@ -1549,6 +1601,12 @@ onLoadInternal(
       return -1;
       }
 
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after dataCM initialize");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    jitConfig->thunkLookUpNameAndSig = &j9ThunkLookupNameAndSig;
 
    TR::CompilationInfo * compInfo = TR::CompilationInfo::get();
@@ -1557,6 +1615,12 @@ onLoadInternal(
    // should initialize the compilationController
    //
    TR::CompilationController::init(compInfo);
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after CompilationController::init");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
    if (!TR::CompilationController::useController()) // test if initialization succeeded
       return -1;
@@ -1637,6 +1701,12 @@ onLoadInternal(
       return -1;
       }
 
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after allocateCompilationThreads");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    // create regular compilation threads
    for (int32_t threadNum = 0; threadNum < TR::Options::_numAllocatedCompilationThreads; threadNum++)
       {
@@ -1659,6 +1729,12 @@ onLoadInternal(
       Trc_JIT_startCompThreadFailed(curThread);
       return -1;
       }
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after startCompilationThread");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
    // Create the monitor used for log handling in presence of multiple compilation threads
    // TODO: postpone this when we know that a log is actually used
@@ -1716,6 +1792,12 @@ onLoadInternal(
       {
       ((TR_JitPrivateConfig*)(jitConfig->privateConfig))->jProfiler = NULL;
       }
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after iprofiler");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
    vpMonitor = TR::Monitor::create("ValueProfilingMutex");
 
@@ -1781,6 +1863,12 @@ onLoadInternal(
          return -1;
       persistentMemory->getPersistentInfo()->setPersistentCHTable(chtable);
       }
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after chtable");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
 #if defined(J9VM_OPT_JITSERVER)
    if (compInfo->useSSL())
@@ -1919,8 +2007,18 @@ onLoadInternal(
       persistentMemory->getPersistentInfo()->setInvokeExactJ2IThunkTable(ieThunkTable);
       }
 
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after thunktable");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
 
    jitConfig->jitAddNewLowToHighRSSRegion = jitAddNewLowToHighRSSRegion;
+
+   // XXX diagnostic perf
+   I_64 end = j9time_nano_time();
+   printf("JBK onLoadInternal t = %lld\n", end-start);
 
    return 0;
    }
