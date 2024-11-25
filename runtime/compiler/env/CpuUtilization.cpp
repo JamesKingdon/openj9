@@ -390,13 +390,38 @@ double TR_CpuEntitlement::computeGuestCpuEntitlement() const
 void TR_CpuEntitlement::computeAndCacheCpuEntitlement()
    {
    PORT_ACCESS_FROM_JITCONFIG(_jitConfig);
+
+   // XXX diagnostics
+   I_64 start = j9time_nano_time();
+   I_64 t0 = start, t1;
+
    _numTargetCpu = j9sysinfo_get_number_CPUs_by_type(J9PORT_CPU_TARGET);
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("computeAndCacheCpuEntitlement: after j9sysinfo_get_number_CPUs_by_type");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    if (_numTargetCpu == 0)
       _numTargetCpu = 1; // some correction in case we get it wrong
    uint32_t numTargetCpuEntitlement = _numTargetCpu * 100;
    if (isHypervisorPresent())
       {
+      // XXX diagnostics
+      t1 = j9time_nano_time();
+      printf("computeAndCacheCpuEntitlement: after isHypervisorPresent");
+      printf(" %lld\n", t1-t0);
+      t0 = t1;
+
       _guestCpuEntitlement = computeGuestCpuEntitlement();
+
+      // XXX diagnostics
+      t1 = j9time_nano_time();
+      printf("computeAndCacheCpuEntitlement: after computeGuestCpuEntitlement");
+      printf(" %lld\n", t1-t0);
+      t0 = t1;
+
       // If the number of target CPUs is smaller (bind the JVM to a subset of CPUs), use that value
       if (numTargetCpuEntitlement < _guestCpuEntitlement || _guestCpuEntitlement <= 0)
          _jvmCpuEntitlement = numTargetCpuEntitlement;

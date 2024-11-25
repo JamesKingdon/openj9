@@ -797,6 +797,12 @@ bool TR::CompilationInfo::shouldDowngradeCompReq(TR_MethodToBeCompiled *entry)
 bool
 TR::CompilationInfo::createCompilationInfo(J9JITConfig * jitConfig)
    {
+   PORT_ACCESS_FROM_JAVAVM(jitConfig->javaVM);
+
+   // XXX diagnostics
+   I_64 start = j9time_nano_time();
+   I_64 t0 = start, t1;
+
    TR_ASSERT(!_compilationRuntime, "The global compilation info has already been allocated");
    try
       {
@@ -808,6 +814,13 @@ TR::CompilationInfo::createCompilationInfo(J9JITConfig * jitConfig)
       memset(alloc, 0, sizeof(TR::CompilationInfo));
       _compilationRuntime = new (alloc) TR::CompilationInfo(jitConfig);
       jitConfig->compilationRuntime = (void*)_compilationRuntime;
+
+      // XXX diagnostics
+      t1 = j9time_nano_time();
+      printf("after new compilationInfo");
+      printf(" %lld\n", t1-t0);
+      t0 = t1;
+
 #ifdef DEBUG
          if (debug("traceThreadCompile"))
             _compilationRuntime->_traceCompiling = true;
@@ -820,12 +833,20 @@ TR::CompilationInfo::createCompilationInfo(J9JITConfig * jitConfig)
        */
       TR::CRRuntime *crRuntime = new (PERSISTENT_NEW) TR::CRRuntime(jitConfig, _compilationRuntime);
       _compilationRuntime->setCRRuntime(crRuntime);
+
+      // XXX diagnostics
+      t1 = j9time_nano_time();
+      printf("after new CRRuntime");
+      printf(" %lld\n", t1-t0);
+      t0 = t1;
+
 #endif /* if defined(J9VM_OPT_CRIU_SUPPORT) */
       }
    catch (const std::exception &e)
       {
       return false;
       }
+      
    return true;
    }
 
@@ -1178,6 +1199,12 @@ TR::CompilationInfo::CompilationInfo(J9JITConfig *jitConfig) :
    _lastAllocatedCompThreadID(0),
    _arrayOfCompilationInfoPerThread(NULL)
    {
+   PORT_ACCESS_FROM_JAVAVM(jitConfig->javaVM);
+
+   // XXX diagnostics
+   I_64 start = j9time_nano_time();
+   I_64 t0 = start, t1;
+
    // The object is zero-initialized before this method is called
    //
    ::jitConfig = jitConfig;
@@ -1215,7 +1242,13 @@ TR::CompilationInfo::CompilationInfo(J9JITConfig *jitConfig) :
 
    _iprofilerMaxCount = TR::Options::_maxIprofilingCountInStartupMode;
 
-   PORT_ACCESS_FROM_JAVAVM(jitConfig->javaVM);
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after monitors");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
+   // PORT_ACCESS_FROM_JAVAVM(jitConfig->javaVM); XXX JBK temporary hack
    _cpuUtil = 0; // Field will be set in onLoadInternal after option processing
    static char *verySmallQueue = feGetEnv("VERY_SMALL_QUEUE");
    if (verySmallQueue)
@@ -1252,15 +1285,43 @@ TR::CompilationInfo::CompilationInfo(J9JITConfig *jitConfig) :
       if (temp)
          VERY_LARGE_QUEUE = temp;
       }
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after getenvs");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    statCompErrors.init("CompilationErrors", compilationErrorNames, 0);
 
-   setSamplerState(TR::CompilationInfo::SAMPLER_NOT_INITIALIZED);
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after statCompErrors.init");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
-   setIsWarmSCC(TR_maybe);
+   setSamplerState(TR::CompilationInfo::SAMPLER_NOT_INITIALIZED); // quick
+
+   setIsWarmSCC(TR_maybe); // quick
+
    initCPUEntitlement();
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after initCPUEntitlement");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    _lowPriorityCompilationScheduler.setCompInfo(this);
    _JProfilingQueue.setCompInfo(this);
    _interpSamplTrackingInfo = new (PERSISTENT_NEW) TR_InterpreterSamplingTracking(this);
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after new TR_InterpreterSamplingTracking");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
 #if defined(J9VM_OPT_JITSERVER)
    _clientSessionHT = NULL; // This will be set later when options are processed
    _unloadedClassesTempList = NULL;
