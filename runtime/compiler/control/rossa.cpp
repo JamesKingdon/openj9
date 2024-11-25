@@ -1195,11 +1195,29 @@ onLoadInternal(
    // setting it to null here to catch anything that assumes it's set between here and the new init code.
    persistentMemory->getPersistentInfo()->setPersistentCHTable(NULL);
 
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after setPersistentCHTable");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    if (!TR::CompilationInfo::createCompilationInfo(jitConfig))
       return -1;
 
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after createCompilationInfo");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    if (!TR_J9VMBase::createGlobalFrontEnd(jitConfig, TR::CompilationInfo::get()))
       return -1;
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("after createGlobalFrontEnd");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
    TR_J9VMBase * feWithoutThread(TR_J9VMBase::get(jitConfig, NULL));
    if (!feWithoutThread)
