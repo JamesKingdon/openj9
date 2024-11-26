@@ -817,7 +817,7 @@ TR::CompilationInfo::createCompilationInfo(J9JITConfig * jitConfig)
 
       // XXX diagnostics
       t1 = j9time_nano_time();
-      printf("after new compilationInfo");
+      printf("createCompilationInfo: after new compilationInfo");
       printf(" %lld\n", t1-t0);
       t0 = t1;
 
@@ -836,7 +836,7 @@ TR::CompilationInfo::createCompilationInfo(J9JITConfig * jitConfig)
 
       // XXX diagnostics
       t1 = j9time_nano_time();
-      printf("after new CRRuntime");
+      printf("createCompilationInfo: after new CRRuntime");
       printf(" %lld\n", t1-t0);
       t0 = t1;
 
