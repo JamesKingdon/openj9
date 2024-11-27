@@ -1220,25 +1220,94 @@ TR::CompilationInfo::CompilationInfo(J9JITConfig *jitConfig) :
    _cachedIncompleteFreePhysicalMemory = false;
    OMRPORT_ACCESS_FROM_J9PORT(jitConfig->javaVM->portLibrary);
    _cgroupMemorySubsystemEnabled = (OMR_CGROUP_SUBSYSTEM_MEMORY == omrsysinfo_cgroup_are_subsystems_enabled(OMR_CGROUP_SUBSYSTEM_MEMORY));
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after omrsysinfo_cgroup_are_subsystems_enabled");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    _suspendThreadDueToLowPhysicalMemory = false;
    J9MemoryInfo memInfo;
    _isSwapMemoryDisabled = ((omrsysinfo_get_memory_info(&memInfo) == 0) && (0 == memInfo.totalSwap));
 
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after omrsysinfo_get_memory_info");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    // Initialize the compilation monitor
    //
    _compilationMonitor = TR::Monitor::create("JIT-CompilationQueueMonitor");
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after JIT-CompilationQueueMonitor");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    _schedulingMonitor = TR::Monitor::create("JIT-SchedulingMonitor");
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after JIT-SchedulingMonitor");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
 #if defined(J9VM_JIT_DYNAMIC_LOOP_TRANSFER)
    _dltMonitor = TR::Monitor::create("JIT-DLTmonitor");
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after JIT-DLTmonitor");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
 #endif
 
    _iprofilerBufferArrivalMonitor = TR::Monitor::create("JIT-IProfilerBufferArrivalMonitor");
-   _classUnloadMonitor = TR::MonitorTable::get()->getClassUnloadMonitor(); // by this time this variable is initialized
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after JIT-IProfilerBufferArrivalMonitor");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
+   // by this time this variable is initialized
+   _classUnloadMonitor = TR::MonitorTable::get()->getClassUnloadMonitor(); // these are both just field accesses
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after getClassUnloadMonitor");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
+
                                              // TODO: hang these monitors to something persistent
    _j9MonitorTable = TR::MonitorTable::get();
 
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after MonitorTable::get");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
    _gpuInitMonitor = TR::Monitor::create("JIT-GpuInitializationMonitor");
-   _persistentMemory->getPersistentInfo()->setGpuInitializationMonitor(_gpuInitMonitor);
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after JIT-GpuInitializationMonitor");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
+
+   _persistentMemory->getPersistentInfo()->setGpuInitializationMonitor(_gpuInitMonitor); // just a field write
+
+   // XXX diagnostics
+   t1 = j9time_nano_time();
+   printf("CompilationInfo: after setGpuInitializationMonitor");
+   printf(" %lld\n", t1-t0);
+   t0 = t1;
 
    _iprofilerMaxCount = TR::Options::_maxIprofilingCountInStartupMode;
 
