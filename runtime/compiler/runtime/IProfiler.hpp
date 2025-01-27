@@ -605,7 +605,14 @@ public:
 
    // Use _iprofilerMonitor for these two routines
    TR_IprofilerThreadLifetimeStates getIProfilerThreadLifetimeState() const { return _iprofilerThreadLifetimeState; }
-   void setIProfilerThreadLifetimeState(TR_IprofilerThreadLifetimeStates s) { _iprofilerThreadLifetimeState = s; }
+   void setIProfilerThreadLifetimeState(TR_IprofilerThreadLifetimeStates s) 
+   {
+      if (_iprofilerThreadLifetimeState == TR_IProfiler::IPROF_THR_STOPPING || s == TR_IProfiler::IPROF_THR_STOPPING)
+      {
+         fprintf(stderr, "sITLS: from %d to %d\n", _iprofilerThreadLifetimeState, s);
+      } 
+      _iprofilerThreadLifetimeState = s; 
+   }
 
 protected:
    bool isCompact(U_8 byteCode);

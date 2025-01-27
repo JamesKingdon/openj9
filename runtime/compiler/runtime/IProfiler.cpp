@@ -3890,24 +3890,38 @@ void TR_IProfiler::deallocateIProfilerBuffers()
 void TR_IProfiler::stopIProfilerThread()
    {
    PORT_ACCESS_FROM_PORT(_portLib);
-   if (!_iprofilerMonitor)
+   if (!_iprofilerMonitor) {
+      // debug this path (even though it doesn't seem to fit with the hang location)
+      fprintf(stderr, "SIT no monitor\n");
       return; // possible if the IProfiler thread was never created
+   }
 
    _iprofilerMonitor->enter();
    if (!getIProfilerThread()) // We could not create the iprofilerThread
       {
+      // debug (even though it doesn't seem to fit with the hang location)
       _iprofilerMonitor->exit();
+      fprintf(stderr, "SIT no thread\n");
       return;
       }
 
    setIProfilerThreadLifetimeState(TR_IProfiler::IPROF_THR_STOPPING);
+   int tmpState = getIProfilerThreadLifetimeState();
+   if (tmpState != TR_IProfiler::IPROF_THR_STOPPING) {
+      printf("SIT Expected state 7, read state %d\n", tmpState);
+   }
    while (getIProfilerThreadLifetimeState() == TR_IProfiler::IPROF_THR_STOPPING)
       {
+      fprintf(stderr, "SIT notifyAll, state %d\n", getIProfilerThreadLifetimeState());
       _iprofilerMonitor->notifyAll();
-      _iprofilerMonitor->wait();
+      fprintf(stderr, "SIT after notifyAll, state %d\n", getIProfilerThreadLifetimeState());
+      fprintf(stderr, "SIT waiting...\n");
+      _iprofilerMonitor->wait();          // We're here in the hang cases, with state IPROF_THR_STOPPING
+      fprintf(stderr, "SIT wait finished, state %d\n", getIProfilerThreadLifetimeState());
       }
 
    _iprofilerMonitor->exit();
+   fprintf(stderr, "SIT done, state %d\n", getIProfilerThreadLifetimeState());
    }
 
 // The following method is executed by the app thread and tries to post a
@@ -4022,7 +4036,8 @@ TR_IProfiler::processWorkingQueue()
 
    // wait for something to do
    _iprofilerMonitor->enter();
-   do {
+   do { // ... while(true)
+
       // Wait for work until a buffer is added to the working list
       //
       // However, during shutdown, it is possible for the shutdown thread to
@@ -4035,20 +4050,28 @@ TR_IProfiler::processWorkingQueue()
          {
          setIProfilerThreadLifetimeState(TR_IProfiler::IPROF_THR_WAITING_FOR_WORK);
 
-         //fprintf(stderr, "IProfiler thread will wait for data outstanding=%d\n", numOutstandingBuffers);
-         _iprofilerMonitor->wait();
+         // fprintf(stderr, "IProfiler thread will wait for data outstanding=%d\n", _numOutstandingBuffers);
+         _iprofilerMonitor->wait(); // Hangs here with state IPROF_THR_STOPPING
+
+         if (_numOutstandingBuffers == 0 || getIProfilerThreadLifetimeState() == TR_IProfiler::IPROF_THR_STOPPING)
+         {
+            fprintf(stderr, "PWQ after wait, data outstanding=%d, state %d\n", _numOutstandingBuffers, getIProfilerThreadLifetimeState());
+         }
 
          // The state could have been changed either for checkpoint or shutdown, ensure
          // consistency with the state before changing it to IPROF_THR_INITIALIZED
          if (getIProfilerThreadLifetimeState() == TR_IProfiler::IPROF_THR_WAITING_FOR_WORK)
             setIProfilerThreadLifetimeState(TR_IProfiler::IPROF_THR_INITIALIZED);
-         }
+
+         } // while (get work)
 
       // IProfiler thread should be shut down
       if (getIProfilerThreadLifetimeState() == TR_IProfiler::IPROF_THR_STOPPING)
          {
+         fprintf(stderr, "PWQ sees THR_STOPPING\n");
          discardFilledIProfilerBuffers();
          _iprofilerMonitor->exit();
+         fprintf(stderr, "PWQ break loop\n");
          break;
          }
       else if (!_workingBufferList.isEmpty())
@@ -4061,7 +4084,7 @@ TR_IProfiler::processWorkingQueue()
             _workingBufferTail = NULL;
 
          // We don't need the iprofiler monitor now
-         _iprofilerMonitor->exit();
+         _iprofilerMonitor->exit();    // XXX monitor released
 
          TR_ASSERT_FATAL(_crtProfilingBuffer->getSize() > 0, "size of _crtProfilingBuffer (%p) <= 0", _crtProfilingBuffer);
 
@@ -4077,7 +4100,7 @@ TR_IProfiler::processWorkingQueue()
          releaseVMAccess(_iprofilerThread);
 
          // attach the buffer to the buffer pool
-         _iprofilerMonitor->enter();
+         _iprofilerMonitor->enter();               // XXX monitor re-aquired
          _freeBufferList.add(_crtProfilingBuffer);
          _crtProfilingBuffer = NULL;
          _numOutstandingBuffers--;
@@ -4112,6 +4135,7 @@ TR_IProfiler::processWorkingQueue()
          }
       else
          {
+         fprintf(stderr, "PWQ invalid state %d\n", getIProfilerThreadLifetimeState());
          TR_ASSERT_FATAL(false, "Iprofiler in invalid state %d\n", getIProfilerThreadLifetimeState());
          }
       } while(true);
