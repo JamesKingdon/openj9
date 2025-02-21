@@ -120,3 +120,8 @@ J9::Monitor::owned_by_self()
    {
    return (int32_t)j9thread_monitor_owned_by_self(_monitor);
    }
+
+void J9::Monitor::setJbkDebug(int x)
+{
+   omrthread_monitor_setJbkDebug(_monitor, x);
+}

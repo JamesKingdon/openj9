@@ -3896,7 +3896,12 @@ void TR_IProfiler::stopIProfilerThread()
       return; // possible if the IProfiler thread was never created
    }
 
+   // enable debug on this specific monitor as early as possible
+   _iprofilerMonitor->setJbkDebug(1);
+
+
    _iprofilerMonitor->enter();
+
    if (!getIProfilerThread()) // We could not create the iprofilerThread
       {
       // debug (even though it doesn't seem to fit with the hang location)
@@ -3913,7 +3918,7 @@ void TR_IProfiler::stopIProfilerThread()
    while (getIProfilerThreadLifetimeState() == TR_IProfiler::IPROF_THR_STOPPING)
       {
       fprintf(stderr, "SIT notifyAll, state %d\n", getIProfilerThreadLifetimeState());
-      _iprofilerMonitor->notifyAll();
+      _iprofilerMonitor->notifyAll();     // XXX any info in the return code we can use?
       fprintf(stderr, "SIT after notifyAll, state %d\n", getIProfilerThreadLifetimeState());
       fprintf(stderr, "SIT waiting...\n");
       _iprofilerMonitor->wait();          // We're here in the hang cases, with state IPROF_THR_STOPPING
