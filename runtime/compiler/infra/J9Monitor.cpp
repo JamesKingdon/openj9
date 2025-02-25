@@ -123,5 +123,9 @@ J9::Monitor::owned_by_self()
 
 void J9::Monitor::setJbkDebug(int x)
 {
-   omrthread_monitor_setJbkDebug(_monitor, x);
+   // Can't be seen when compiling on ADM64, works for Mac
+   // omrthread_monitor_setJbkDebug(_monitor, x);
+
+   // Added a macro with the others. Might have been an extern "C" requirement
+   j9thread_monitor_setJbkDebug(_monitor, x);
 }

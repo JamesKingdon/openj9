@@ -57,6 +57,8 @@ extern "C" {
 #define j9thread_monitor_owned_by_self omrthread_monitor_owned_by_self
 #define j9thread_monitor_num_waiting omrthread_monitor_num_waiting
 
+#define j9thread_monitor_setJbkDebug omrthread_monitor_setJbkDebug
+
 #define j9thread_rwmutex_init omrthread_rwmutex_init
 #define j9thread_rwmutex_destroy omrthread_rwmutex_destroy
 #define j9thread_rwmutex_enter_write omrthread_rwmutex_enter_write
