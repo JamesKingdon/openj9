@@ -4039,6 +4039,10 @@ TR_IProfiler::processWorkingQueue()
    {
    PORT_ACCESS_FROM_PORT(_portLib);
 
+   // Hack, using this call to capture the iprofiler thread. Debug will be enabled from stopIprofilerThread()
+   _iprofilerMonitor->setJbkDebug(0);
+
+
    // wait for something to do
    _iprofilerMonitor->enter();
    do { // ... while(true)
