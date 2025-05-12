@@ -3896,8 +3896,8 @@ void TR_IProfiler::stopIProfilerThread()
       return; // possible if the IProfiler thread was never created
    }
 
-   // enable debug on this specific monitor as early as possible
-   _iprofilerMonitor->setJbkDebug(1);
+   // enable all debug on this specific monitor as early as possible
+   _iprofilerMonitor->setJbkDebug(2);
 
 
    _iprofilerMonitor->enter();
@@ -3915,14 +3915,20 @@ void TR_IProfiler::stopIProfilerThread()
    if (tmpState != TR_IProfiler::IPROF_THR_STOPPING) {
       printf("SIT Expected state 7, read state %d\n", tmpState);
    }
+   int notifyAttempts = 0;
    while (getIProfilerThreadLifetimeState() == TR_IProfiler::IPROF_THR_STOPPING)
       {
       fprintf(stderr, "SIT notifyAll, state %d\n", getIProfilerThreadLifetimeState());
-      _iprofilerMonitor->notifyAll();     // XXX any info in the return code we can use?
-      fprintf(stderr, "SIT after notifyAll, state %d\n", getIProfilerThreadLifetimeState());
+      if (notifyAttempts > 0) fprintf(stderr, "*** SIT RETRY NOTIFICATION ***\n");
+      _iprofilerMonitor->notifyAll();     // XXX any info in the return code we can use? There is no return code at this level.
+      notifyAttempts++;
+      fprintf(stderr, "SIT after notifyAll %d, state %d\n", notifyAttempts, getIProfilerThreadLifetimeState());
       fprintf(stderr, "SIT waiting...\n");
-      _iprofilerMonitor->wait();          // We're here in the hang cases, with state IPROF_THR_STOPPING
-      fprintf(stderr, "SIT wait finished, state %d\n", getIProfilerThreadLifetimeState());
+
+      // _iprofilerMonitor->wait();          // We're here in the hang cases, with state IPROF_THR_STOPPING
+      intptr_t res = _iprofilerMonitor->wait_timed(1000, 0);   // millis, nanos, 1Hz retries
+
+      fprintf(stderr, "SIT wait finished, state %d, ret value %ld\n", getIProfilerThreadLifetimeState(), res);
       }
 
    _iprofilerMonitor->exit();
@@ -4040,7 +4046,10 @@ TR_IProfiler::processWorkingQueue()
    PORT_ACCESS_FROM_PORT(_portLib);
 
    // Hack, using this call to capture the iprofiler thread. Debug will be enabled from stopIprofilerThread()
-   _iprofilerMonitor->setJbkDebug(0);
+   _iprofilerMonitor->setJbkDebug(99);
+
+   // Enable debug for special (more interesting?) cases
+   _iprofilerMonitor->setJbkDebug(1);
 
 
    // wait for something to do
