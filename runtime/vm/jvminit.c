@@ -3699,6 +3699,15 @@ processVMArgsFromFirstToLast(J9JavaVM * vm)
 		}
 	}
 
+	// Consider adding support for showing inlined frames for jit'd methods
+	{
+		IDATA noShowInlining = FIND_AND_CONSUME_VMARG(EXACT_MATCH, VMOPT_XXNOJAVACORESHOWINLINING, NULL);
+		IDATA showInlining = FIND_AND_CONSUME_VMARG(EXACT_MATCH, VMOPT_XXJAVACORESHOWINLINING, NULL);
+		fprintf(stderr, "noShowInlining %ld, showInlining %ld\n", noShowInlining, showInlining);
+
+		// TODO add a flag, set it here, use it in the javacore stack writer.
+	}
+
 #if defined(J9VM_ARCH_X86) || defined(J9VM_ARCH_POWER) || defined(J9VM_ARCH_S390)
 	/* Enabled field watch by default on x86, Power, and S390 platforms */
 	vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_JIT_INLINE_WATCHES;

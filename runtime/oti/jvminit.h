@@ -671,6 +671,10 @@ enum INIT_STAGE {
 #define VMOPT_XXENABLEDYNAMICAGENTLOADING "-XX:+EnableDynamicAgentLoading"
 #define VMOPT_XXNOENABLEDYNAMICAGENTLOADING "-XX:-EnableDynamicAgentLoading"
 
+// Define +/- option for indicating which jit frames are inlined when printing javacore call stacks.
+#define VMOPT_XXJAVACORESHOWINLINING "-XX:+JavacoreShowInlining"
+#define VMOPT_XXNOJAVACORESHOWINLINING "-XX:-JavacoreShowInlining"
+
 /* Modularity command line options */
 #define VMOPT_MODULE_UPGRADE_PATH "--upgrade-module-path"
 #define VMOPT_MODULE_PATH "--module-path"

@@ -5048,6 +5048,7 @@ JavaCoreDumpWriter::writeFrame(J9StackWalkState* state)
 	UDATA offsetPC = state->bytecodePCOffset;
 	bool compiledMethod = (NULL != state->jitInfo);
 
+
 #ifdef J9VM_OPT_DEBUG_INFO_SERVER
 	/* Write source file and line number info, if available and we can take locks. */
 	if (!avoidLocks()) {
@@ -5064,7 +5065,9 @@ JavaCoreDumpWriter::writeFrame(J9StackWalkState* state)
 			}
 
 			if (compiledMethod) {
-				_OutputStream.writeCharacters("(Compiled Code)");
+				_OutputStream.writeCharacters("(");
+				if (state->inlineDepth) _OutputStream.writeCharacters("Inline ");
+				_OutputStream.writeCharacters("Compiled Code)");
 			}
 
 			_OutputStream.writeCharacters(")\n");
@@ -5092,8 +5095,13 @@ JavaCoreDumpWriter::writeFrame(J9StackWalkState* state)
 	_OutputStream.writeCharacters("(Bytecode PC:");
 	_OutputStream.writeInteger(offsetPC, "%zu");
 
+	// if (compiledMethod) {
+	// 	_OutputStream.writeCharacters("(Compiled Code)");
+	// }
 	if (compiledMethod) {
-		_OutputStream.writeCharacters("(Compiled Code)");
+		_OutputStream.writeCharacters("(");
+		if (state->inlineDepth) _OutputStream.writeCharacters("Inline ");
+		_OutputStream.writeCharacters("Compiled Code)");
 	}
 
 	_OutputStream.writeCharacters(")\n");
