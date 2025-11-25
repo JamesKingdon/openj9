@@ -184,22 +184,45 @@ LABEL(L_done_$1):
 	END_HELPER($1,$2)
 })
 
+dnl define({NEW_DUAL_MODE_HELPER},{
+dnl 	FASTCALL_EXTERN(fast_$1,$2+1)
+dnl 	BEGIN_HELPER($1)
+dnl 	pop uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
+dnl 	call FASTCALL_SYMBOL(fast_$1,$2+1)
+dnl 	test _rax,_rax
+dnl 	jne SHORT_JMP LABEL(L_slow_$1)
+dnl 	push uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
+dnl 	mov _rax,uword ptr J9TR_VMThread_returnValue[_rbp]
+dnl 	ret
+dnl LABEL(L_slow_$1):
+dnl 	SWITCH_TO_C_STACK
+dnl 	SAVE_C_NONVOLATILE_REGS
+dnl 	FASTCALL_INDIRECT_WITH_VMTHREAD(_rax)
+dnl 	test _rax,_rax
+dnl 	jne SHORT_JMP LABEL(L_exception_$1)
+dnl 	RESTORE_C_NONVOLATILE_REGS
+dnl 	SWITCH_TO_JAVA_STACK
+dnl 	push uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
+dnl 	mov _rax,uword ptr J9TR_VMThread_returnValue[_rbp]
+dnl 	ret
+dnl LABEL(L_exception_$1):
+dnl 	jmp _rax
+dnl 	END_PROC($1)
+dnl })
+
 define({NEW_DUAL_MODE_HELPER},{
 	FASTCALL_EXTERN(fast_$1,$2+1)
 	BEGIN_HELPER($1)
 	pop uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
-	call FASTCALL_SYMBOL(fast_$1,$2+1)
-	test _rax,_rax
-	jne SHORT_JMP LABEL(L_slow_$1)
-	push uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
-	mov _rax,uword ptr J9TR_VMThread_returnValue[_rbp]
-	ret
-LABEL(L_slow_$1):
 	SWITCH_TO_C_STACK
 	SAVE_C_NONVOLATILE_REGS
+	call FASTCALL_SYMBOL(fast_$1,$2+1)
+	test _rax,_rax
+	jz SHORT_JMP LABEL(L_exit_$1)
 	FASTCALL_INDIRECT_WITH_VMTHREAD(_rax)
 	test _rax,_rax
 	jne SHORT_JMP LABEL(L_exception_$1)
+LABEL(L_exit_$1):
 	RESTORE_C_NONVOLATILE_REGS
 	SWITCH_TO_JAVA_STACK
 	push uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
@@ -210,21 +233,44 @@ LABEL(L_exception_$1):
 	END_PROC($1)
 })
 
+
+dnl define({NEW_DUAL_MODE_HELPER_NO_RETURN_VALUE},{
+dnl 	FASTCALL_EXTERN(fast_$1,$2+1)
+dnl 	BEGIN_HELPER($1)
+dnl 	pop uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
+dnl 	call FASTCALL_SYMBOL(fast_$1,$2+1)
+dnl 	test _rax,_rax
+dnl 	jne SHORT_JMP LABEL(L_slow_$1)
+dnl 	push uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
+dnl 	ret
+dnl LABEL(L_slow_$1):
+dnl 	SWITCH_TO_C_STACK
+dnl 	SAVE_C_NONVOLATILE_REGS
+dnl 	FASTCALL_INDIRECT_WITH_VMTHREAD(_rax)
+dnl 	test _rax,_rax
+dnl 	jne SHORT_JMP LABEL(L_exception_$1)
+dnl 	RESTORE_C_NONVOLATILE_REGS
+dnl 	SWITCH_TO_JAVA_STACK
+dnl 	push uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
+dnl 	ret
+dnl LABEL(L_exception_$1):
+dnl 	jmp _rax
+dnl 	END_PROC($1)
+dnl })
+
 define({NEW_DUAL_MODE_HELPER_NO_RETURN_VALUE},{
 	FASTCALL_EXTERN(fast_$1,$2+1)
 	BEGIN_HELPER($1)
 	pop uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
-	call FASTCALL_SYMBOL(fast_$1,$2+1)
-	test _rax,_rax
-	jne SHORT_JMP LABEL(L_slow_$1)
-	push uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
-	ret
-LABEL(L_slow_$1):
 	SWITCH_TO_C_STACK
 	SAVE_C_NONVOLATILE_REGS
+	call FASTCALL_SYMBOL(fast_$1,$2+1)
+	test _rax,_rax
+	jz SHORT_JMP LABEL(L_exit_$1)
 	FASTCALL_INDIRECT_WITH_VMTHREAD(_rax)
 	test _rax,_rax
 	jne SHORT_JMP LABEL(L_exception_$1)
+LABEL(L_exit_$1):
 	RESTORE_C_NONVOLATILE_REGS
 	SWITCH_TO_JAVA_STACK
 	push uword ptr J9TR_VMThread_jitReturnAddress[_rbp]
@@ -233,6 +279,7 @@ LABEL(L_exception_$1):
 	jmp _rax
 	END_PROC($1)
 })
+
 
 ifdef({ASM_J9VM_ENV_DATA64},{
 
